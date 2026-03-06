@@ -94,7 +94,7 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
 
   function handleOpenTerminal(e: React.MouseEvent) {
     e.stopPropagation();
-    onOpenTerminal(session.sessionId, displayName, session.cwd);
+    onOpenTerminal(session.sessionId, displayName, session.projectPath);
   }
 
   return (

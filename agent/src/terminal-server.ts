@@ -68,6 +68,11 @@ export function startTerminalServer(port: number, machineId: string) {
 
         const cmd = buildCommand(mode, session, cwd);
 
+        // Strip CLAUDECODE env var so claude --resume works
+        // (the agent may itself be running inside a Claude Code session)
+        const cleanEnv = { ...process.env };
+        delete cleanEnv.CLAUDECODE;
+
         const proc = Bun.spawn(
           ["python3", PTY_HELPER, String(cols), String(rows), ...cmd],
           {
@@ -75,6 +80,7 @@ export function startTerminalServer(port: number, machineId: string) {
             stdout: "pipe",
             stderr: "pipe",
             cwd: cwd || undefined,
+            env: cleanEnv,
           }
         );
 
