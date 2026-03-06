@@ -131,7 +131,7 @@ export async function parseSession(jsonlPath: string): Promise<SessionInfo | nul
       slug: lastEntry.slug || lastEntry.sessionId.slice(0, 8),
       projectPath: extractProjectPath(dirName),
       projectName: extractProjectName(dirName),
-      gitBranch: lastEntry.gitBranch || "",
+      gitBranch: lastEntry.gitBranch && lastEntry.gitBranch !== "HEAD" ? lastEntry.gitBranch : "",
       status: detectStatus(lastEntry, fileStat.mtimeMs),
       lastActivity: lastEntry.timestamp || new Date(fileStat.mtimeMs).toISOString(),
       lastMessage: summarizeLastMessage(lastEntry),

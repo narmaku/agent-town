@@ -29,6 +29,7 @@ interface Props {
 
 export function SessionCard({ session, machineId }: Props) {
   const config = STATUS_CONFIG[session.status];
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(session.customName || "");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -37,12 +38,16 @@ export function SessionCard({ session, machineId }: Props) {
     if (editing) inputRef.current?.focus();
   }, [editing]);
 
+  // Sync external updates
+  useEffect(() => {
+    if (!editing) setName(session.customName || "");
+  }, [session.customName, editing]);
+
   const displayName = session.customName || session.slug;
 
   async function handleRename() {
     setEditing(false);
     const trimmed = name.trim();
-    // Skip if unchanged
     if (trimmed === (session.customName || "")) return;
 
     try {
@@ -56,12 +61,12 @@ export function SessionCard({ session, machineId }: Props) {
         }),
       });
     } catch {
-      // revert on failure
       setName(session.customName || "");
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    e.stopPropagation();
     if (e.key === "Enter") handleRename();
     if (e.key === "Escape") {
       setName(session.customName || "");
@@ -69,8 +74,23 @@ export function SessionCard({ session, machineId }: Props) {
     }
   }
 
+  function handleCardClick(e: React.MouseEvent) {
+    // Don't toggle when interacting with rename input
+    if ((e.target as HTMLElement).closest(".session-slug")) return;
+    setExpanded((prev) => !prev);
+  }
+
+  function startRename(e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditing(true);
+  }
+
   return (
-    <div className="session-card" style={{ borderLeftColor: config.color, background: config.bg }}>
+    <div
+      className={`session-card ${expanded ? "expanded" : ""}`}
+      style={{ borderLeftColor: config.color, background: config.bg }}
+      onClick={handleCardClick}
+    >
       <div className="session-header">
         <div className="session-status">
           <span
@@ -91,7 +111,7 @@ export function SessionCard({ session, machineId }: Props) {
         )}
       </div>
 
-      <div className="session-slug" onDoubleClick={() => setEditing(true)}>
+      <div className="session-slug" onDoubleClick={startRename}>
         {editing ? (
           <input
             ref={inputRef}
@@ -100,6 +120,7 @@ export function SessionCard({ session, machineId }: Props) {
             onChange={(e) => setName(e.target.value)}
             onBlur={handleRename}
             onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
             placeholder={session.slug}
           />
         ) : (
@@ -110,15 +131,55 @@ export function SessionCard({ session, machineId }: Props) {
       </div>
 
       {session.lastMessage && (
-        <div className="session-message">{session.lastMessage}</div>
+        <div className={`session-message ${expanded ? "expanded" : ""}`}>
+          {session.lastMessage}
+        </div>
       )}
 
-      <div className="session-footer">
-        <span className="session-cwd" title={session.cwd}>
-          {session.cwd}
-        </span>
-        {session.model && <span className="session-model">{session.model}</span>}
-      </div>
+      {expanded && (
+        <div className="session-details">
+          <div className="detail-row">
+            <span className="detail-label">Session ID</span>
+            <span className="detail-value mono">{session.sessionId}</span>
+          </div>
+          <div className="detail-row">
+            <span className="detail-label">Working Dir</span>
+            <span className="detail-value mono">{session.cwd}</span>
+          </div>
+          {session.model && (
+            <div className="detail-row">
+              <span className="detail-label">Model</span>
+              <span className="detail-value mono">{session.model}</span>
+            </div>
+          )}
+          {session.version && (
+            <div className="detail-row">
+              <span className="detail-label">Claude Code</span>
+              <span className="detail-value mono">v{session.version}</span>
+            </div>
+          )}
+          {session.projectPath && (
+            <div className="detail-row">
+              <span className="detail-label">Project Path</span>
+              <span className="detail-value mono">{session.projectPath}</span>
+            </div>
+          )}
+          <div className="card-actions">
+            <button className="action-btn rename-btn" onClick={startRename}>
+              Rename
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!expanded && (
+        <div className="session-footer">
+          <span className="session-cwd" title={session.cwd}>
+            {session.cwd}
+          </span>
+          {session.model && <span className="session-model">{session.model}</span>}
+        </div>
+      )}
     </div>
   );
 }

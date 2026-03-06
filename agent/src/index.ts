@@ -1,12 +1,17 @@
 import { hostname, platform } from "node:os";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { Heartbeat } from "@agent-town/shared";
 import { discoverSessions } from "./session-parser";
 import { detectMultiplexers } from "./multiplexer";
 
 const SERVER_URL = process.env.AGENT_TOWN_SERVER || "http://localhost:4680";
 const HEARTBEAT_INTERVAL_MS = Number(process.env.AGENT_TOWN_INTERVAL || "5000");
-const MACHINE_ID = process.env.AGENT_TOWN_MACHINE_ID || randomUUID();
+
+// Stable machine ID derived from hostname — same machine always gets the same ID
+function stableMachineId(): string {
+  return createHash("sha256").update(hostname()).digest("hex").slice(0, 16);
+}
+const MACHINE_ID = process.env.AGENT_TOWN_MACHINE_ID || stableMachineId();
 
 const machineHostname = hostname();
 const machinePlatform = platform();

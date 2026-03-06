@@ -155,11 +155,18 @@ body {
   border-left: 3px solid;
   border-radius: 8px;
   padding: 14px 16px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+  user-select: none;
 }
 
 .session-card:hover {
   border-color: #444;
+  filter: brightness(1.1);
+}
+
+.session-card.expanded {
+  border-color: #555;
 }
 
 .session-header {
@@ -271,6 +278,12 @@ body {
   margin-bottom: 8px;
 }
 
+.session-message.expanded {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
 .session-footer {
   display: flex;
   justify-content: space-between;
@@ -327,4 +340,61 @@ body {
   font-size: 13px;
   padding: 20px;
   text-align: center;
+}
+
+/* Expanded Session Details */
+.session-details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.detail-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.detail-value {
+  color: var(--text);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-value.mono {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 11px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.action-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.action-btn:hover {
+  color: var(--text);
+  border-color: #555;
+  background: #252525;
 }
