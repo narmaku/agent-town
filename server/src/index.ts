@@ -41,12 +41,13 @@ const server = Bun.serve({
     // WebSocket upgrade for terminal proxy
     if (url.pathname === "/ws/terminal") {
       const machineId = url.searchParams.get("machineId");
-      const sessionName = url.searchParams.get("session");
-      const multiplexer = url.searchParams.get("multiplexer") || "zellij";
+      const session = url.searchParams.get("session");
+      const mode = url.searchParams.get("mode") || "claude";
+      const cwd = url.searchParams.get("cwd") || "";
       const cols = url.searchParams.get("cols") || "120";
       const rows = url.searchParams.get("rows") || "40";
 
-      if (!machineId || !sessionName) {
+      if (!machineId || !session) {
         return new Response("Missing machineId or session", { status: 400 });
       }
 
@@ -59,11 +60,11 @@ const server = Bun.serve({
         data: {
           type: "terminal",
           machineId,
-          sessionName,
-          multiplexer,
+          session,
+          mode,
+          cwd,
           cols,
           rows,
-          // For local dev, agent is on localhost. For remote, use machine hostname.
           agentHost: machine.agentAddress || machine.hostname,
           agentPort: machine.terminalPort,
         },
@@ -166,12 +167,13 @@ const server = Bun.serve({
       }
 
       if (data.type === "terminal") {
-        const { agentHost, agentPort, sessionName, multiplexer, cols, rows } =
+        const { agentHost, agentPort, session, mode, cwd, cols, rows } =
           data as {
             agentHost: string;
             agentPort: number;
-            sessionName: string;
-            multiplexer: string;
+            session: string;
+            mode: string;
+            cwd: string;
             cols: string;
             rows: string;
           };
@@ -179,8 +181,9 @@ const server = Bun.serve({
         // Connect to the agent's terminal WebSocket
         const agentUrl =
           `ws://${agentHost}:${agentPort}/ws/terminal` +
-          `?session=${encodeURIComponent(sessionName)}` +
-          `&multiplexer=${multiplexer}` +
+          `?session=${encodeURIComponent(session)}` +
+          `&mode=${mode}` +
+          `&cwd=${encodeURIComponent(cwd)}` +
           `&cols=${cols}&rows=${rows}`;
 
         const agentWs = new WebSocket(agentUrl);

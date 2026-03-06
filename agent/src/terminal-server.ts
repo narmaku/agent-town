@@ -6,19 +6,23 @@ const PTY_HELPER = join(import.meta.dir, "pty-helper.py");
 interface TerminalSession {
   process: Subprocess;
   machineId: string;
-  sessionName: string;
+  identifier: string;
 }
 
 const activeTerminals = new Map<unknown, TerminalSession>();
 
-function buildAttachCommand(
-  multiplexer: "zellij" | "tmux",
-  sessionName: string
-): string[] {
-  if (multiplexer === "zellij") {
-    return ["zellij", "attach", sessionName];
+function buildCommand(mode: string, identifier: string, cwd?: string): string[] {
+  switch (mode) {
+    case "claude":
+      // Resume a specific Claude Code session directly
+      return ["claude", "--resume", identifier];
+    case "zellij":
+      return ["zellij", "attach", identifier];
+    case "tmux":
+      return ["tmux", "attach-session", "-t", identifier];
+    default:
+      return ["claude", "--resume", identifier];
   }
-  return ["tmux", "attach-session", "-t", sessionName];
 }
 
 export function startTerminalServer(port: number, machineId: string) {
@@ -31,8 +35,9 @@ export function startTerminalServer(port: number, machineId: string) {
       if (url.pathname === "/ws/terminal") {
         const upgraded = server.upgrade(req, {
           data: {
-            multiplexer: url.searchParams.get("multiplexer") || "zellij",
+            mode: url.searchParams.get("mode") || "claude",
             session: url.searchParams.get("session") || "",
+            cwd: url.searchParams.get("cwd") || "",
             cols: parseInt(url.searchParams.get("cols") || "120"),
             rows: parseInt(url.searchParams.get("rows") || "40"),
           },
@@ -47,9 +52,10 @@ export function startTerminalServer(port: number, machineId: string) {
 
     websocket: {
       open(ws) {
-        const { multiplexer, session, cols, rows } = ws.data as {
-          multiplexer: "zellij" | "tmux";
+        const { mode, session, cwd, cols, rows } = ws.data as {
+          mode: string;
           session: string;
+          cwd: string;
           cols: number;
           rows: number;
         };
@@ -60,7 +66,7 @@ export function startTerminalServer(port: number, machineId: string) {
           return;
         }
 
-        const cmd = buildAttachCommand(multiplexer, session);
+        const cmd = buildCommand(mode, session, cwd);
 
         const proc = Bun.spawn(
           ["python3", PTY_HELPER, String(cols), String(rows), ...cmd],
@@ -68,10 +74,11 @@ export function startTerminalServer(port: number, machineId: string) {
             stdin: "pipe",
             stdout: "pipe",
             stderr: "pipe",
+            cwd: cwd || undefined,
           }
         );
 
-        activeTerminals.set(ws, { process: proc, machineId, sessionName: session });
+        activeTerminals.set(ws, { process: proc, machineId, identifier: session });
 
         // Read stdout and send to WebSocket
         (async () => {
@@ -115,12 +122,10 @@ export function startTerminalServer(port: number, machineId: string) {
         const terminal = activeTerminals.get(ws);
         if (!terminal) return;
 
-        // Check if it's a control message (resize)
         if (typeof message === "string") {
           try {
             const parsed = JSON.parse(message);
             if (parsed.type === "resize") {
-              // Forward resize to PTY helper
               terminal.process.stdin.write(
                 JSON.stringify({ type: "resize", cols: parsed.cols, rows: parsed.rows }) + "\n"
               );
@@ -131,7 +136,6 @@ export function startTerminalServer(port: number, machineId: string) {
           }
           terminal.process.stdin.write(message);
         } else {
-          // Binary data — write directly to stdin
           terminal.process.stdin.write(message as Uint8Array);
         }
       },

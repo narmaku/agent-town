@@ -1,10 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import type {
-  SessionInfo,
-  SessionStatus,
-  MultiplexerSessionInfo,
-  TerminalMultiplexer,
-} from "@agent-town/shared";
+import type { SessionInfo, SessionStatus } from "@agent-town/shared";
 
 const STATUS_CONFIG: Record<
   SessionStatus,
@@ -37,24 +32,14 @@ function timeAgo(timestamp: string): string {
 interface Props {
   session: SessionInfo;
   machineId: string;
-  multiplexerSessions: MultiplexerSessionInfo[];
-  onOpenTerminal: (
-    sessionName: string,
-    multiplexer: TerminalMultiplexer
-  ) => void;
+  onOpenTerminal: (sessionId: string, sessionLabel: string, cwd: string) => void;
 }
 
-export function SessionCard({
-  session,
-  machineId,
-  multiplexerSessions,
-  onOpenTerminal,
-}: Props) {
+export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
   const config = STATUS_CONFIG[session.status];
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(session.customName || "");
-  const [showTerminalPicker, setShowTerminalPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -99,7 +84,6 @@ export function SessionCard({
   function handleCardClick(e: React.MouseEvent) {
     if ((e.target as HTMLElement).closest(".session-slug")) return;
     if ((e.target as HTMLElement).closest(".card-actions")) return;
-    if ((e.target as HTMLElement).closest(".terminal-picker")) return;
     setExpanded((prev) => !prev);
   }
 
@@ -110,12 +94,7 @@ export function SessionCard({
 
   function handleOpenTerminal(e: React.MouseEvent) {
     e.stopPropagation();
-    if (multiplexerSessions.length === 1) {
-      const s = multiplexerSessions[0];
-      onOpenTerminal(s.name, s.multiplexer);
-    } else if (multiplexerSessions.length > 1) {
-      setShowTerminalPicker((prev) => !prev);
-    }
+    onOpenTerminal(session.sessionId, displayName, session.cwd);
   }
 
   return (
@@ -197,35 +176,13 @@ export function SessionCard({
             <button className="action-btn rename-btn" onClick={startRename}>
               Rename
             </button>
-            {multiplexerSessions.length > 0 && (
-              <button
-                className="action-btn terminal-btn"
-                onClick={handleOpenTerminal}
-              >
-                Open Terminal
-              </button>
-            )}
+            <button
+              className="action-btn terminal-btn"
+              onClick={handleOpenTerminal}
+            >
+              Open Terminal
+            </button>
           </div>
-
-          {showTerminalPicker && (
-            <div className="terminal-picker">
-              <div className="picker-label">Select terminal session:</div>
-              {multiplexerSessions.map((mux) => (
-                <button
-                  key={`${mux.multiplexer}:${mux.name}`}
-                  className="picker-option"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowTerminalPicker(false);
-                    onOpenTerminal(mux.name, mux.multiplexer);
-                  }}
-                >
-                  <span className="picker-mux">{mux.multiplexer}</span>
-                  <span className="picker-name">{mux.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 

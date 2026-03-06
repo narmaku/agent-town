@@ -6,15 +6,17 @@ import "@xterm/xterm/css/xterm.css";
 
 interface Props {
   machineId: string;
-  sessionName: string;
-  multiplexer: "zellij" | "tmux";
+  sessionId: string;
+  sessionLabel: string;
+  cwd: string;
   onClose: () => void;
 }
 
 export function TerminalOverlay({
   machineId,
-  sessionName,
-  multiplexer,
+  sessionId,
+  sessionLabel,
+  cwd,
   onClose,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,7 +53,6 @@ export function TerminalOverlay({
     term.loadAddon(webLinksAddon);
     term.open(containerRef.current);
 
-    // Fit after a small delay so the container is fully sized
     requestAnimationFrame(() => {
       fitAddon.fit();
     });
@@ -59,12 +60,13 @@ export function TerminalOverlay({
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Connect to the terminal proxy via the server
+    // Connect to the terminal proxy — uses claude --resume <sessionId>
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const params = new URLSearchParams({
       machineId,
-      session: sessionName,
-      multiplexer,
+      session: sessionId,
+      mode: "claude",
+      cwd,
       cols: String(term.cols),
       rows: String(term.rows),
     });
@@ -93,14 +95,12 @@ export function TerminalOverlay({
       term.write("\r\n\x1b[31m--- Connection error ---\x1b[0m\r\n");
     };
 
-    // Forward terminal input to WebSocket
     term.onData((data) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(data);
       }
     });
 
-    // Handle resize
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
       if (ws.readyState === WebSocket.OPEN) {
@@ -115,7 +115,6 @@ export function TerminalOverlay({
     });
     resizeObserver.observe(containerRef.current);
 
-    // ESC ESC (double escape) to close
     let lastEscTime = 0;
     const keyHandler = term.onKey(({ domEvent }) => {
       if (domEvent.key === "Escape") {
@@ -133,14 +132,14 @@ export function TerminalOverlay({
       ws.close();
       term.dispose();
     };
-  }, [machineId, sessionName, multiplexer, handleClose]);
+  }, [machineId, sessionId, cwd, handleClose]);
 
   return (
     <div className="terminal-overlay">
       <div className="terminal-header">
         <div className="terminal-title">
-          <span className="terminal-session-name">{sessionName}</span>
-          <span className="terminal-multiplexer">{multiplexer}</span>
+          <span className="terminal-session-name">{sessionLabel}</span>
+          <span className="terminal-multiplexer">claude --resume</span>
         </div>
         <div className="terminal-controls">
           <span className="terminal-hint">ESC ESC to close</span>

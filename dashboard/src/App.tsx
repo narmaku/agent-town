@@ -5,8 +5,9 @@ import { TerminalOverlay } from "./components/TerminalOverlay";
 
 interface TerminalTarget {
   machineId: string;
-  sessionName: string;
-  multiplexer: "zellij" | "tmux";
+  sessionId: string;
+  sessionLabel: string;
+  cwd: string;
 }
 
 export function App() {
@@ -60,11 +61,12 @@ export function App() {
           <MachineGroup
             key={machine.machineId}
             machine={machine}
-            onOpenTerminal={(sessionName, multiplexer) =>
+            onOpenTerminal={(sessionId, sessionLabel, cwd) =>
               setTerminal({
                 machineId: machine.machineId,
-                sessionName,
-                multiplexer,
+                sessionId,
+                sessionLabel,
+                cwd,
               })
             }
           />
@@ -74,8 +76,9 @@ export function App() {
       {terminal && (
         <TerminalOverlay
           machineId={terminal.machineId}
-          sessionName={terminal.sessionName}
-          multiplexer={terminal.multiplexer}
+          sessionId={terminal.sessionId}
+          sessionLabel={terminal.sessionLabel}
+          cwd={terminal.cwd}
           onClose={() => setTerminal(null)}
         />
       )}

@@ -1,7 +1,6 @@
 """
 Tiny PTY bridge: spawns a command inside a pseudo-terminal and relays
-stdin/stdout as raw bytes. Used by the agent to attach to
-zellij/tmux sessions with proper terminal emulation.
+stdin/stdout as raw bytes.
 
 Usage: python3 pty-helper.py <cols> <rows> <command> [args...]
 
@@ -24,20 +23,16 @@ def main():
     pid, master_fd = pty.fork()
 
     if pid == 0:
-        # Child: exec the command
         os.execvp(cmd[0], cmd)
         sys.exit(1)
 
-    # Parent: relay I/O
     set_winsize(master_fd, cols, rows)
 
-    # Make stdin non-blocking
     stdin_fd = sys.stdin.fileno()
     stdout_fd = sys.stdout.fileno()
     flags = fcntl.fcntl(stdin_fd, fcntl.F_GETFL)
     fcntl.fcntl(stdin_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-    # Buffer for detecting resize JSON messages
     stdin_buf = b""
 
     try:
@@ -60,8 +55,6 @@ def main():
                         if not data:
                             return
 
-                        # Check if data contains a resize JSON message
-                        # These come as complete lines from the WebSocket handler
                         stdin_buf += data
                         while b"\n" in stdin_buf:
                             line, stdin_buf = stdin_buf.split(b"\n", 1)
@@ -70,26 +63,21 @@ def main():
                                 try:
                                     msg = json.loads(line_str)
                                     set_winsize(master_fd, msg["cols"], msg["rows"])
-                                    signal.kill(pid, signal.SIGWINCH)
+                                    os.kill(pid, signal.SIGWINCH)
                                     continue
                                 except (json.JSONDecodeError, KeyError):
                                     pass
-                            # Not a resize message — forward to PTY
                             os.write(master_fd, line + b"\n")
 
-                        # If there's remaining data without a newline, it's
-                        # raw terminal input — forward immediately
                         if stdin_buf and b"\n" not in stdin_buf:
-                            # Check if it might be a partial JSON resize
                             if stdin_buf.startswith(b'{"type":"resize"'):
-                                continue  # wait for the newline
+                                continue
                             os.write(master_fd, stdin_buf)
                             stdin_buf = b""
 
                     except OSError:
                         return
 
-            # Check if child process is still alive
             try:
                 result = os.waitpid(pid, os.WNOHANG)
                 if result[0] != 0:
