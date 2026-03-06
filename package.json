@@ -1,0 +1,18 @@
+{
+  "name": "agent-town",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "agent",
+    "server",
+    "dashboard"
+  ],
+  "scripts": {
+    "dev:agent": "bun run --filter agent dev",
+    "dev:server": "bun run --filter agent-town-server dev",
+    "dev:dashboard": "bun run --filter agent-town-dashboard dev",
+    "test": "bun test",
+    "build": "bun run --filter agent-town-dashboard build"
+  }
+}
