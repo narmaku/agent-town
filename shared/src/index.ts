@@ -5,6 +5,7 @@ export type TerminalMultiplexer = "zellij" | "tmux";
 export interface SessionInfo {
   sessionId: string;
   slug: string;
+  customName?: string; // user-defined rename from the dashboard
   projectPath: string;
   projectName: string;
   gitBranch: string;
@@ -40,6 +41,12 @@ export interface SendInstructionRequest {
   machineId: string;
   sessionId: string;
   instruction: string;
+}
+
+export interface RenameSessionRequest {
+  machineId: string;
+  sessionId: string;
+  name: string;
 }
 
 export interface WebSocketMessage {

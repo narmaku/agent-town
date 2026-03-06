@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from "react";
 import type { SessionInfo, SessionStatus } from "@agent-town/shared";
 
 const STATUS_CONFIG: Record<
@@ -23,10 +24,50 @@ function timeAgo(timestamp: string): string {
 
 interface Props {
   session: SessionInfo;
+  machineId: string;
 }
 
-export function SessionCard({ session }: Props) {
+export function SessionCard({ session, machineId }: Props) {
   const config = STATUS_CONFIG[session.status];
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(session.customName || "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const displayName = session.customName || session.slug;
+
+  async function handleRename() {
+    setEditing(false);
+    const trimmed = name.trim();
+    // Skip if unchanged
+    if (trimmed === (session.customName || "")) return;
+
+    try {
+      await fetch("/api/sessions/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          machineId,
+          sessionId: session.sessionId,
+          name: trimmed,
+        }),
+      });
+    } catch {
+      // revert on failure
+      setName(session.customName || "");
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") handleRename();
+    if (e.key === "Escape") {
+      setName(session.customName || "");
+      setEditing(false);
+    }
+  }
 
   return (
     <div className="session-card" style={{ borderLeftColor: config.color, background: config.bg }}>
@@ -50,7 +91,23 @@ export function SessionCard({ session }: Props) {
         )}
       </div>
 
-      <div className="session-slug">{session.slug}</div>
+      <div className="session-slug" onDoubleClick={() => setEditing(true)}>
+        {editing ? (
+          <input
+            ref={inputRef}
+            className="rename-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={handleKeyDown}
+            placeholder={session.slug}
+          />
+        ) : (
+          <span className="session-name" title="Double-click to rename">
+            {displayName}
+          </span>
+        )}
+      </div>
 
       {session.lastMessage && (
         <div className="session-message">{session.lastMessage}</div>

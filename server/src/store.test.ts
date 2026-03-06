@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach } from "bun:test";
-import { upsertMachine, getAllMachines, getMachine } from "./store";
+import { upsertMachine, getAllMachines, getMachine, renameSession } from "./store";
 import type { Heartbeat } from "@agent-town/shared";
 
 function makeHeartbeat(overrides: Partial<Heartbeat> = {}): Heartbeat {
@@ -57,6 +57,88 @@ describe("store", () => {
 
     const machines = getAllMachines();
     expect(machines.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("renameSession applies custom name", () => {
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "rename-test",
+        sessions: [
+          {
+            sessionId: "s1",
+            slug: "original-slug",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "main",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project",
+          },
+        ],
+      })
+    );
+
+    const ok = renameSession("rename-test", "s1", "My Custom Name");
+    expect(ok).toBe(true);
+
+    const machine = getMachine("rename-test");
+    expect(machine!.sessions[0].customName).toBe("My Custom Name");
+  });
+
+  test("renameSession persists across heartbeats", () => {
+    const session = {
+      sessionId: "s2",
+      slug: "test-slug",
+      projectPath: "/project",
+      projectName: "project",
+      gitBranch: "main",
+      status: "working" as const,
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/project",
+    };
+
+    upsertMachine(makeHeartbeat({ machineId: "persist-test", sessions: [session] }));
+    renameSession("persist-test", "s2", "Renamed");
+
+    // Simulate a new heartbeat (agent sends fresh data without customName)
+    upsertMachine(makeHeartbeat({ machineId: "persist-test", sessions: [session] }));
+
+    const machine = getMachine("persist-test");
+    expect(machine!.sessions[0].customName).toBe("Renamed");
+  });
+
+  test("renameSession with empty string clears name", () => {
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "clear-test",
+        sessions: [
+          {
+            sessionId: "s3",
+            slug: "slug",
+            projectPath: "/p",
+            projectName: "p",
+            gitBranch: "",
+            status: "idle",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/p",
+          },
+        ],
+      })
+    );
+
+    renameSession("clear-test", "s3", "Named");
+    renameSession("clear-test", "s3", "");
+
+    const machine = getMachine("clear-test");
+    expect(machine!.sessions[0].customName).toBeUndefined();
+  });
+
+  test("renameSession returns false for unknown machine", () => {
+    const ok = renameSession("nonexistent", "s1", "name");
+    expect(ok).toBe(false);
   });
 
   test("getAllMachines excludes expired machines", () => {

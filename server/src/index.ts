@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import type { Heartbeat, WebSocketMessage } from "@agent-town/shared";
-import { upsertMachine, getAllMachines } from "./store";
+import type { Heartbeat, RenameSessionRequest, WebSocketMessage } from "@agent-town/shared";
+import { upsertMachine, getAllMachines, renameSession } from "./store";
 
 const PORT = Number(process.env.AGENT_TOWN_PORT || "4680");
 const DASHBOARD_DIR = join(import.meta.dir, "../../dashboard/dist");
@@ -53,6 +53,24 @@ const server = Bun.serve({
           { error: "Invalid heartbeat payload" },
           { status: 400 }
         );
+      }
+    }
+
+    // API: rename a session
+    if (url.pathname === "/api/sessions/rename" && req.method === "POST") {
+      try {
+        const body: RenameSessionRequest = await req.json();
+        const ok = renameSession(body.machineId, body.sessionId, body.name);
+        if (!ok) {
+          return Response.json({ error: "Session not found" }, { status: 404 });
+        }
+        broadcastToClients({
+          type: "machines_update",
+          payload: getAllMachines(),
+        });
+        return Response.json({ ok: true });
+      } catch {
+        return Response.json({ error: "Invalid payload" }, { status: 400 });
       }
     }
 

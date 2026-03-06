@@ -52,7 +52,7 @@ export function MachineGroup({ machine }: Props) {
       </div>
       <div className="sessions-grid">
         {sortedSessions.map((session) => (
-          <SessionCard key={session.sessionId} session={session} />
+          <SessionCard key={session.sessionId} session={session} machineId={machine.machineId} />
         ))}
         {sortedSessions.length === 0 && (
           <div className="no-sessions">No active sessions</div>

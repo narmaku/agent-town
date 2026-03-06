@@ -234,6 +234,31 @@ body {
   color: var(--text-muted);
   font-family: "SF Mono", "Fira Code", monospace;
   margin-bottom: 8px;
+  cursor: default;
+}
+
+.session-name {
+  cursor: default;
+}
+
+.session-name:hover {
+  color: var(--text);
+}
+
+.rename-input {
+  background: var(--bg);
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  padding: 2px 6px;
+  width: 100%;
+  outline: none;
+}
+
+.rename-input:focus {
+  border-color: var(--blue);
 }
 
 .session-message {

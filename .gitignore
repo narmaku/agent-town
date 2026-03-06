@@ -4,3 +4,4 @@ dist/
 *.db
 *.db-journal
 .vite/
+.machine-id
