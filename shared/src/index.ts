@@ -19,6 +19,12 @@ export interface SessionInfo {
   multiplexer?: TerminalMultiplexer;
 }
 
+export interface MultiplexerSessionInfo {
+  name: string;
+  multiplexer: TerminalMultiplexer;
+  attached: boolean;
+}
+
 export interface MachineInfo {
   machineId: string;
   hostname: string;
@@ -26,6 +32,9 @@ export interface MachineInfo {
   lastHeartbeat: string; // ISO timestamp
   sessions: SessionInfo[];
   multiplexers: TerminalMultiplexer[];
+  multiplexerSessions: MultiplexerSessionInfo[];
+  terminalPort?: number; // port for terminal WebSocket on the agent
+  agentAddress?: string; // agent's reachable address (IP or hostname)
 }
 
 export interface Heartbeat {
@@ -34,6 +43,8 @@ export interface Heartbeat {
   platform: string;
   sessions: SessionInfo[];
   multiplexers: TerminalMultiplexer[];
+  multiplexerSessions: MultiplexerSessionInfo[];
+  terminalPort: number;
   timestamp: string;
 }
 

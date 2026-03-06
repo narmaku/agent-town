@@ -1,10 +1,4 @@
-import type { TerminalMultiplexer } from "@agent-town/shared";
-
-interface MultiplexerSession {
-  name: string;
-  multiplexer: TerminalMultiplexer;
-  attached: boolean;
-}
+import type { TerminalMultiplexer, MultiplexerSessionInfoInfo } from "@agent-town/shared";
 
 async function runCommand(cmd: string[]): Promise<string> {
   const proc = Bun.spawn(cmd, {
@@ -33,7 +27,7 @@ export async function detectMultiplexers(): Promise<TerminalMultiplexer[]> {
   return result;
 }
 
-export async function listZellijSessions(): Promise<MultiplexerSession[]> {
+export async function listZellijSessions(): Promise<MultiplexerSessionInfo[]> {
   try {
     const output = await runCommand(["zellij", "list-sessions", "--short"]);
     if (!output) return [];
@@ -53,7 +47,7 @@ export async function listZellijSessions(): Promise<MultiplexerSession[]> {
   }
 }
 
-export async function listTmuxSessions(): Promise<MultiplexerSession[]> {
+export async function listTmuxSessions(): Promise<MultiplexerSessionInfo[]> {
   try {
     const output = await runCommand([
       "tmux",
@@ -75,7 +69,7 @@ export async function listTmuxSessions(): Promise<MultiplexerSession[]> {
   }
 }
 
-export async function listAllSessions(): Promise<MultiplexerSession[]> {
+export async function listAllSessions(): Promise<MultiplexerSessionInfo[]> {
   const [zellijSessions, tmuxSessions] = await Promise.all([
     listZellijSessions(),
     listTmuxSessions(),

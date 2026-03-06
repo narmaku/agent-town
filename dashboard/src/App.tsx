@@ -1,8 +1,17 @@
+import { useState } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { MachineGroup } from "./components/MachineGroup";
+import { TerminalOverlay } from "./components/TerminalOverlay";
+
+interface TerminalTarget {
+  machineId: string;
+  sessionName: string;
+  multiplexer: "zellij" | "tmux";
+}
 
 export function App() {
   const { machines, connected } = useWebSocket();
+  const [terminal, setTerminal] = useState<TerminalTarget | null>(null);
 
   const totalSessions = machines.reduce((sum, m) => sum + m.sessions.length, 0);
   const totalAttention = machines.reduce(
@@ -48,9 +57,28 @@ export function App() {
           </div>
         )}
         {machines.map((machine) => (
-          <MachineGroup key={machine.machineId} machine={machine} />
+          <MachineGroup
+            key={machine.machineId}
+            machine={machine}
+            onOpenTerminal={(sessionName, multiplexer) =>
+              setTerminal({
+                machineId: machine.machineId,
+                sessionName,
+                multiplexer,
+              })
+            }
+          />
         ))}
       </main>
+
+      {terminal && (
+        <TerminalOverlay
+          machineId={terminal.machineId}
+          sessionName={terminal.sessionName}
+          multiplexer={terminal.multiplexer}
+          onClose={() => setTerminal(null)}
+        />
+      )}
     </div>
   );
 }

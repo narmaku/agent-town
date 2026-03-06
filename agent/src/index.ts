@@ -2,10 +2,12 @@ import { hostname, platform } from "node:os";
 import { createHash } from "node:crypto";
 import type { Heartbeat } from "@agent-town/shared";
 import { discoverSessions } from "./session-parser";
-import { detectMultiplexers } from "./multiplexer";
+import { detectMultiplexers, listAllSessions } from "./multiplexer";
+import { startTerminalServer } from "./terminal-server";
 
 const SERVER_URL = process.env.AGENT_TOWN_SERVER || "http://localhost:4680";
 const HEARTBEAT_INTERVAL_MS = Number(process.env.AGENT_TOWN_INTERVAL || "5000");
+const TERMINAL_PORT = Number(process.env.AGENT_TOWN_TERMINAL_PORT || "4681");
 
 // Stable machine ID derived from hostname — same machine always gets the same ID
 function stableMachineId(): string {
@@ -18,9 +20,10 @@ const machinePlatform = platform();
 
 async function sendHeartbeat(): Promise<void> {
   try {
-    const [sessions, multiplexers] = await Promise.all([
+    const [sessions, multiplexers, multiplexerSessions] = await Promise.all([
       discoverSessions(),
       detectMultiplexers(),
+      listAllSessions(),
     ]);
 
     const heartbeat: Heartbeat = {
@@ -29,6 +32,8 @@ async function sendHeartbeat(): Promise<void> {
       platform: machinePlatform,
       sessions,
       multiplexers,
+      multiplexerSessions,
+      terminalPort: TERMINAL_PORT,
       timestamp: new Date().toISOString(),
     };
 
@@ -54,6 +59,9 @@ async function main(): Promise<void> {
   console.log(`  Hostname:   ${machineHostname}`);
   console.log(`  Server:     ${SERVER_URL}`);
   console.log(`  Interval:   ${HEARTBEAT_INTERVAL_MS}ms`);
+
+  // Start the terminal WebSocket server
+  startTerminalServer(TERMINAL_PORT, MACHINE_ID);
 
   // Send first heartbeat immediately
   await sendHeartbeat();

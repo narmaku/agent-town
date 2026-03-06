@@ -9,6 +9,8 @@ function makeHeartbeat(overrides: Partial<Heartbeat> = {}): Heartbeat {
     platform: "linux",
     sessions: [],
     multiplexers: ["zellij"],
+    multiplexerSessions: [],
+    terminalPort: 4681,
     timestamp: new Date().toISOString(),
     ...overrides,
   };

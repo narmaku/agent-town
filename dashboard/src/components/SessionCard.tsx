@@ -1,19 +1,31 @@
 import { useState, useRef, useEffect } from "react";
-import type { SessionInfo, SessionStatus } from "@agent-town/shared";
+import type {
+  SessionInfo,
+  SessionStatus,
+  MultiplexerSessionInfo,
+  TerminalMultiplexer,
+} from "@agent-town/shared";
 
 const STATUS_CONFIG: Record<
   SessionStatus,
   { label: string; color: string; bg: string; pulse: boolean }
 > = {
   working: { label: "Working", color: "#22c55e", bg: "#052e16", pulse: true },
-  needs_attention: { label: "Needs Attention", color: "#eab308", bg: "#422006", pulse: true },
+  needs_attention: {
+    label: "Needs Attention",
+    color: "#eab308",
+    bg: "#422006",
+    pulse: true,
+  },
   idle: { label: "Idle", color: "#6b7280", bg: "#1f2937", pulse: false },
   done: { label: "Done", color: "#3b82f6", bg: "#172554", pulse: false },
   error: { label: "Error", color: "#ef4444", bg: "#450a0a", pulse: true },
 };
 
 function timeAgo(timestamp: string): string {
-  const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+  const seconds = Math.floor(
+    (Date.now() - new Date(timestamp).getTime()) / 1000
+  );
   if (seconds < 10) return "just now";
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
@@ -25,20 +37,30 @@ function timeAgo(timestamp: string): string {
 interface Props {
   session: SessionInfo;
   machineId: string;
+  multiplexerSessions: MultiplexerSessionInfo[];
+  onOpenTerminal: (
+    sessionName: string,
+    multiplexer: TerminalMultiplexer
+  ) => void;
 }
 
-export function SessionCard({ session, machineId }: Props) {
+export function SessionCard({
+  session,
+  machineId,
+  multiplexerSessions,
+  onOpenTerminal,
+}: Props) {
   const config = STATUS_CONFIG[session.status];
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(session.customName || "");
+  const [showTerminalPicker, setShowTerminalPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
   }, [editing]);
 
-  // Sync external updates
   useEffect(() => {
     if (!editing) setName(session.customName || "");
   }, [session.customName, editing]);
@@ -75,14 +97,25 @@ export function SessionCard({ session, machineId }: Props) {
   }
 
   function handleCardClick(e: React.MouseEvent) {
-    // Don't toggle when interacting with rename input
     if ((e.target as HTMLElement).closest(".session-slug")) return;
+    if ((e.target as HTMLElement).closest(".card-actions")) return;
+    if ((e.target as HTMLElement).closest(".terminal-picker")) return;
     setExpanded((prev) => !prev);
   }
 
   function startRename(e: React.MouseEvent) {
     e.stopPropagation();
     setEditing(true);
+  }
+
+  function handleOpenTerminal(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (multiplexerSessions.length === 1) {
+      const s = multiplexerSessions[0];
+      onOpenTerminal(s.name, s.multiplexer);
+    } else if (multiplexerSessions.length > 1) {
+      setShowTerminalPicker((prev) => !prev);
+    }
   }
 
   return (
@@ -107,7 +140,9 @@ export function SessionCard({ session, machineId }: Props) {
       <div className="session-project">
         <span className="project-name">{session.projectName}</span>
         {session.gitBranch && (
-          <span className="git-branch" title="Git branch">{session.gitBranch}</span>
+          <span className="git-branch" title="Git branch">
+            {session.gitBranch}
+          </span>
         )}
       </div>
 
@@ -158,17 +193,39 @@ export function SessionCard({ session, machineId }: Props) {
               <span className="detail-value mono">v{session.version}</span>
             </div>
           )}
-          {session.projectPath && (
-            <div className="detail-row">
-              <span className="detail-label">Project Path</span>
-              <span className="detail-value mono">{session.projectPath}</span>
-            </div>
-          )}
           <div className="card-actions">
             <button className="action-btn rename-btn" onClick={startRename}>
               Rename
             </button>
+            {multiplexerSessions.length > 0 && (
+              <button
+                className="action-btn terminal-btn"
+                onClick={handleOpenTerminal}
+              >
+                Open Terminal
+              </button>
+            )}
           </div>
+
+          {showTerminalPicker && (
+            <div className="terminal-picker">
+              <div className="picker-label">Select terminal session:</div>
+              {multiplexerSessions.map((mux) => (
+                <button
+                  key={`${mux.multiplexer}:${mux.name}`}
+                  className="picker-option"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowTerminalPicker(false);
+                    onOpenTerminal(mux.name, mux.multiplexer);
+                  }}
+                >
+                  <span className="picker-mux">{mux.multiplexer}</span>
+                  <span className="picker-name">{mux.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -177,7 +234,9 @@ export function SessionCard({ session, machineId }: Props) {
           <span className="session-cwd" title={session.cwd}>
             {session.cwd}
           </span>
-          {session.model && <span className="session-model">{session.model}</span>}
+          {session.model && (
+            <span className="session-model">{session.model}</span>
+          )}
         </div>
       )}
     </div>

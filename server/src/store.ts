@@ -42,6 +42,8 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     lastHeartbeat: heartbeat.timestamp,
     sessions,
     multiplexers: heartbeat.multiplexers,
+    multiplexerSessions: heartbeat.multiplexerSessions,
+    terminalPort: heartbeat.terminalPort,
   });
 }
 

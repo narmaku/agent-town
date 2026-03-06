@@ -1,4 +1,4 @@
-import type { MachineInfo } from "@agent-town/shared";
+import type { MachineInfo, TerminalMultiplexer } from "@agent-town/shared";
 import { SessionCard } from "./SessionCard";
 
 function timeAgo(timestamp: string): string {
@@ -11,9 +11,10 @@ function timeAgo(timestamp: string): string {
 
 interface Props {
   machine: MachineInfo;
+  onOpenTerminal: (sessionName: string, multiplexer: TerminalMultiplexer) => void;
 }
 
-export function MachineGroup({ machine }: Props) {
+export function MachineGroup({ machine, onOpenTerminal }: Props) {
   const needsAttention = machine.sessions.filter(
     (s) => s.status === "needs_attention"
   ).length;
@@ -25,6 +26,11 @@ export function MachineGroup({ machine }: Props) {
   const statusOrder = { needs_attention: 0, error: 1, working: 2, idle: 3, done: 4 };
   const sortedSessions = [...machine.sessions].sort(
     (a, b) => statusOrder[a.status] - statusOrder[b.status]
+  );
+
+  // Get active (non-exited) multiplexer sessions
+  const activeMuxSessions = (machine.multiplexerSessions || []).filter(
+    (s) => s.attached
   );
 
   return (
@@ -52,7 +58,13 @@ export function MachineGroup({ machine }: Props) {
       </div>
       <div className="sessions-grid">
         {sortedSessions.map((session) => (
-          <SessionCard key={session.sessionId} session={session} machineId={machine.machineId} />
+          <SessionCard
+            key={session.sessionId}
+            session={session}
+            machineId={machine.machineId}
+            multiplexerSessions={activeMuxSessions}
+            onOpenTerminal={onOpenTerminal}
+          />
         ))}
         {sortedSessions.length === 0 && (
           <div className="no-sessions">No active sessions</div>
