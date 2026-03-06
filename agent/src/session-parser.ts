@@ -24,16 +24,6 @@ interface JsonlEntry {
   toolUseResult?: string;
 }
 
-function extractProjectName(dirName: string): string {
-  // Claude Code stores projects as hyphen-separated paths like "-home-nmunoz-development-myproject"
-  const parts = dirName.replace(/^-/, "").split("-");
-  return parts[parts.length - 1] || dirName;
-}
-
-function extractProjectPath(dirName: string): string {
-  return "/" + dirName.replace(/^-/, "").replace(/-/g, "/");
-}
-
 function detectStatus(lastEntry: JsonlEntry, lastModifiedMs: number): SessionStatus {
   const age = Date.now() - lastModifiedMs;
 
@@ -104,6 +94,14 @@ function summarizeLastMessage(entry: JsonlEntry): string {
   return "";
 }
 
+async function readFirstLine(filePath: string): Promise<string | null> {
+  const file = Bun.file(filePath);
+  const text = await file.text();
+  const newlineIdx = text.indexOf("\n");
+  if (newlineIdx === -1) return text.trim() || null;
+  return text.slice(0, newlineIdx).trim() || null;
+}
+
 async function readLastLines(filePath: string, count: number): Promise<string[]> {
   const file = Bun.file(filePath);
   const text = await file.text();
@@ -120,23 +118,32 @@ export async function parseSession(jsonlPath: string): Promise<SessionInfo | nul
     const lastLine = lastLines[lastLines.length - 1];
     const lastEntry: JsonlEntry = JSON.parse(lastLine);
 
-    // Also check an earlier entry for more context
-    const firstLine = lastLines[0];
-    const firstEntry: JsonlEntry = JSON.parse(firstLine);
+    // Read the very first line to get the original cwd (project root)
+    const firstLineStr = await readFirstLine(jsonlPath);
+    const firstEntry: JsonlEntry | null = firstLineStr
+      ? JSON.parse(firstLineStr)
+      : null;
 
-    const dirName = basename(jsonlPath.split("/projects/")[1]?.split("/")[0] || "");
+    // Use the first entry's cwd as the project root — it's the actual
+    // filesystem path, not the mangled directory name
+    const projectRoot = firstEntry?.cwd || lastEntry.cwd;
+    const projectName = basename(projectRoot);
 
     return {
       sessionId: lastEntry.sessionId,
       slug: lastEntry.slug || lastEntry.sessionId.slice(0, 8),
-      projectPath: extractProjectPath(dirName),
-      projectName: extractProjectName(dirName),
-      gitBranch: lastEntry.gitBranch && lastEntry.gitBranch !== "HEAD" ? lastEntry.gitBranch : "",
+      projectPath: projectRoot,
+      projectName,
+      gitBranch:
+        lastEntry.gitBranch && lastEntry.gitBranch !== "HEAD"
+          ? lastEntry.gitBranch
+          : "",
       status: detectStatus(lastEntry, fileStat.mtimeMs),
-      lastActivity: lastEntry.timestamp || new Date(fileStat.mtimeMs).toISOString(),
+      lastActivity:
+        lastEntry.timestamp || new Date(fileStat.mtimeMs).toISOString(),
       lastMessage: summarizeLastMessage(lastEntry),
       cwd: lastEntry.cwd,
-      model: firstEntry.message?.model || lastEntry.message?.model,
+      model: firstEntry?.message?.model || lastEntry.message?.model,
       version: lastEntry.version,
     };
   } catch {
@@ -160,10 +167,10 @@ export async function discoverSessions(): Promise<SessionInfo[]> {
 
       for (const jsonlFile of jsonlFiles) {
         const jsonlPath = join(projectDir, jsonlFile);
-        const fileStat = await stat(jsonlPath);
+        const jsonlStat = await stat(jsonlPath);
 
         // Only include sessions modified in the last 24 hours
-        const ageMs = Date.now() - fileStat.mtimeMs;
+        const ageMs = Date.now() - jsonlStat.mtimeMs;
         if (ageMs > 24 * 60 * 60 * 1000) continue;
 
         const session = await parseSession(jsonlPath);

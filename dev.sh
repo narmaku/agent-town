@@ -4,6 +4,11 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
+# Kill any previous agent-town processes
+pkill -f "agent-town.*server/src/index" 2>/dev/null || true
+pkill -f "agent-town.*agent/src/index" 2>/dev/null || true
+sleep 0.5
+
 # Install deps if needed
 if [ ! -d "node_modules" ]; then
   echo "Installing dependencies..."
@@ -12,14 +17,7 @@ fi
 
 # Build dashboard
 echo "Building dashboard..."
-cd dashboard && bunx vite build && cd ..
-
-# Generate a stable machine ID for this machine
-MACHINE_ID_FILE="$DIR/.machine-id"
-if [ ! -f "$MACHINE_ID_FILE" ]; then
-  cat /proc/sys/kernel/random/uuid > "$MACHINE_ID_FILE" 2>/dev/null || uuidgen > "$MACHINE_ID_FILE"
-fi
-MACHINE_ID=$(cat "$MACHINE_ID_FILE")
+cd dashboard && bunx vite build 2>&1 && cd ..
 
 PORT="${AGENT_TOWN_PORT:-4680}"
 
@@ -45,8 +43,8 @@ SERVER_PID=$!
 
 sleep 1
 
-# Start agent pointing at local server
-AGENT_TOWN_SERVER="http://localhost:$PORT" AGENT_TOWN_MACHINE_ID="$MACHINE_ID" bun run agent/src/index.ts &
+# Start agent — uses stable hostname-based ID by default (no override needed)
+AGENT_TOWN_SERVER="http://localhost:$PORT" bun run agent/src/index.ts &
 AGENT_PID=$!
 
 wait $SERVER_PID $AGENT_PID

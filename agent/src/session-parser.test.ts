@@ -157,4 +157,36 @@ describe("session-parser", () => {
     expect(session).not.toBeNull();
     expect(session!.model).toBe("claude-opus-4-6");
   });
+
+  test("derives project name from cwd (handles hyphenated names)", async () => {
+    const filePath = await createTempJsonl(tempDir, [
+      makeEntry({ cwd: "/home/nmunoz/development/rubric-kit" }),
+      makeEntry({ cwd: "/home/nmunoz/development/rubric-kit" }),
+    ]);
+
+    const session = await parseSession(filePath);
+    expect(session).not.toBeNull();
+    expect(session!.projectName).toBe("rubric-kit");
+    expect(session!.projectPath).toBe("/home/nmunoz/development/rubric-kit");
+  });
+
+  test("derives project name from cwd for nested paths", async () => {
+    const filePath = await createTempJsonl(tempDir, [
+      makeEntry({ cwd: "/home/nmunoz/development/rls-unified-test-suite" }),
+    ]);
+
+    const session = await parseSession(filePath);
+    expect(session).not.toBeNull();
+    expect(session!.projectName).toBe("rls-unified-test-suite");
+  });
+
+  test("filters out HEAD as git branch", async () => {
+    const filePath = await createTempJsonl(tempDir, [
+      makeEntry({ gitBranch: "HEAD" }),
+    ]);
+
+    const session = await parseSession(filePath);
+    expect(session).not.toBeNull();
+    expect(session!.gitBranch).toBe("");
+  });
 });

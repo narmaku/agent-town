@@ -107,7 +107,7 @@ export function SessionCard({ session, machineId }: Props) {
       <div className="session-project">
         <span className="project-name">{session.projectName}</span>
         {session.gitBranch && (
-          <span className="git-branch">{session.gitBranch}</span>
+          <span className="git-branch" title="Git branch">{session.gitBranch}</span>
         )}
       </div>
 
