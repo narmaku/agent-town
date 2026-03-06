@@ -4,9 +4,9 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
-# Kill any previous agent-town processes
-pkill -f "agent-town.*server/src/index" 2>/dev/null || true
-pkill -f "agent-town.*agent/src/index" 2>/dev/null || true
+# Kill any previous agent-town processes (match both path styles)
+pkill -f "bun.*server/src/index\.ts" 2>/dev/null || true
+pkill -f "bun.*agent/src/index\.ts" 2>/dev/null || true
 sleep 0.5
 
 # Install deps if needed

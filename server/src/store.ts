@@ -13,6 +13,22 @@ function nameKey(machineId: string, sessionId: string): string {
 }
 
 export function upsertMachine(heartbeat: Heartbeat): void {
+  // Deduplicate by hostname: if another machineId has the same hostname,
+  // remove the old entry (happens when agent restarts with a different ID)
+  for (const [existingId, existing] of machines) {
+    if (existing.hostname === heartbeat.hostname && existingId !== heartbeat.machineId) {
+      // Migrate any saved session names to the new machineId
+      for (const [key, value] of sessionNames) {
+        if (key.startsWith(existingId + ":")) {
+          const sessionId = key.slice(existingId.length + 1);
+          sessionNames.set(nameKey(heartbeat.machineId, sessionId), value);
+          sessionNames.delete(key);
+        }
+      }
+      machines.delete(existingId);
+    }
+  }
+
   // Apply any saved custom names to incoming sessions
   const sessions = heartbeat.sessions.map((s) => {
     const saved = sessionNames.get(nameKey(heartbeat.machineId, s.sessionId));

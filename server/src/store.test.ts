@@ -141,6 +141,59 @@ describe("store", () => {
     expect(ok).toBe(false);
   });
 
+  test("deduplicates machines by hostname", () => {
+    // Old agent registers with one machineId
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "old-id",
+        hostname: "same-host",
+        sessions: [],
+      })
+    );
+
+    // New agent registers with different machineId but same hostname
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "new-id",
+        hostname: "same-host",
+        sessions: [],
+      })
+    );
+
+    const machines = getAllMachines();
+    const sameHostMachines = machines.filter((m) => m.hostname === "same-host");
+    expect(sameHostMachines).toHaveLength(1);
+    expect(sameHostMachines[0].machineId).toBe("new-id");
+  });
+
+  test("dedup migrates session renames to new machineId", () => {
+    const session = {
+      sessionId: "s-migrate",
+      slug: "slug",
+      projectPath: "/p",
+      projectName: "p",
+      gitBranch: "",
+      status: "working" as const,
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/p",
+    };
+
+    upsertMachine(
+      makeHeartbeat({ machineId: "old-id-2", hostname: "migrate-host", sessions: [session] })
+    );
+    renameSession("old-id-2", "s-migrate", "My Name");
+
+    // New agent with different id, same hostname
+    upsertMachine(
+      makeHeartbeat({ machineId: "new-id-2", hostname: "migrate-host", sessions: [session] })
+    );
+
+    const machine = getMachine("new-id-2");
+    expect(machine).not.toBeUndefined();
+    expect(machine!.sessions[0].customName).toBe("My Name");
+  });
+
   test("getAllMachines excludes expired machines", () => {
     const oldTimestamp = new Date(Date.now() - 60_000).toISOString();
     upsertMachine(
