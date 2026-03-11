@@ -26,7 +26,7 @@ export function startTerminalServer(port: number, machineId: string) {
     port,
     hostname: "0.0.0.0",
 
-    fetch(req, server) {
+    async fetch(req, server) {
       const url = new URL(req.url);
       if (url.pathname === "/ws/terminal") {
         const upgraded = server.upgrade(req, {
