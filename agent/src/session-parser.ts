@@ -157,8 +157,20 @@ export async function parseSession(jsonlPath: string): Promise<SessionInfo | nul
     const lastLines = await readLastLines(jsonlPath, 20);
     if (lastLines.length === 0) return null;
 
-    const lastLine = lastLines[lastLines.length - 1];
-    const lastEntry: JsonlEntry = JSON.parse(lastLine);
+    // Find the last real entry (skip non-standard types like "last-prompt", "summary")
+    let lastEntry: JsonlEntry | null = null;
+    for (let i = lastLines.length - 1; i >= 0; i--) {
+      try {
+        const entry: JsonlEntry = JSON.parse(lastLines[i]);
+        if ((entry.type === "user" || entry.type === "assistant") && entry.cwd) {
+          lastEntry = entry;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    if (!lastEntry) return null;
 
     // Find the last full assistant text message
     const lastAssistantMessage = findLastAssistantText(lastLines);
