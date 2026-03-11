@@ -1,13 +1,13 @@
 import { useState } from "react";
+import type { TerminalMultiplexer } from "@agent-town/shared";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { MachineGroup } from "./components/MachineGroup";
 import { TerminalOverlay } from "./components/TerminalOverlay";
 
 interface TerminalTarget {
   machineId: string;
-  sessionId: string;
-  sessionLabel: string;
-  cwd: string;
+  sessionName: string;
+  multiplexer: TerminalMultiplexer;
 }
 
 export function App() {
@@ -61,13 +61,8 @@ export function App() {
           <MachineGroup
             key={machine.machineId}
             machine={machine}
-            onOpenTerminal={(sessionId, sessionLabel, cwd) =>
-              setTerminal({
-                machineId: machine.machineId,
-                sessionId,
-                sessionLabel,
-                cwd,
-              })
+            onOpenTerminal={(sessionName, multiplexer) =>
+              setTerminal({ machineId: machine.machineId, sessionName, multiplexer })
             }
           />
         ))}
@@ -76,9 +71,8 @@ export function App() {
       {terminal && (
         <TerminalOverlay
           machineId={terminal.machineId}
-          sessionId={terminal.sessionId}
-          sessionLabel={terminal.sessionLabel}
-          cwd={terminal.cwd}
+          sessionName={terminal.sessionName}
+          multiplexer={terminal.multiplexer}
           onClose={() => setTerminal(null)}
         />
       )}

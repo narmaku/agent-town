@@ -1,4 +1,4 @@
-import type { MachineInfo } from "@agent-town/shared";
+import type { MachineInfo, TerminalMultiplexer } from "@agent-town/shared";
 import { SessionCard } from "./SessionCard";
 
 function timeAgo(timestamp: string): string {
@@ -11,7 +11,7 @@ function timeAgo(timestamp: string): string {
 
 interface Props {
   machine: MachineInfo;
-  onOpenTerminal: (sessionId: string, sessionLabel: string, cwd: string) => void;
+  onOpenTerminal: (sessionName: string, multiplexer: TerminalMultiplexer) => void;
 }
 
 export function MachineGroup({ machine, onOpenTerminal }: Props) {
@@ -25,6 +25,11 @@ export function MachineGroup({ machine, onOpenTerminal }: Props) {
   const statusOrder = { needs_attention: 0, error: 1, working: 2, idle: 3, done: 4 };
   const sortedSessions = [...machine.sessions].sort(
     (a, b) => statusOrder[a.status] - statusOrder[b.status]
+  );
+
+  // Active (non-exited) multiplexer sessions for the terminal picker
+  const activeMuxSessions = (machine.multiplexerSessions || []).filter(
+    (s) => s.attached
   );
 
   return (
@@ -56,6 +61,7 @@ export function MachineGroup({ machine, onOpenTerminal }: Props) {
             key={session.sessionId}
             session={session}
             machineId={machine.machineId}
+            multiplexerSessions={activeMuxSessions}
             onOpenTerminal={onOpenTerminal}
           />
         ))}

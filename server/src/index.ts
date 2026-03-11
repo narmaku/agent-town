@@ -42,8 +42,7 @@ const server = Bun.serve({
     if (url.pathname === "/ws/terminal") {
       const machineId = url.searchParams.get("machineId");
       const session = url.searchParams.get("session");
-      const mode = url.searchParams.get("mode") || "claude";
-      const cwd = url.searchParams.get("cwd") || "";
+      const multiplexer = url.searchParams.get("multiplexer") || "zellij";
       const cols = url.searchParams.get("cols") || "120";
       const rows = url.searchParams.get("rows") || "40";
 
@@ -61,8 +60,7 @@ const server = Bun.serve({
           type: "terminal",
           machineId,
           session,
-          mode,
-          cwd,
+          multiplexer,
           cols,
           rows,
           agentHost: machine.agentAddress || machine.hostname,
@@ -167,13 +165,12 @@ const server = Bun.serve({
       }
 
       if (data.type === "terminal") {
-        const { agentHost, agentPort, session, mode, cwd, cols, rows } =
+        const { agentHost, agentPort, session, multiplexer, cols, rows } =
           data as {
             agentHost: string;
             agentPort: number;
             session: string;
-            mode: string;
-            cwd: string;
+            multiplexer: string;
             cols: string;
             rows: string;
           };
@@ -182,8 +179,7 @@ const server = Bun.serve({
         const agentUrl =
           `ws://${agentHost}:${agentPort}/ws/terminal` +
           `?session=${encodeURIComponent(session)}` +
-          `&mode=${mode}` +
-          `&cwd=${encodeURIComponent(cwd)}` +
+          `&multiplexer=${multiplexer}` +
           `&cols=${cols}&rows=${rows}`;
 
         const agentWs = new WebSocket(agentUrl);

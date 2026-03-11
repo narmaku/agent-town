@@ -400,6 +400,12 @@ body {
   background: #252525;
 }
 
+.no-terminal-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .terminal-btn {
   color: #22c55e;
   border-color: rgba(34, 197, 94, 0.3);

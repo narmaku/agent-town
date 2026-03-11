@@ -1,4 +1,4 @@
-import type { TerminalMultiplexer, MultiplexerSessionInfoInfo } from "@agent-town/shared";
+import type { TerminalMultiplexer, MultiplexerSessionInfo } from "@agent-town/shared";
 
 async function runCommand(cmd: string[]): Promise<string> {
   const proc = Bun.spawn(cmd, {

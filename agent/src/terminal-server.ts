@@ -11,18 +11,14 @@ interface TerminalSession {
 
 const activeTerminals = new Map<unknown, TerminalSession>();
 
-function buildCommand(mode: string, identifier: string, cwd?: string): string[] {
-  switch (mode) {
-    case "claude":
-      // Resume a specific Claude Code session directly
-      return ["claude", "--resume", identifier];
-    case "zellij":
-      return ["zellij", "attach", identifier];
-    case "tmux":
-      return ["tmux", "attach-session", "-t", identifier];
-    default:
-      return ["claude", "--resume", identifier];
+function buildAttachCommand(
+  multiplexer: "zellij" | "tmux",
+  sessionName: string
+): string[] {
+  if (multiplexer === "zellij") {
+    return ["zellij", "attach", sessionName];
   }
+  return ["tmux", "attach-session", "-t", sessionName];
 }
 
 export function startTerminalServer(port: number, machineId: string) {
@@ -35,9 +31,8 @@ export function startTerminalServer(port: number, machineId: string) {
       if (url.pathname === "/ws/terminal") {
         const upgraded = server.upgrade(req, {
           data: {
-            mode: url.searchParams.get("mode") || "claude",
+            multiplexer: url.searchParams.get("multiplexer") || "zellij",
             session: url.searchParams.get("session") || "",
-            cwd: url.searchParams.get("cwd") || "",
             cols: parseInt(url.searchParams.get("cols") || "120"),
             rows: parseInt(url.searchParams.get("rows") || "40"),
           },
@@ -52,10 +47,9 @@ export function startTerminalServer(port: number, machineId: string) {
 
     websocket: {
       open(ws) {
-        const { mode, session, cwd, cols, rows } = ws.data as {
-          mode: string;
+        const { multiplexer, session, cols, rows } = ws.data as {
+          multiplexer: "zellij" | "tmux";
           session: string;
-          cwd: string;
           cols: number;
           rows: number;
         };
@@ -66,11 +60,16 @@ export function startTerminalServer(port: number, machineId: string) {
           return;
         }
 
-        const cmd = buildCommand(mode, session, cwd);
+        const cmd = buildAttachCommand(multiplexer, session);
 
-        // Strip CLAUDECODE env var so claude --resume works
-        // (the agent may itself be running inside a Claude Code session)
+        // Strip multiplexer and Claude env vars so attach works even when
+        // the agent itself runs inside a zellij/tmux/claude session
         const cleanEnv = { ...process.env };
+        delete cleanEnv.ZELLIJ;
+        delete cleanEnv.ZELLIJ_SESSION_NAME;
+        delete cleanEnv.ZELLIJ_PANE_ID;
+        delete cleanEnv.TMUX;
+        delete cleanEnv.TMUX_PANE;
         delete cleanEnv.CLAUDECODE;
 
         const proc = Bun.spawn(
@@ -79,7 +78,6 @@ export function startTerminalServer(port: number, machineId: string) {
             stdin: "pipe",
             stdout: "pipe",
             stderr: "pipe",
-            cwd: cwd || undefined,
             env: cleanEnv,
           }
         );

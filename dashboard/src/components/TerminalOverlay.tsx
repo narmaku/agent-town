@@ -3,26 +3,24 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import type { TerminalMultiplexer } from "@agent-town/shared";
 
 interface Props {
   machineId: string;
-  sessionId: string;
-  sessionLabel: string;
-  cwd: string;
+  sessionName: string;
+  multiplexer: TerminalMultiplexer;
   onClose: () => void;
 }
 
 export function TerminalOverlay({
   machineId,
-  sessionId,
-  sessionLabel,
-  cwd,
+  sessionName,
+  multiplexer,
   onClose,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
 
   const handleClose = useCallback(() => {
     wsRef.current?.close();
@@ -58,15 +56,12 @@ export function TerminalOverlay({
     });
 
     terminalRef.current = term;
-    fitAddonRef.current = fitAddon;
 
-    // Connect to the terminal proxy — uses claude --resume <sessionId>
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const params = new URLSearchParams({
       machineId,
-      session: sessionId,
-      mode: "claude",
-      cwd,
+      session: sessionName,
+      multiplexer,
       cols: String(term.cols),
       rows: String(term.rows),
     });
@@ -132,14 +127,14 @@ export function TerminalOverlay({
       ws.close();
       term.dispose();
     };
-  }, [machineId, sessionId, cwd, handleClose]);
+  }, [machineId, sessionName, multiplexer, handleClose]);
 
   return (
     <div className="terminal-overlay">
       <div className="terminal-header">
         <div className="terminal-title">
-          <span className="terminal-session-name">{sessionLabel}</span>
-          <span className="terminal-multiplexer">claude --resume</span>
+          <span className="terminal-session-name">{sessionName}</span>
+          <span className="terminal-multiplexer">{multiplexer}</span>
         </div>
         <div className="terminal-controls">
           <span className="terminal-hint">ESC ESC to close</span>
