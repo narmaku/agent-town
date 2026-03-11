@@ -11,7 +11,8 @@ export interface SessionInfo {
   gitBranch: string;
   status: SessionStatus;
   lastActivity: string; // ISO timestamp
-  lastMessage: string; // summary of last assistant/user message
+  lastMessage: string; // short summary of last message
+  lastAssistantMessage?: string; // full markdown text of last assistant response
   cwd: string;
   model?: string;
   version?: string;

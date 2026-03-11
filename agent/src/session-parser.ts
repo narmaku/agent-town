@@ -118,14 +118,50 @@ async function readLastLines(filePath: string, count: number): Promise<string[]>
   return lines.slice(-count);
 }
 
+function extractFullAssistantText(entry: JsonlEntry): string | undefined {
+  if (entry.type !== "assistant") return undefined;
+  const content = entry.message?.content;
+  if (!content || !Array.isArray(content)) return undefined;
+
+  const textBlocks: string[] = [];
+  for (const block of content) {
+    const b = block as { type: string; text?: string; name?: string };
+    if (b.type === "text" && b.text) {
+      textBlocks.push(b.text);
+    }
+  }
+  return textBlocks.length > 0 ? textBlocks.join("\n\n") : undefined;
+}
+
+/**
+ * Find the last assistant message with text content by scanning
+ * the last N lines of the JSONL file backward.
+ */
+function findLastAssistantText(lines: string[]): string | undefined {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const entry: JsonlEntry = JSON.parse(lines[i]);
+      const text = extractFullAssistantText(entry);
+      if (text) return text;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
 export async function parseSession(jsonlPath: string): Promise<SessionInfo | null> {
   try {
     const fileStat = await stat(jsonlPath);
-    const lastLines = await readLastLines(jsonlPath, 3);
+    // Read more lines to find the last assistant text message
+    const lastLines = await readLastLines(jsonlPath, 20);
     if (lastLines.length === 0) return null;
 
     const lastLine = lastLines[lastLines.length - 1];
     const lastEntry: JsonlEntry = JSON.parse(lastLine);
+
+    // Find the last full assistant text message
+    const lastAssistantMessage = findLastAssistantText(lastLines);
 
     // Read the very first line to get the original cwd (project root)
     const firstLineStr = await readFirstLine(jsonlPath);
@@ -151,6 +187,7 @@ export async function parseSession(jsonlPath: string): Promise<SessionInfo | nul
       lastActivity:
         lastEntry.timestamp || new Date(fileStat.mtimeMs).toISOString(),
       lastMessage: summarizeLastMessage(lastEntry),
+      lastAssistantMessage,
       cwd: lastEntry.cwd,
       model: firstEntry?.message?.model || lastEntry.message?.model,
       version: lastEntry.version,

@@ -124,6 +124,43 @@ const server = Bun.serve({
       }
     }
 
+    // API: send text to a session's multiplexer
+    if (url.pathname === "/api/sessions/send" && req.method === "POST") {
+      try {
+        const body = await req.json() as {
+          machineId: string;
+          multiplexer: string;
+          session: string;
+          text: string;
+        };
+
+        const machine = getMachine(body.machineId);
+        if (!machine || !machine.terminalPort) {
+          return Response.json({ error: "Machine not found" }, { status: 404 });
+        }
+
+        const agentHost = machine.agentAddress || machine.hostname;
+        const agentUrl = `http://${agentHost}:${machine.terminalPort}/api/send`;
+
+        const agentResp = await fetch(agentUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            multiplexer: body.multiplexer,
+            session: body.session,
+            text: body.text,
+          }),
+        });
+
+        if (!agentResp.ok) {
+          return Response.json({ error: "Agent send failed" }, { status: 502 });
+        }
+        return Response.json({ ok: true });
+      } catch {
+        return Response.json({ error: "Failed to send" }, { status: 500 });
+      }
+    }
+
     // API: get all machines
     if (url.pathname === "/api/machines" && req.method === "GET") {
       return Response.json(getAllMachines());

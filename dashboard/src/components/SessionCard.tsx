@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { SessionInfo, SessionStatus, TerminalMultiplexer } from "@agent-town/shared";
+import { MessageView } from "./MessageView";
+import { SendMessage } from "./SendMessage";
 
 const STATUS_CONFIG: Record<
   SessionStatus,
@@ -155,14 +157,19 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
         )}
       </div>
 
-      {session.lastMessage && (
-        <div className={`session-message ${expanded ? "expanded" : ""}`}>
+      {!expanded && session.lastMessage && (
+        <div className="session-message">
           {session.lastMessage}
         </div>
       )}
 
       {expanded && (
         <div className="session-details">
+          {/* Rich-formatted last assistant message */}
+          <MessageView
+            lastMessage={session.lastMessage}
+            fullMessage={session.lastAssistantMessage}
+          />
           <div className="detail-row">
             <span className="detail-label">Session ID</span>
             <span className="detail-value mono">{session.sessionId}</span>
@@ -204,6 +211,15 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
               </button>
             )}
           </div>
+
+          {/* Send message to agent */}
+          {hasTerminal && (
+            <SendMessage
+              machineId={machineId}
+              multiplexer={session.multiplexer!}
+              session={session.multiplexerSession!}
+            />
+          )}
         </div>
       )}
 

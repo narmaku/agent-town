@@ -42,6 +42,56 @@ export function startTerminalServer(port: number, machineId: string) {
         }
         return undefined;
       }
+      // HTTP endpoint: send text to a multiplexer session
+      if (url.pathname === "/api/send" && req.method === "POST") {
+        try {
+          const body = await req.json() as {
+            multiplexer: "zellij" | "tmux";
+            session: string;
+            text: string;
+          };
+
+          if (!body.session || !body.text) {
+            return Response.json({ error: "Missing session or text" }, { status: 400 });
+          }
+
+          const cleanEnv = { ...process.env };
+          delete cleanEnv.ZELLIJ;
+          delete cleanEnv.ZELLIJ_SESSION_NAME;
+          delete cleanEnv.TMUX;
+          delete cleanEnv.CLAUDECODE;
+
+          if (body.multiplexer === "tmux") {
+            // tmux send-keys works reliably
+            const proc = Bun.spawn(
+              ["tmux", "send-keys", "-t", body.session, body.text, "Enter"],
+              { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+            );
+            await proc.exited;
+            return Response.json({ ok: true });
+          }
+
+          // For zellij, use write-chars + write 13 (Enter)
+          const writeChars = Bun.spawn(
+            ["zellij", "--session", body.session, "action", "write-chars", body.text],
+            { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+          );
+          await writeChars.exited;
+
+          // Small delay then send Enter
+          await new Promise((r) => setTimeout(r, 200));
+          const writeEnter = Bun.spawn(
+            ["zellij", "--session", body.session, "action", "write", "13"],
+            { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+          );
+          await writeEnter.exited;
+
+          return Response.json({ ok: true });
+        } catch {
+          return Response.json({ error: "Failed to send" }, { status: 500 });
+        }
+      }
+
       return new Response("Agent Town Terminal Server", { status: 200 });
     },
 
