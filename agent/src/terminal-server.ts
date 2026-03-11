@@ -42,6 +42,91 @@ export function startTerminalServer(port: number, machineId: string) {
         }
         return undefined;
       }
+      // HTTP endpoint: launch a new multiplexer session with claude
+      if (url.pathname === "/api/launch" && req.method === "POST") {
+        try {
+          const body = await req.json() as {
+            sessionName: string;
+            projectDir: string;
+            multiplexer: "zellij" | "tmux";
+            zellijLayout?: string;
+            model?: string;
+          };
+
+          if (!body.sessionName || !body.projectDir) {
+            return Response.json({ error: "Missing sessionName or projectDir" }, { status: 400 });
+          }
+
+          const cleanEnv = { ...process.env };
+          delete cleanEnv.ZELLIJ;
+          delete cleanEnv.ZELLIJ_SESSION_NAME;
+          delete cleanEnv.ZELLIJ_PANE_ID;
+          delete cleanEnv.TMUX;
+          delete cleanEnv.TMUX_PANE;
+          delete cleanEnv.CLAUDECODE;
+
+          const claudeCmd = body.model ? `claude --model ${body.model}` : "claude";
+
+          if (body.multiplexer === "tmux") {
+            // Create tmux session in the project directory
+            const newSession = Bun.spawn(
+              ["tmux", "new-session", "-d", "-s", body.sessionName, "-c", body.projectDir],
+              { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+            );
+            await newSession.exited;
+            if (newSession.exitCode !== 0) {
+              const stderr = await new Response(newSession.stderr).text();
+              return Response.json({ error: `tmux new-session failed: ${stderr}` }, { status: 500 });
+            }
+
+            // Send claude command
+            const sendKeys = Bun.spawn(
+              ["tmux", "send-keys", "-t", body.sessionName, claudeCmd, "Enter"],
+              { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+            );
+            await sendKeys.exited;
+
+            return Response.json({ ok: true });
+          }
+
+          // Zellij: create session with layout
+          const zellijArgs = ["zellij", "-s", body.sessionName];
+          if (body.zellijLayout) {
+            zellijArgs.push("-n", body.zellijLayout);
+          }
+
+          const zellijProc = Bun.spawn(zellijArgs, {
+            env: cleanEnv,
+            stdout: "pipe",
+            stderr: "pipe",
+            cwd: body.projectDir,
+          });
+
+          // Don't await zellij — it may stay running. Give it time to start.
+          await new Promise((r) => setTimeout(r, 1500));
+
+          // Send cd + claude command via write-chars
+          const fullCmd = `cd ${body.projectDir} && ${claudeCmd}`;
+          const writeChars = Bun.spawn(
+            ["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd],
+            { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+          );
+          await writeChars.exited;
+
+          // Send Enter
+          await new Promise((r) => setTimeout(r, 200));
+          const writeEnter = Bun.spawn(
+            ["zellij", "--session", body.sessionName, "action", "write", "13"],
+            { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+          );
+          await writeEnter.exited;
+
+          return Response.json({ ok: true });
+        } catch (err) {
+          return Response.json({ error: "Failed to launch session" }, { status: 500 });
+        }
+      }
+
       // HTTP endpoint: send text to a multiplexer session
       if (url.pathname === "/api/send" && req.method === "POST") {
         try {

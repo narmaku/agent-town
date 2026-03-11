@@ -1,4 +1,4 @@
-import type { Heartbeat, MachineInfo } from "@agent-town/shared";
+import type { Heartbeat, MachineInfo, Settings } from "@agent-town/shared";
 
 // How long (ms) before a machine is considered offline
 const MACHINE_TIMEOUT_MS = 30_000; // 30 seconds without heartbeat
@@ -88,4 +88,19 @@ export function getAllMachines(): MachineInfo[] {
 
 export function getMachine(machineId: string): MachineInfo | undefined {
   return machines.get(machineId);
+}
+
+// Settings store
+let settings: Settings = {
+  defaultMultiplexer: "zellij",
+  zellijLayout: "agent",
+};
+
+export function getSettings(): Settings {
+  return { ...settings };
+}
+
+export function updateSettings(patch: Partial<Settings>): Settings {
+  settings = { ...settings, ...patch };
+  return { ...settings };
 }

@@ -61,6 +61,18 @@ export interface RenameSessionRequest {
   name: string;
 }
 
+export interface Settings {
+  defaultMultiplexer: TerminalMultiplexer;
+  zellijLayout: string;
+  defaultModel?: string;
+}
+
+export interface LaunchAgentRequest {
+  machineId: string;
+  sessionName: string;
+  projectDir: string;
+}
+
 export interface WebSocketMessage {
   type: "heartbeat" | "machines_update" | "terminal_data" | "terminal_resize";
   payload: unknown;

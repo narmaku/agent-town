@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import type { Heartbeat, RenameSessionRequest, WebSocketMessage } from "@agent-town/shared";
-import { upsertMachine, getAllMachines, getMachine, renameSession } from "./store";
+import type { Heartbeat, RenameSessionRequest, LaunchAgentRequest, Settings, WebSocketMessage } from "@agent-town/shared";
+import { upsertMachine, getAllMachines, getMachine, renameSession, getSettings, updateSettings } from "./store";
 
 const PORT = Number(process.env.AGENT_TOWN_PORT || "4680");
 const DASHBOARD_DIR = join(import.meta.dir, "../../dashboard/dist");
@@ -158,6 +158,57 @@ const server = Bun.serve({
         return Response.json({ ok: true });
       } catch {
         return Response.json({ error: "Failed to send" }, { status: 500 });
+      }
+    }
+
+    // API: get settings
+    if (url.pathname === "/api/settings" && req.method === "GET") {
+      return Response.json(getSettings());
+    }
+
+    // API: update settings
+    if (url.pathname === "/api/settings" && req.method === "POST") {
+      try {
+        const body: Partial<Settings> = await req.json();
+        const updated = updateSettings(body);
+        return Response.json(updated);
+      } catch {
+        return Response.json({ error: "Invalid payload" }, { status: 400 });
+      }
+    }
+
+    // API: launch a new agent session
+    if (url.pathname === "/api/agents/launch" && req.method === "POST") {
+      try {
+        const body: LaunchAgentRequest = await req.json();
+        const machine = getMachine(body.machineId);
+        if (!machine || !machine.terminalPort) {
+          return Response.json({ error: "Machine not found" }, { status: 404 });
+        }
+
+        const settings = getSettings();
+        const agentHost = machine.agentAddress || machine.hostname;
+        const agentUrl = `http://${agentHost}:${machine.terminalPort}/api/launch`;
+
+        const agentResp = await fetch(agentUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionName: body.sessionName,
+            projectDir: body.projectDir,
+            multiplexer: settings.defaultMultiplexer,
+            zellijLayout: settings.zellijLayout,
+            model: settings.defaultModel,
+          }),
+        });
+
+        if (!agentResp.ok) {
+          const errText = await agentResp.text();
+          return Response.json({ error: errText || "Agent launch failed" }, { status: 502 });
+        }
+        return Response.json({ ok: true });
+      } catch {
+        return Response.json({ error: "Failed to launch agent" }, { status: 500 });
       }
     }
 
