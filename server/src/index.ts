@@ -124,6 +124,41 @@ const server = Bun.serve({
       }
     }
 
+    // API: kill/close a multiplexer session
+    if (url.pathname === "/api/sessions/kill" && req.method === "POST") {
+      try {
+        const body = await req.json() as {
+          machineId: string;
+          multiplexer: string;
+          session: string;
+        };
+
+        const machine = getMachine(body.machineId);
+        if (!machine || !machine.terminalPort) {
+          return Response.json({ error: "Machine not found" }, { status: 404 });
+        }
+
+        const agentHost = machine.agentAddress || machine.hostname;
+        const agentUrl = `http://${agentHost}:${machine.terminalPort}/api/kill`;
+
+        const agentResp = await fetch(agentUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            multiplexer: body.multiplexer,
+            session: body.session,
+          }),
+        });
+
+        if (!agentResp.ok) {
+          return Response.json({ error: "Agent kill failed" }, { status: 502 });
+        }
+        return Response.json({ ok: true });
+      } catch {
+        return Response.json({ error: "Failed to kill session" }, { status: 500 });
+      }
+    }
+
     // API: send text to a session's multiplexer
     if (url.pathname === "/api/sessions/send" && req.method === "POST") {
       try {

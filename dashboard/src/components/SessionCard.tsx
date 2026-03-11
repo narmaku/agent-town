@@ -105,6 +105,26 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
     }
   }
 
+  async function handleKillSession(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!hasTerminal) return;
+    if (!window.confirm(`Close session "${session.multiplexerSession}"? This will terminate the agent.`)) return;
+
+    try {
+      await fetch("/api/sessions/kill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          machineId,
+          multiplexer: session.multiplexer,
+          session: session.multiplexerSession,
+        }),
+      });
+    } catch {
+      // will disappear on next heartbeat
+    }
+  }
+
   return (
     <div
       className={`session-card ${expanded ? "expanded" : ""}`}
@@ -208,6 +228,14 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
                 onClick={handleOpenTerminal}
               >
                 Open Terminal
+              </button>
+            )}
+            {hasTerminal && (
+              <button
+                className="action-btn kill-btn"
+                onClick={handleKillSession}
+              >
+                Close Agent
               </button>
             )}
           </div>

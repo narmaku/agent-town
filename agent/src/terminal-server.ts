@@ -127,6 +127,44 @@ export function startTerminalServer(port: number, machineId: string) {
         }
       }
 
+      // HTTP endpoint: kill/close a multiplexer session
+      if (url.pathname === "/api/kill" && req.method === "POST") {
+        try {
+          const body = await req.json() as {
+            multiplexer: "zellij" | "tmux";
+            session: string;
+          };
+
+          if (!body.session) {
+            return Response.json({ error: "Missing session" }, { status: 400 });
+          }
+
+          const cleanEnv = { ...process.env };
+          delete cleanEnv.ZELLIJ;
+          delete cleanEnv.ZELLIJ_SESSION_NAME;
+          delete cleanEnv.TMUX;
+          delete cleanEnv.CLAUDECODE;
+
+          if (body.multiplexer === "tmux") {
+            const proc = Bun.spawn(
+              ["tmux", "kill-session", "-t", body.session],
+              { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+            );
+            await proc.exited;
+          } else {
+            const proc = Bun.spawn(
+              ["zellij", "delete-session", body.session, "--force"],
+              { env: cleanEnv, stdout: "pipe", stderr: "pipe" }
+            );
+            await proc.exited;
+          }
+
+          return Response.json({ ok: true });
+        } catch {
+          return Response.json({ error: "Failed to kill session" }, { status: 500 });
+        }
+      }
+
       // HTTP endpoint: send text to a multiplexer session
       if (url.pathname === "/api/send" && req.method === "POST") {
         try {
