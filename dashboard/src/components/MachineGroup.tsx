@@ -27,11 +27,6 @@ export function MachineGroup({ machine, onOpenTerminal }: Props) {
     (a, b) => statusOrder[a.status] - statusOrder[b.status]
   );
 
-  // Active (non-exited) multiplexer sessions for the terminal picker
-  const activeMuxSessions = (machine.multiplexerSessions || []).filter(
-    (s) => s.attached
-  );
-
   return (
     <div className="machine-group">
       <div className="machine-header">
@@ -61,7 +56,6 @@ export function MachineGroup({ machine, onOpenTerminal }: Props) {
             key={session.sessionId}
             session={session}
             machineId={machine.machineId}
-            multiplexerSessions={activeMuxSessions}
             onOpenTerminal={onOpenTerminal}
           />
         ))}

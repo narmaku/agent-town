@@ -1,0 +1,5 @@
+// Minimal layout for agent-town terminal sessions.
+// No tab bar, no status bar, no pane frames — just the raw terminal.
+layout {
+    pane borderless=true
+}

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { Heartbeat } from "@agent-town/shared";
 import { discoverSessions } from "./session-parser";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
+import { discoverProcessMappings } from "./process-mapper";
 import { startTerminalServer } from "./terminal-server";
 
 const SERVER_URL = process.env.AGENT_TOWN_SERVER || "http://localhost:4680";
@@ -20,11 +21,25 @@ const machinePlatform = platform();
 
 async function sendHeartbeat(): Promise<void> {
   try {
-    const [sessions, multiplexers, multiplexerSessions] = await Promise.all([
-      discoverSessions(),
-      detectMultiplexers(),
-      listAllSessions(),
-    ]);
+    const [sessions, multiplexers, multiplexerSessions, processMappings] =
+      await Promise.all([
+        discoverSessions(),
+        detectMultiplexers(),
+        listAllSessions(),
+        discoverProcessMappings(),
+      ]);
+
+    // Enrich sessions with their multiplexer mapping (auto-discovered)
+    for (const session of sessions) {
+      const mapping = processMappings.get(session.projectPath);
+      if (mapping) {
+        session.multiplexer = mapping.multiplexer;
+        session.multiplexerSession = mapping.session;
+      }
+    }
+
+    // Only include active (non-exited) multiplexer sessions
+    const activeMuxSessions = multiplexerSessions.filter((s) => s.attached);
 
     const heartbeat: Heartbeat = {
       machineId: MACHINE_ID,
@@ -32,7 +47,7 @@ async function sendHeartbeat(): Promise<void> {
       platform: machinePlatform,
       sessions,
       multiplexers,
-      multiplexerSessions,
+      multiplexerSessions: activeMuxSessions,
       terminalPort: TERMINAL_PORT,
       timestamp: new Date().toISOString(),
     };

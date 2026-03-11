@@ -36,19 +36,33 @@ Open http://localhost:4680
 
 For the best experience with Agent Town, run each Claude Code agent in its **own named terminal session**. This makes it easy to attach to any agent directly from the dashboard.
 
-### With zellij
+### With zellij (recommended: minimal layout)
+
+For the cleanest web terminal experience, create a minimal zellij layout without tab bar or status bar:
 
 ```bash
-# Create a named session for each project
-zellij -s rubric-kit
+# Create the minimal layout (one-time setup)
+mkdir -p ~/.config/zellij/layouts
+cat > ~/.config/zellij/layouts/agent.kdl << 'EOF'
+layout {
+    pane borderless=true
+}
+EOF
+```
+
+Then create sessions using this layout:
+
+```bash
+# Create a named session for each project with minimal UI
+zellij -s rubric-kit --layout agent
 cd ~/development/rubric-kit && claude
 
-# In another terminal, create another session
-zellij -s evaluation-data
+# In another terminal
+zellij -s evaluation-data --layout agent
 cd ~/development/evaluation-data && claude
 
 # And another
-zellij -s deploy
+zellij -s deploy --layout agent
 cd ~/development/lscore && claude
 ```
 
