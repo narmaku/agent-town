@@ -58,8 +58,8 @@ describe("session-parser", () => {
     expect(session!.lastMessage).toContain("Hello, I can help");
   });
 
-  test("detects needs_attention when assistant sent text and is waiting", async () => {
-    // Assistant sent text-only response (no tool_use) — waiting for user
+  test("detects working when file was just modified (< 30s)", async () => {
+    // Any entry type — if the file was just written, it's working
     const filePath = await createTempJsonl(tempDir, [
       makeEntry({
         type: "assistant",
@@ -72,7 +72,8 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.status).toBe("needs_attention");
+    // File was just created so mtime is < 30s ago = working
+    expect(session!.status).toBe("working");
   });
 
   test("detects working when user just sent a message", async () => {

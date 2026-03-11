@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalMultiplexer } from "@agent-town/shared";
 
@@ -47,9 +48,12 @@ export function TerminalOverlay({
 
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
+    const unicode11Addon = new Unicode11Addon();
 
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
+    term.loadAddon(unicode11Addon);
+    term.unicode.activeVersion = "11";
     term.open(containerRef.current);
 
     // Fit immediately, then again after a short delay to ensure accurate sizing

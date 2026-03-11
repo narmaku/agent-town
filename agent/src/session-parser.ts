@@ -5,8 +5,15 @@ import type { SessionInfo, SessionStatus } from "@agent-town/shared";
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
-// How long (ms) since last activity before a session is considered idle
-const IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+// How long (ms) since last JSONL write before a session is considered idle
+const IDLE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+// How long (ms) since last tool_use before we consider the agent might be
+// waiting for user permission (tool calls can take a while to execute)
+const PERMISSION_WAIT_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+
+// How long (ms) since assistant text before we assume it's waiting for user
+const USER_INPUT_WAIT_THRESHOLD_MS = 60 * 1000; // 1 minute
 
 interface JsonlEntry {
   type: "user" | "assistant";
@@ -25,24 +32,20 @@ interface JsonlEntry {
 }
 
 function detectStatus(lastEntry: JsonlEntry, lastModifiedMs: number): SessionStatus {
+  // Age = time since the JSONL file was last modified (written to).
+  // During active work, entries are appended every few seconds.
   const age = Date.now() - lastModifiedMs;
 
-  // If the last entry is from the user and contains a tool_result, the assistant is working
-  if (lastEntry.type === "user" && lastEntry.message?.content) {
-    const content = lastEntry.message.content;
-    if (Array.isArray(content)) {
-      const hasToolResult = content.some(
-        (block: { type?: string }) => block.type === "tool_result"
-      );
-      if (hasToolResult) {
-        // Tool result just came in — assistant should be responding
-        return age < IDLE_THRESHOLD_MS ? "working" : "idle";
-      }
-    }
-    // User typed something — assistant should respond
-    if (typeof content === "string") {
-      return age < IDLE_THRESHOLD_MS ? "working" : "idle";
-    }
+  // If the file was modified very recently (< 30s), the session is actively running
+  if (age < 30_000) {
+    return "working";
+  }
+
+  // If the last entry is from the user (tool_result or typed message),
+  // the assistant should be responding
+  if (lastEntry.type === "user") {
+    // Still within idle threshold — assistant is probably thinking/generating
+    return age < IDLE_THRESHOLD_MS ? "working" : "idle";
   }
 
   // If the last entry is from the assistant
@@ -53,16 +56,22 @@ function detectStatus(lastEntry: JsonlEntry, lastModifiedMs: number): SessionSta
         (block: { type?: string }) => block.type === "tool_use"
       );
       if (hasToolUse) {
-        // Assistant is making tool calls — it's working or waiting for permission
-        // If file hasn't been modified in a while, it's likely waiting for user permission
-        return age > 10_000 ? "needs_attention" : "working";
+        // Assistant made a tool call. The tool is either:
+        // - Still executing (working) — age < 2min
+        // - Waiting for user permission (needs_attention) — age > 2min
+        // - Stale (idle) — age > 10min
+        if (age < PERMISSION_WAIT_THRESHOLD_MS) return "working";
+        if (age < IDLE_THRESHOLD_MS) return "needs_attention";
+        return "idle";
       }
       const hasText = content.some(
         (block: { type?: string }) => block.type === "text"
       );
-      if (hasText && !hasToolUse) {
-        // Assistant sent a text-only response — waiting for user input
-        return age < IDLE_THRESHOLD_MS ? "needs_attention" : "idle";
+      if (hasText) {
+        // Assistant sent a text response — waiting for user to reply
+        if (age < USER_INPUT_WAIT_THRESHOLD_MS) return "working";
+        if (age < IDLE_THRESHOLD_MS) return "needs_attention";
+        return "idle";
       }
     }
   }
