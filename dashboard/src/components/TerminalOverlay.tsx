@@ -34,7 +34,8 @@ export function TerminalOverlay({
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: '"SF Mono", "Fira Code", "Cascadia Code", monospace',
+      fontFamily: '"Fira Code", "Cascadia Code", "SF Mono", "Menlo", "DejaVu Sans Mono", monospace',
+      drawBoldTextInBrightColors: true,
       theme: {
         background: "#0a0a0a",
         foreground: "#e5e5e5",
@@ -51,12 +52,15 @@ export function TerminalOverlay({
     term.loadAddon(webLinksAddon);
     term.open(containerRef.current);
 
+    // Fit immediately, then again after a short delay to ensure accurate sizing
+    fitAddon.fit();
     requestAnimationFrame(() => {
       fitAddon.fit();
     });
 
     terminalRef.current = term;
 
+    // Connect after fit so we send accurate cols/rows from the start
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const params = new URLSearchParams({
       machineId,
@@ -72,6 +76,15 @@ export function TerminalOverlay({
 
     ws.onopen = () => {
       term.focus();
+      // Send a resize after connect to ensure the PTY matches the browser size
+      fitAddon.fit();
+      ws.send(
+        JSON.stringify({
+          type: "resize",
+          cols: term.cols,
+          rows: term.rows,
+        })
+      );
     };
 
     ws.onmessage = (event) => {

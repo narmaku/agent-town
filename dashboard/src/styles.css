@@ -537,6 +537,11 @@ body {
 
 .terminal-container {
   flex: 1;
-  padding: 4px;
+  padding: 0;
   overflow: hidden;
+}
+
+.terminal-container .xterm {
+  height: 100%;
+  padding: 4px;
 }

@@ -72,6 +72,11 @@ export function startTerminalServer(port: number, machineId: string) {
         delete cleanEnv.TMUX_PANE;
         delete cleanEnv.CLAUDECODE;
 
+        // Ensure proper terminal capabilities for xterm.js
+        cleanEnv.TERM = "xterm-256color";
+        cleanEnv.COLORTERM = "truecolor";
+        cleanEnv.LANG = cleanEnv.LANG || "en_US.UTF-8";
+
         const proc = Bun.spawn(
           ["python3", PTY_HELPER, String(cols), String(rows), ...cmd],
           {
