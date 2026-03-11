@@ -38,6 +38,11 @@ async function sendHeartbeat(): Promise<void> {
       }
     }
 
+    // Only show sessions that have an active multiplexer session
+    // (i.e., a running claude process mapped to a zellij/tmux session).
+    // Sessions without a mapping are just old JSONL history, not running agents.
+    const activeSessions = sessions.filter((s) => s.multiplexerSession);
+
     // Only include active (non-exited) multiplexer sessions
     const activeMuxSessions = multiplexerSessions.filter((s) => s.attached);
 
@@ -45,7 +50,7 @@ async function sendHeartbeat(): Promise<void> {
       machineId: MACHINE_ID,
       hostname: machineHostname,
       platform: machinePlatform,
-      sessions,
+      sessions: activeSessions,
       multiplexers,
       multiplexerSessions: activeMuxSessions,
       terminalPort: TERMINAL_PORT,
