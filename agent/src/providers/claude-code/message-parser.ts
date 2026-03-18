@@ -1,7 +1,13 @@
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createLogger, type SessionMessage, type SessionMessagesResponse } from "@agent-town/shared";
+import {
+  createLogger,
+  paginateFromEnd,
+  type SessionMessage,
+  type SessionMessagesResponse,
+  truncateId,
+} from "@agent-town/shared";
 
 const log = createLogger("claude:messages");
 
@@ -60,7 +66,7 @@ export async function getClaudeSessionMessages(
 ): Promise<SessionMessagesResponse> {
   const filePath = await findJsonlFile(sessionId);
   if (!filePath) {
-    log.warn(`session not found: sessionId=${sessionId.slice(0, 12)}`);
+    log.warn(`session not found: sessionId=${truncateId(sessionId)}`);
     throw new Error("Session not found");
   }
 
@@ -80,16 +86,12 @@ export async function getClaudeSessionMessages(
   }
 
   const total = entries.length;
-  const startFromEnd = offset + limit;
-  const startIndex = Math.max(0, total - startFromEnd);
-  const endIndex = Math.max(0, total - offset);
-  const slice = entries.slice(startIndex, endIndex);
-  const hasMore = startIndex > 0;
+  const { slice, hasMore } = paginateFromEnd(entries, offset, limit);
 
   const messages = slice.map(formatClaudeEntry);
 
   log.debug(
-    `getClaudeSessionMessages: session=${sessionId.slice(0, 12)} total=${total} returned=${messages.length} offset=${offset}`,
+    `getClaudeSessionMessages: session=${truncateId(sessionId)} total=${total} returned=${messages.length} offset=${offset}`,
   );
   return { messages, total, hasMore };
 }

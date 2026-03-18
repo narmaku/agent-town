@@ -1,5 +1,7 @@
+export { SESSION_ID_DISPLAY_LENGTH, SESSION_RETENTION_MS } from "./constants";
 export { createLogger, type Logger } from "./logger";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
+export { paginateFromEnd, safeJsonParse, truncateId } from "./utils";
 
 export type AgentType = "claude-code" | "opencode";
 

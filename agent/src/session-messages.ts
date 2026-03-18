@@ -1,5 +1,4 @@
-import type { AgentType, SessionMessagesResponse } from "@agent-town/shared";
-import { createLogger } from "@agent-town/shared";
+import { type AgentType, createLogger, type SessionMessagesResponse, truncateId } from "@agent-town/shared";
 import { getProvider } from "./providers/registry";
 
 const log = createLogger("session-messages");
@@ -19,7 +18,7 @@ export async function getSessionMessages(
   const provider = getProvider(type);
 
   if (!provider) {
-    log.warn(`no provider for agentType=${type}, session=${sessionId.slice(0, 12)}`);
+    log.warn(`no provider for agentType=${type}, session=${truncateId(sessionId)}`);
     throw new Error(`No provider available for agent type: ${type}`);
   }
 

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type AgentType, buildShellCommand, createLogger } from "@agent-town/shared";
+import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
 import type { Subprocess } from "bun";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { getAllProviders, getProvider } from "./providers/registry";
@@ -505,7 +505,7 @@ export function startTerminalServer(port: number, machineId: string) {
           }
 
           log.info(
-            `resume: session=${body.sessionId.slice(0, 12)} agent=${agentType} name=${body.sessionName} mux=${body.multiplexer} dir=${body.projectDir}`,
+            `resume: session=${truncateId(body.sessionId)} agent=${agentType} name=${body.sessionName} mux=${body.multiplexer} dir=${body.projectDir}`,
           );
 
           const nameErr = validateSessionName(body.sessionName);
@@ -737,7 +737,7 @@ export function startTerminalServer(port: number, machineId: string) {
             }
           }
 
-          log.info(`reconnect: session=${body.sessionId.slice(0, 12)} agent=${agentType} mux=${body.session}`);
+          log.info(`reconnect: session=${truncateId(body.sessionId)} agent=${agentType} mux=${body.session}`);
           return Response.json({ ok: true });
         } catch (err) {
           log.error(`reconnect failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -808,7 +808,7 @@ export function startTerminalServer(port: number, machineId: string) {
           const sidErr = validateSessionId(body.sessionId);
           if (sidErr) return Response.json({ error: sidErr }, { status: 400 });
 
-          log.info(`delete-session: sessionId=${body.sessionId.slice(0, 12)}`);
+          log.info(`delete-session: sessionId=${truncateId(body.sessionId)}`);
 
           // Try all providers if agentType not specified
           const agentType = body.agentType || "claude-code";
@@ -992,7 +992,7 @@ export function startTerminalServer(port: number, machineId: string) {
             if (result) {
               updateHookState(result);
               log.debug(
-                `hook: agent=${provider.type} session=${result.sessionId.slice(0, 12)} status=${result.status}${result.currentTool ? ` tool=${result.currentTool}` : ""}`,
+                `hook: agent=${provider.type} session=${truncateId(result.sessionId)} status=${result.status}${result.currentTool ? ` tool=${result.currentTool}` : ""}`,
               );
               break;
             }
