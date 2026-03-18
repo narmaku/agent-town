@@ -22,6 +22,27 @@ const PTY_INPUT_BASE_DELAY_MS = 500;
 const PTY_INPUT_PER_CHAR_MS = 15; // extra delay per character for TUI apps
 const BACKUP_ENTER_DELAY_MS = 300;
 
+// --- Shell escaping ---
+
+/** Characters that are safe to leave unquoted in a shell argument. */
+const SAFE_SHELL_RE = /^[a-zA-Z0-9._:/@=+-]+$/;
+
+/** Escape a string for safe use as a shell argument using single-quote wrapping. */
+export function shellEscape(arg: string): string {
+  if (arg.length === 0) return "''";
+  if (SAFE_SHELL_RE.test(arg)) return arg;
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+/** Join command parts into a shell-safe string, optionally prepending `cd <dir> &&`. */
+export function buildShellCommand(parts: string[], projectDir?: string): string {
+  const escaped = parts.map(shellEscape).join(" ");
+  if (projectDir) {
+    return `cd ${shellEscape(projectDir)} && ${escaped}`;
+  }
+  return escaped;
+}
+
 // --- Input validation ---
 
 const SAFE_NAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -328,7 +349,7 @@ export function startTerminalServer(port: number, machineId: string) {
 
           const cleanEnv = cleanMultiplexerEnv();
 
-          const agentCmd = provider.buildLaunchCommand({
+          const agentParts = provider.buildLaunchCommand({
             model: body.model,
             autonomous: body.autonomous,
           });
@@ -356,6 +377,7 @@ export function startTerminalServer(port: number, machineId: string) {
             }
 
             // Send agent command
+            const agentCmd = buildShellCommand(agentParts);
             const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
               env: cleanEnv,
               stdout: "pipe",
@@ -440,8 +462,7 @@ export function startTerminalServer(port: number, machineId: string) {
           }
 
           // Send cd + agent command via write-chars (include \n to execute)
-          // projectDir and agentCmd are validated above (no shell metacharacters)
-          const fullCmd = `cd '${body.projectDir}' && ${agentCmd}\n`;
+          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
           const writeChars = Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
             stdout: "pipe",
@@ -524,7 +545,7 @@ export function startTerminalServer(port: number, machineId: string) {
 
           const cleanEnv = cleanMultiplexerEnv();
 
-          const agentCmd = provider.buildResumeCommand({
+          const agentParts = provider.buildResumeCommand({
             sessionId: body.sessionId,
             model: body.model,
             autonomous: body.autonomous,
@@ -552,6 +573,7 @@ export function startTerminalServer(port: number, machineId: string) {
               return Response.json({ error: `tmux new-session failed: ${stderr}` }, { status: 500 });
             }
 
+            const agentCmd = buildShellCommand(agentParts);
             Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
               env: cleanEnv,
               stdout: "pipe",
@@ -622,8 +644,7 @@ export function startTerminalServer(port: number, machineId: string) {
           }
 
           // Send resume command
-          // projectDir and agentCmd are validated above (no shell metacharacters)
-          const fullCmd = `cd '${body.projectDir}' && ${agentCmd}\n`;
+          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
           Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
             stdout: "pipe",
@@ -690,10 +711,11 @@ export function startTerminalServer(port: number, machineId: string) {
 
           const cleanEnv = cleanMultiplexerEnv();
 
-          const agentCmd = provider.buildResumeCommand({
+          const agentParts = provider.buildResumeCommand({
             sessionId: body.sessionId,
             model: body.model,
           });
+          const agentCmd = buildShellCommand(agentParts);
 
           if (body.multiplexer === "tmux") {
             const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.session, agentCmd, "Enter"], {

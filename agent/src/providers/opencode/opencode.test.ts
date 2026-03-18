@@ -12,32 +12,32 @@ describe("OpenCodeProvider", () => {
     expect(provider.binaryName).toBe("opencode");
   });
 
-  test("buildLaunchCommand with defaults", () => {
-    const cmd = provider.buildLaunchCommand({});
-    expect(cmd).toBe("opencode");
+  test("buildLaunchCommand with defaults returns array", () => {
+    const parts = provider.buildLaunchCommand({});
+    expect(parts).toEqual(["opencode"]);
   });
 
-  test("buildLaunchCommand with model", () => {
-    const cmd = provider.buildLaunchCommand({ model: "anthropic/claude-opus-4-6" });
-    expect(cmd).toBe("opencode --model anthropic/claude-opus-4-6");
+  test("buildLaunchCommand with model returns array with flag and value", () => {
+    const parts = provider.buildLaunchCommand({ model: "anthropic/claude-opus-4-6" });
+    expect(parts).toEqual(["opencode", "--model", "anthropic/claude-opus-4-6"]);
   });
 
   test("buildLaunchCommand ignores autonomous (config-based)", () => {
-    const cmd = provider.buildLaunchCommand({ autonomous: true });
-    expect(cmd).toBe("opencode");
+    const parts = provider.buildLaunchCommand({ autonomous: true });
+    expect(parts).toEqual(["opencode"]);
   });
 
-  test("buildResumeCommand with session ID", () => {
-    const cmd = provider.buildResumeCommand({ sessionId: "ses_abc123" });
-    expect(cmd).toBe("opencode --session ses_abc123");
+  test("buildResumeCommand with session ID returns array", () => {
+    const parts = provider.buildResumeCommand({ sessionId: "ses_abc123" });
+    expect(parts).toEqual(["opencode", "--session", "ses_abc123"]);
   });
 
-  test("buildResumeCommand with model", () => {
-    const cmd = provider.buildResumeCommand({
+  test("buildResumeCommand with model returns array", () => {
+    const parts = provider.buildResumeCommand({
       sessionId: "ses_abc123",
       model: "anthropic/claude-opus-4-6",
     });
-    expect(cmd).toBe("opencode --session ses_abc123 --model anthropic/claude-opus-4-6");
+    expect(parts).toEqual(["opencode", "--session", "ses_abc123", "--model", "anthropic/claude-opus-4-6"]);
   });
 });
 

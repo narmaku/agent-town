@@ -41,16 +41,16 @@ export class OpenCodeProvider implements AgentProvider {
     return extractOpenCodeSessionIdFromArgs(args);
   }
 
-  buildLaunchCommand(opts: LaunchOptions): string {
+  buildLaunchCommand(opts: LaunchOptions): string[] {
     const parts = ["opencode"];
-    if (opts.model) parts.push(`--model ${opts.model}`);
-    return parts.join(" ");
+    if (opts.model) parts.push("--model", opts.model);
+    return parts;
   }
 
-  buildResumeCommand(opts: ResumeOptions): string {
+  buildResumeCommand(opts: ResumeOptions): string[] {
     const parts = ["opencode", "--session", opts.sessionId];
-    if (opts.model) parts.push(`--model ${opts.model}`);
-    return parts.join(" ");
+    if (opts.model) parts.push("--model", opts.model);
+    return parts;
   }
 
   handleHookEvent(payload: unknown): HookEventResult | null {

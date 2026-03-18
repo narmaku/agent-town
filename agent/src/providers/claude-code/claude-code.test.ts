@@ -11,38 +11,38 @@ describe("ClaudeCodeProvider", () => {
     expect(provider.binaryName).toBe("claude");
   });
 
-  test("buildLaunchCommand with defaults", () => {
-    const cmd = provider.buildLaunchCommand({});
-    expect(cmd).toBe("claude");
+  test("buildLaunchCommand with defaults returns array", () => {
+    const parts = provider.buildLaunchCommand({});
+    expect(parts).toEqual(["claude"]);
   });
 
-  test("buildLaunchCommand with model", () => {
-    const cmd = provider.buildLaunchCommand({ model: "claude-opus-4-6" });
-    expect(cmd).toBe("claude --model claude-opus-4-6");
+  test("buildLaunchCommand with model returns array with flag and value", () => {
+    const parts = provider.buildLaunchCommand({ model: "claude-opus-4-6" });
+    expect(parts).toEqual(["claude", "--model", "claude-opus-4-6"]);
   });
 
-  test("buildLaunchCommand with autonomous", () => {
-    const cmd = provider.buildLaunchCommand({ autonomous: true });
-    expect(cmd).toBe("claude --dangerously-skip-permissions");
+  test("buildLaunchCommand with autonomous returns array with flag", () => {
+    const parts = provider.buildLaunchCommand({ autonomous: true });
+    expect(parts).toEqual(["claude", "--dangerously-skip-permissions"]);
   });
 
   test("buildLaunchCommand with model and autonomous", () => {
-    const cmd = provider.buildLaunchCommand({ model: "claude-opus-4-6", autonomous: true });
-    expect(cmd).toBe("claude --model claude-opus-4-6 --dangerously-skip-permissions");
+    const parts = provider.buildLaunchCommand({ model: "claude-opus-4-6", autonomous: true });
+    expect(parts).toEqual(["claude", "--model", "claude-opus-4-6", "--dangerously-skip-permissions"]);
   });
 
-  test("buildResumeCommand with session ID", () => {
-    const cmd = provider.buildResumeCommand({ sessionId: "abc-123-def" });
-    expect(cmd).toBe("claude --resume abc-123-def");
+  test("buildResumeCommand with session ID returns array", () => {
+    const parts = provider.buildResumeCommand({ sessionId: "abc-123-def" });
+    expect(parts).toEqual(["claude", "--resume", "abc-123-def"]);
   });
 
   test("buildResumeCommand with model and autonomous", () => {
-    const cmd = provider.buildResumeCommand({
+    const parts = provider.buildResumeCommand({
       sessionId: "abc-123-def",
       model: "claude-opus-4-6",
       autonomous: true,
     });
-    expect(cmd).toBe("claude --resume abc-123-def --model claude-opus-4-6 --dangerously-skip-permissions");
+    expect(parts).toEqual(["claude", "--resume", "abc-123-def", "--model", "claude-opus-4-6", "--dangerously-skip-permissions"]);
   });
 
   test("filterAgentProcesses filters only claude binaries", () => {

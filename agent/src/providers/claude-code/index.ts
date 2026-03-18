@@ -45,18 +45,18 @@ export class ClaudeCodeProvider implements AgentProvider {
     return extractClaudeSessionIdFromArgs(args);
   }
 
-  buildLaunchCommand(opts: LaunchOptions): string {
+  buildLaunchCommand(opts: LaunchOptions): string[] {
     const parts = ["claude"];
-    if (opts.model) parts.push(`--model ${opts.model}`);
+    if (opts.model) parts.push("--model", opts.model);
     if (opts.autonomous) parts.push("--dangerously-skip-permissions");
-    return parts.join(" ");
+    return parts;
   }
 
-  buildResumeCommand(opts: ResumeOptions): string {
+  buildResumeCommand(opts: ResumeOptions): string[] {
     const parts = ["claude", "--resume", opts.sessionId];
-    if (opts.model) parts.push(`--model ${opts.model}`);
+    if (opts.model) parts.push("--model", opts.model);
     if (opts.autonomous) parts.push("--dangerously-skip-permissions");
-    return parts.join(" ");
+    return parts;
   }
 
   handleHookEvent(payload: unknown): HookEventResult | null {
