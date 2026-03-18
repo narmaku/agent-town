@@ -73,11 +73,19 @@ function broadcastToClients(message: WebSocketMessage): void {
   }
 }
 
-const _server = Bun.serve({
-  port: PORT,
-  hostname: "0.0.0.0",
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+};
 
-  async fetch(req, server) {
+function withSecurityHeaders(response: Response): Response {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
+async function routeRequest(req: Request, server: { upgrade: (req: Request, opts?: unknown) => boolean; requestIP: (req: Request) => { address: string } | null }): Promise<Response | undefined> {
     const url = new URL(req.url);
 
     // Log API requests at debug level
@@ -670,6 +678,15 @@ const _server = Bun.serve({
     }
 
     return new Response("Not found", { status: 404 });
+}
+
+const _server = Bun.serve({
+  port: PORT,
+  hostname: "0.0.0.0",
+
+  async fetch(req, server) {
+    const response = await routeRequest(req, server);
+    return response ? withSecurityHeaders(response) : undefined;
   },
 
   websocket: {
