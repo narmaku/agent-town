@@ -5,16 +5,15 @@ const log = createLogger("opencode:sdk");
 const OPENCODE_PORT = Number(process.env.OPENCODE_PORT || "4096");
 const OPENCODE_HOST = process.env.OPENCODE_HOST || "127.0.0.1";
 
-type OpencodeClient = InstanceType<typeof import("@opencode-ai/sdk").OpencodeClient>;
+type OpencodeClient = ReturnType<typeof import("@opencode-ai/sdk").createOpencodeClient>;
 
 let client: OpencodeClient | null = null;
 let lastCheckMs = 0;
 
-const RETRY_INTERVAL_MS = 30_000; // retry connection every 30s
+const RETRY_INTERVAL_MS = 30_000;
 
 /** Get or create the OpenCode SDK client. Returns null if server is not running. */
 export async function getOpenCodeClient(): Promise<OpencodeClient | null> {
-  // If we have a client, assume it's still valid (health is checked lazily)
   if (client) return client;
 
   // Don't hammer connection attempts
@@ -27,9 +26,9 @@ export async function getOpenCodeClient(): Promise<OpencodeClient | null> {
       baseUrl: `http://${OPENCODE_HOST}:${OPENCODE_PORT}`,
     });
 
-    // Test connection with health check
-    const { data } = await c.global.health();
-    if (data) {
+    // Test connection by listing sessions (no health endpoint in this SDK version)
+    const { data } = await c.session.list({ limit: 1 });
+    if (data !== undefined) {
       client = c;
       log.info(`connected to OpenCode server at ${OPENCODE_HOST}:${OPENCODE_PORT}`);
       return client;

@@ -22,43 +22,16 @@ interface SDKSessionInfo {
   createdAt?: number;
 }
 
+/**
+ * Discover Claude Code sessions by scanning JSONL files.
+ *
+ * The Claude Agent SDK's listSessions() is available but returns less data
+ * than JSONL parsing (no model, no version, no slug from entries, sessions
+ * without cwd appear as bare UUIDs). JSONL scanning remains the primary
+ * discovery method. SDK is used for message retrieval only.
+ */
 export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
-  const sessions: SessionInfo[] = [];
-
-  try {
-    const { listSessions } = await import("@anthropic-ai/claude-agent-sdk");
-    const sdkSessions: SDKSessionInfo[] = await listSessions();
-
-    const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-    for (const s of sdkSessions) {
-      if (s.lastModified < sevenDaysAgoMs) continue;
-
-      const cwd = s.cwd || "";
-      const projectName = cwd.split("/").pop() || "unknown";
-      const status = detectClaudeStatus(s.lastModified);
-
-      sessions.push({
-        sessionId: s.sessionId,
-        agentType: "claude-code",
-        slug: s.sessionId.slice(0, 8),
-        customName: s.customTitle,
-        projectPath: cwd,
-        projectName,
-        gitBranch: s.gitBranch && s.gitBranch !== "HEAD" ? s.gitBranch : "",
-        status,
-        lastActivity: new Date(s.lastModified).toISOString(),
-        lastMessage: s.summary || s.firstPrompt?.slice(0, 120) || "",
-        cwd,
-      });
-    }
-  } catch (err) {
-    log.debug(`discoverClaudeSessions: SDK failed: ${err instanceof Error ? err.message : String(err)}`);
-    // Fall back to JSONL scanning if SDK not available
-    return discoverClaudeSessionsFallback();
-  }
-
-  return sessions;
+  return discoverClaudeSessionsFromJsonl();
 }
 
 function detectClaudeStatus(lastModifiedMs: number): SessionStatus {
@@ -94,8 +67,8 @@ export interface ClaudeJsonlEntry {
   toolUseResult?: string;
 }
 
-async function discoverClaudeSessionsFallback(): Promise<SessionInfo[]> {
-  log.info("using JSONL fallback for session discovery");
+async function discoverClaudeSessionsFromJsonl(): Promise<SessionInfo[]> {
+  log.debug("scanning JSONL files for session discovery");
   const sessions: SessionInfo[] = [];
 
   try {
@@ -121,7 +94,7 @@ async function discoverClaudeSessionsFallback(): Promise<SessionInfo[]> {
       }
     }
   } catch (err) {
-    log.debug(`discoverClaudeSessionsFallback: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`discoverClaudeSessionsFromJsonl: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return sessions;
