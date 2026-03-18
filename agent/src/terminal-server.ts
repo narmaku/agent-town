@@ -876,48 +876,31 @@ export function startTerminalServer(port: number, machineId: string) {
           }
 
           const cleanEnv = cleanMultiplexerEnv();
+          cleanEnv.TERM = "xterm-256color";
 
           const isMultiline = body.text.includes("\n");
           log.info(
             `send: session=${body.session} mux=${body.multiplexer} chars=${body.text.length} multiline=${isMultiline}`,
           );
 
-          if (!isMultiline) {
-            // Single-line: use native multiplexer commands — reliable for all apps
-            if (body.multiplexer === "zellij") {
-              const proc = Bun.spawn(["zellij", "--session", body.session, "action", "write-chars", `${body.text}\n`], {
-                env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
-              });
-              await proc.exited;
-            } else {
-              const proc = Bun.spawn(["tmux", "send-keys", "-t", body.session, body.text, "Enter"], {
-                env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
-              });
-              await proc.exited;
-            }
-          } else {
-            // Multi-line: use PTY to handle bracketed paste mode
-            cleanEnv.TERM = "xterm-256color";
-            const attachCmd = buildAttachCommand(body.multiplexer, body.session);
-            const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
-              stdin: "pipe",
-              stdout: "pipe",
-              stderr: "pipe",
-              env: cleanEnv,
-            });
+          // Use PTY to send text — handles both CLI prompts and TUI apps
+          const attachCmd = buildAttachCommand(body.multiplexer, body.session);
+          const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
+            stdin: "pipe",
+            stdout: "pipe",
+            stderr: "pipe",
+            env: cleanEnv,
+          });
 
-            await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
-            proc.stdin.write(`${body.text}\r`);
+          await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
+          proc.stdin.write(`${body.text}\r`);
 
-            const inputDelay = PTY_INPUT_BASE_DELAY_MS + body.text.length * PTY_INPUT_PER_CHAR_MS;
-            await new Promise((r) => setTimeout(r, inputDelay));
-            proc.kill();
+          const inputDelay = PTY_INPUT_BASE_DELAY_MS + body.text.length * PTY_INPUT_PER_CHAR_MS;
+          await new Promise((r) => setTimeout(r, inputDelay));
+          proc.kill();
 
-            // Backup Enter via native command (PTY CR may be swallowed by paste buffer)
+          // Backup Enter via native command in case PTY CR was swallowed
+          if (isMultiline) {
             await new Promise((r) => setTimeout(r, BACKUP_ENTER_DELAY_MS));
             if (body.multiplexer === "zellij") {
               const enter = Bun.spawn(["zellij", "--session", body.session, "action", "write", "13"], {
