@@ -1,53 +1,9 @@
-import { createLogger, type SessionInfo, type SessionStatus } from "@agent-town/shared";
-
-const log = createLogger("claude:sessions");
-
-/**
- * Session discovery using the Claude Agent SDK.
- *
- * Uses `listSessions()` and `getSessionMessages()` from
- * @anthropic-ai/claude-agent-sdk instead of manually scanning JSONL files.
- */
-
-interface SDKSessionInfo {
-  sessionId: string;
-  summary: string;
-  lastModified: number;
-  fileSize?: number;
-  customTitle?: string;
-  firstPrompt?: string;
-  gitBranch?: string;
-  cwd?: string;
-  tag?: string;
-  createdAt?: number;
-}
-
-/**
- * Discover Claude Code sessions by scanning JSONL files.
- *
- * The Claude Agent SDK's listSessions() is available but returns less data
- * than JSONL parsing (no model, no version, no slug from entries, sessions
- * without cwd appear as bare UUIDs). JSONL scanning remains the primary
- * discovery method. SDK is used for message retrieval only.
- */
-export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
-  return discoverClaudeSessionsFromJsonl();
-}
-
-function detectClaudeStatus(lastModifiedMs: number): SessionStatus {
-  const age = Date.now() - lastModifiedMs;
-
-  if (age < 30_000) return "working";
-  if (age < 60_000) return "awaiting_input";
-  if (age < 10 * 60 * 1000) return "idle";
-  return "done";
-}
-
-// --- Fallback: JSONL scanning (if SDK import fails) ---
-
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { createLogger, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+
+const log = createLogger("claude:sessions");
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
@@ -67,8 +23,17 @@ export interface ClaudeJsonlEntry {
   toolUseResult?: string;
 }
 
-async function discoverClaudeSessionsFromJsonl(): Promise<SessionInfo[]> {
-  log.debug("scanning JSONL files for session discovery");
+function detectClaudeStatus(lastModifiedMs: number): SessionStatus {
+  const age = Date.now() - lastModifiedMs;
+
+  if (age < 30_000) return "working";
+  if (age < 60_000) return "awaiting_input";
+  if (age < 10 * 60 * 1000) return "idle";
+  return "done";
+}
+
+/** Discover Claude Code sessions by scanning JSONL files in ~/.claude/projects/. */
+export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
   const sessions: SessionInfo[] = [];
 
   try {
@@ -94,7 +59,7 @@ async function discoverClaudeSessionsFromJsonl(): Promise<SessionInfo[]> {
       }
     }
   } catch (err) {
-    log.debug(`discoverClaudeSessionsFromJsonl: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`discoverClaudeSessions: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return sessions;
@@ -133,8 +98,6 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
       } catch {}
     }
 
-    const summary = summarizeLastMessage(lastEntry);
-
     return {
       sessionId: lastEntry.sessionId,
       agentType: "claude-code",
@@ -144,13 +107,13 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
       gitBranch: lastEntry.gitBranch && lastEntry.gitBranch !== "HEAD" ? lastEntry.gitBranch : "",
       status: detectClaudeStatus(mtimeMs),
       lastActivity: lastEntry.timestamp || new Date(mtimeMs).toISOString(),
-      lastMessage: summary,
+      lastMessage: summarizeLastMessage(lastEntry),
       cwd: lastEntry.cwd,
       model: lastEntry.message?.model,
       version: lastEntry.version,
     };
   } catch (err) {
-    log.debug(`parseClaudeSessionFromJsonl: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`parseClaudeSession: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -198,5 +161,4 @@ export function pathToProjectDir(fsPath: string): string {
   return fsPath.replace(/\//g, "-").replace(/^-/, "-");
 }
 
-// Re-export parseSession for tests
 export { CLAUDE_PROJECTS_DIR, parseClaudeSessionFromJsonl as parseClaudeSession };
