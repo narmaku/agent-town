@@ -860,30 +860,45 @@ export function startTerminalServer(port: number, machineId: string) {
             return Response.json({ error: "Missing session or text" }, { status: 400 });
           }
 
-          // Try OpenCode TUI SDK for reliable text sending
-          if (body.agentType === "opencode") {
-            const openCodeProvider = getProvider("opencode");
-            if (openCodeProvider && "sendViaTUI" in openCodeProvider) {
-              const sent = await (openCodeProvider as { sendViaTUI: (text: string) => Promise<boolean> }).sendViaTUI(
-                body.text,
-              );
-              if (sent) {
-                log.info(`send: session=${body.session} via OpenCode TUI SDK chars=${body.text.length}`);
-                return Response.json({ ok: true });
-              }
-              log.debug("send: OpenCode TUI SDK unavailable, falling back to multiplexer");
-            }
-          }
-
           const cleanEnv = cleanMultiplexerEnv();
-          cleanEnv.TERM = "xterm-256color";
 
-          const isMultiline = body.text.includes("\n");
           log.info(
-            `send: session=${body.session} mux=${body.multiplexer} chars=${body.text.length} multiline=${isMultiline}`,
+            `send: session=${body.session} mux=${body.multiplexer} agent=${body.agentType || "claude-code"} chars=${body.text.length}`,
           );
 
-          // Use PTY to send text — handles both CLI prompts and TUI apps
+          // OpenCode (Bubble Tea TUI): use native multiplexer commands.
+          // PTY doesn't work — Bubble Tea processes chars one-by-one and
+          // the PTY kill truncates mid-stream. Native write-chars/send-keys
+          // deliver text atomically through the multiplexer's internal buffer.
+          if (body.agentType === "opencode") {
+            if (body.multiplexer === "zellij") {
+              // write 13 = Enter key (CR byte)
+              const write = Bun.spawn(
+                ["zellij", "--session", body.session, "action", "write-chars", body.text],
+                { env: cleanEnv, stdout: "pipe", stderr: "pipe" },
+              );
+              await write.exited;
+              const enter = Bun.spawn(
+                ["zellij", "--session", body.session, "action", "write", "13"],
+                { env: cleanEnv, stdout: "pipe", stderr: "pipe" },
+              );
+              await enter.exited;
+            } else {
+              const proc = Bun.spawn(["tmux", "send-keys", "-t", body.session, body.text, "Enter"], {
+                env: cleanEnv,
+                stdout: "pipe",
+                stderr: "pipe",
+              });
+              await proc.exited;
+            }
+
+            return Response.json({ ok: true });
+          }
+
+          // Claude Code (CLI prompt): use PTY for reliable Enter/submit
+          cleanEnv.TERM = "xterm-256color";
+          const isMultiline = body.text.includes("\n");
+
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
           const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
             stdin: "pipe",

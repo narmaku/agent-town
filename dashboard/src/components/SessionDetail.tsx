@@ -152,6 +152,14 @@ export function SessionDetail({
     refreshLatest();
   }, [refreshLatest, session.lastMessage]);
 
+  // Auto-refresh messages every 5s while session is active
+  useEffect(() => {
+    const isActive = session.status === "working" || session.status === "awaiting_input";
+    if (!isActive) return;
+    const interval = setInterval(refreshLatest, 5000);
+    return () => clearInterval(interval);
+  }, [refreshLatest, session.status]);
+
   async function loadPrevious() {
     const container = messageContainerRef.current;
     if (!container) return;
