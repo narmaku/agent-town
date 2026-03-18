@@ -1,13 +1,10 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { tmpdir, homedir } from "node:os";
 import { parseSession } from "./session-parser";
 
-async function createTempJsonl(
-  dir: string,
-  entries: Record<string, unknown>[]
-): Promise<string> {
+async function createTempJsonl(dir: string, entries: Record<string, unknown>[]): Promise<string> {
   const filePath = join(dir, "test-session.jsonl");
   const content = entries.map((e) => JSON.stringify(e)).join("\n");
   await writeFile(filePath, content);
@@ -51,11 +48,11 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.sessionId).toBe("test-session-123");
-    expect(session!.slug).toBe("test-slug");
-    expect(session!.cwd).toBe("/home/user/project");
-    expect(session!.gitBranch).toBe("main");
-    expect(session!.lastMessage).toContain("Hello, I can help");
+    expect(session?.sessionId).toBe("test-session-123");
+    expect(session?.slug).toBe("test-slug");
+    expect(session?.cwd).toBe("/home/user/project");
+    expect(session?.gitBranch).toBe("main");
+    expect(session?.lastMessage).toContain("Hello, I can help");
   });
 
   test("detects working when file was just modified (< 30s)", async () => {
@@ -73,7 +70,7 @@ describe("session-parser", () => {
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
     // File was just created so mtime is < 30s ago = working
-    expect(session!.status).toBe("working");
+    expect(session?.status).toBe("working");
   });
 
   test("detects working when user just sent a message", async () => {
@@ -86,7 +83,7 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.status).toBe("working");
+    expect(session?.status).toBe("working");
   });
 
   test("detects working when tool_result just arrived", async () => {
@@ -108,7 +105,7 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.status).toBe("working");
+    expect(session?.status).toBe("working");
   });
 
   test("summarizes tool_use as [Tool: name]", async () => {
@@ -124,7 +121,7 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.lastMessage).toBe("[Tool: Read]");
+    expect(session?.lastMessage).toBe("[Tool: Read]");
   });
 
   test("returns null for invalid JSONL", async () => {
@@ -156,7 +153,7 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.model).toBe("claude-opus-4-6");
+    expect(session?.model).toBe("claude-opus-4-6");
   });
 
   test("derives project name from cwd (handles hyphenated names)", async () => {
@@ -167,8 +164,8 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.projectName).toBe("rubric-kit");
-    expect(session!.projectPath).toBe("/home/nmunoz/development/rubric-kit");
+    expect(session?.projectName).toBe("rubric-kit");
+    expect(session?.projectPath).toBe("/home/nmunoz/development/rubric-kit");
   });
 
   test("derives project name from cwd for nested paths", async () => {
@@ -178,16 +175,43 @@ describe("session-parser", () => {
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.projectName).toBe("rls-unified-test-suite");
+    expect(session?.projectName).toBe("rls-unified-test-suite");
   });
 
   test("filters out HEAD as git branch", async () => {
+    const filePath = await createTempJsonl(tempDir, [makeEntry({ gitBranch: "HEAD" })]);
+
+    const session = await parseSession(filePath);
+    expect(session).not.toBeNull();
+    expect(session?.gitBranch).toBe("");
+  });
+
+  test("uses first entry with cwd as projectPath, not last entry cwd", async () => {
+    // Simulates: first line is file-history-snapshot (no cwd),
+    // then initial entry in project root, then later entry in subdirectory
     const filePath = await createTempJsonl(tempDir, [
-      makeEntry({ gitBranch: "HEAD" }),
+      { type: "file-history-snapshot", messageId: "abc", snapshot: {} },
+      makeEntry({ cwd: "/home/user/my-project" }),
+      makeEntry({ cwd: "/home/user/my-project/subdir" }),
     ]);
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
-    expect(session!.gitBranch).toBe("");
+    expect(session?.projectPath).toBe("/home/user/my-project");
+    expect(session?.projectName).toBe("my-project");
+    // cwd should reflect the LATEST working directory
+    expect(session?.cwd).toBe("/home/user/my-project/subdir");
+  });
+
+  test("falls back to lastEntry.cwd if no entry has cwd", async () => {
+    // Edge case: all entries lack cwd except the last one
+    const filePath = await createTempJsonl(tempDir, [
+      { type: "file-history-snapshot", messageId: "abc", snapshot: {} },
+      makeEntry({ cwd: "/home/user/fallback-project" }),
+    ]);
+
+    const session = await parseSession(filePath);
+    expect(session).not.toBeNull();
+    expect(session?.projectPath).toBe("/home/user/fallback-project");
   });
 });

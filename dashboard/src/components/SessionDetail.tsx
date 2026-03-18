@@ -1,0 +1,344 @@
+import type { AgentType, SessionInfo, SessionMessage, TerminalMultiplexer } from "@agent-town/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { API, STATUS_CONFIG, timeAgo } from "../utils";
+import { SendMessage } from "./SendMessage";
+
+const BATCH_SIZE = 10;
+
+const markdownComponents: Record<
+  string,
+  React.ComponentType<{ className?: string; children?: React.ReactNode; [key: string]: unknown }>
+> = {
+  code({ className, children, ...props }: { className?: string; children?: React.ReactNode; [key: string]: unknown }) {
+    const isInline = !className;
+    if (isInline) {
+      return (
+        <code className="inline-code" {...props}>
+          {children}
+        </code>
+      );
+    }
+    return (
+      <pre className="code-block">
+        <code className={className} {...props}>
+          {children}
+        </code>
+      </pre>
+    );
+  },
+};
+
+interface Props {
+  session: SessionInfo;
+  machineId: string;
+  onOpenTerminal: (sessionName: string, multiplexer: TerminalMultiplexer) => void;
+  onResume: (sessionId: string, projectDir: string, agentType: AgentType) => void;
+  autoDeleteOnClose?: boolean;
+  onClose?: () => void;
+  extraActions?: React.ReactNode;
+}
+
+export function SessionDetail({
+  session,
+  machineId,
+  onOpenTerminal,
+  onResume,
+  autoDeleteOnClose,
+  onClose,
+  extraActions,
+}: Props) {
+  const config = STATUS_CONFIG[session.status];
+  const hasTerminal = session.multiplexer && session.multiplexerSession;
+
+  const [history, setHistory] = useState<SessionMessage[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [flash, setFlash] = useState(false);
+  const [, setTick] = useState(0);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessageRef = useRef(session.lastMessage);
+
+  // Tick for live timestamp updates
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Flash on message change
+  useEffect(() => {
+    if (session.lastMessage !== prevMessageRef.current) {
+      setFlash(true);
+      prevMessageRef.current = session.lastMessage;
+      const timeout = setTimeout(() => setFlash(false), 1000);
+      return () => clearTimeout(timeout);
+    }
+  }, [session.lastMessage]);
+
+  const loadMessages = useCallback(
+    async (currentOffset: number) => {
+      setLoadingHistory(true);
+      try {
+        const resp = await fetch(
+          `${API.SESSION_MESSAGES}?machineId=${machineId}` +
+            `&sessionId=${session.sessionId}` +
+            `&agentType=${session.agentType || "claude-code"}` +
+            `&offset=${currentOffset}&limit=${BATCH_SIZE}`,
+        );
+        if (!resp.ok) return;
+
+        const data: { messages: SessionMessage[]; total: number; hasMore: boolean } = await resp.json();
+
+        if (currentOffset === 0) {
+          setHistory(data.messages);
+        } else {
+          setHistory((prev) => [...data.messages, ...prev]);
+        }
+        setHasMore(data.hasMore);
+        setOffset(currentOffset + BATCH_SIZE);
+      } catch {
+        // silently fail
+      } finally {
+        setLoadingHistory(false);
+      }
+    },
+    [machineId, session.sessionId, session.agentType],
+  );
+
+  const refreshLatest = useCallback(async () => {
+    try {
+      const resp = await fetch(
+        `${API.SESSION_MESSAGES}?machineId=${machineId}` +
+          `&sessionId=${session.sessionId}` +
+          `&agentType=${session.agentType || "claude-code"}` +
+          `&offset=0&limit=${BATCH_SIZE}`,
+      );
+      if (!resp.ok) return;
+
+      const data: { messages: SessionMessage[]; total: number; hasMore: boolean } = await resp.json();
+
+      setHistory((prev) => {
+        const oldCount = Math.max(0, prev.length - BATCH_SIZE);
+        const olderMessages = prev.slice(0, oldCount);
+        return [...olderMessages, ...data.messages];
+      });
+
+      setOffset((currentOffset) => {
+        const totalLoaded = Math.max(currentOffset, BATCH_SIZE);
+        setHasMore(data.total > totalLoaded);
+        return currentOffset;
+      });
+    } catch {
+      // silently fail
+    }
+  }, [machineId, session.sessionId]);
+
+  // Load initial messages
+  useEffect(() => {
+    setHistory([]);
+    setOffset(0);
+    setHasMore(true);
+    loadMessages(0);
+  }, [loadMessages]);
+
+  // Re-fetch latest messages when session data changes (heartbeat update).
+  // session.lastMessage changes when the agent reports new JSONL content.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lastMessage is an intentional trigger
+  useEffect(() => {
+    refreshLatest();
+  }, [refreshLatest, session.lastMessage]);
+
+  async function loadPrevious() {
+    const container = messageContainerRef.current;
+    if (!container) return;
+    const prevScrollHeight = container.scrollHeight;
+    await loadMessages(offset);
+    requestAnimationFrame(() => {
+      const newScrollHeight = container.scrollHeight;
+      container.scrollTop = newScrollHeight - prevScrollHeight;
+    });
+  }
+
+  function scrollToBottom() {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  async function handleSent() {
+    await new Promise((r) => setTimeout(r, 1500));
+    await refreshLatest();
+    scrollToBottom();
+  }
+
+  async function handleKillSession() {
+    if (!hasTerminal) return;
+    if (!window.confirm(`Close session "${session.multiplexerSession}"? This will terminate the agent.`)) return;
+
+    try {
+      const resp = await fetch(API.SESSIONS_KILL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          machineId,
+          multiplexer: session.multiplexer,
+          session: session.multiplexerSession,
+        }),
+      });
+
+      if (resp.ok && autoDeleteOnClose) {
+        try {
+          await fetch(API.SESSIONS_DELETE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              machineId,
+              sessionId: session.sessionId,
+              multiplexer: session.multiplexer,
+              multiplexerSession: session.multiplexerSession,
+            }),
+          });
+        } catch {
+          // deletion is best-effort
+        }
+      }
+    } catch {
+      // will disappear on next heartbeat
+    }
+  }
+
+  return (
+    <>
+      <div className="fullscreen-header">
+        <div className="fullscreen-title-row">
+          <div className="session-status">
+            <span className={`status-dot ${config.pulse ? "pulse" : ""}`} style={{ background: config.color }} />
+            <span className="status-label" style={{ color: config.color }}>
+              {config.label}
+            </span>
+            {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
+            <span
+              className={`tracking-badge ${session.hookEnabled ? "hook" : "heuristic"}`}
+              title={session.hookEnabled ? "Real-time tracking via hooks" : "Estimated status (no hooks)"}
+            >
+              {session.hookEnabled ? "LIVE" : "EST"}
+            </span>
+          </div>
+          <span className="fullscreen-name">{session.customName || session.slug}</span>
+          <span className="session-time">Updated {timeAgo(session.lastActivity)}</span>
+        </div>
+        {onClose && (
+          <button type="button" className="modal-close" onClick={onClose}>
+            &times;
+          </button>
+        )}
+      </div>
+
+      <div className="fullscreen-meta">
+        <div className="detail-row">
+          <span className="detail-label">Project</span>
+          <span className="detail-value mono">{session.projectPath}</span>
+        </div>
+        {session.gitBranch && (
+          <div className="detail-row">
+            <span className="detail-label">Branch</span>
+            <span className="detail-value mono">{session.gitBranch}</span>
+          </div>
+        )}
+        {session.model && (
+          <div className="detail-row">
+            <span className="detail-label">Model</span>
+            <span className="detail-value mono">{session.model}</span>
+          </div>
+        )}
+      </div>
+
+      <div className={`fullscreen-messages ${flash ? "flash" : ""}`} ref={messageContainerRef}>
+        {hasMore && (
+          <button type="button" className="load-previous-btn" onClick={loadPrevious} disabled={loadingHistory}>
+            {loadingHistory ? "Loading..." : "Load previous messages"}
+          </button>
+        )}
+
+        {history.map((msg) => (
+          <div
+            key={`${msg.timestamp}-${msg.role}-${msg.content?.slice(0, 20) ?? ""}`}
+            className={`chat-message chat-${msg.role}`}
+          >
+            <div className="chat-message-header">
+              <span className="chat-role">{msg.role === "user" ? "You" : "Assistant"}</span>
+              <span className="chat-timestamp">{new Date(msg.timestamp).toLocaleString()}</span>
+              {msg.model && <span className="chat-model">{msg.model}</span>}
+            </div>
+            <div className="chat-message-body">
+              {msg.role === "assistant" ? (
+                <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                  {msg.content || "[No text content]"}
+                </Markdown>
+              ) : (
+                <div className="chat-user-text">{msg.content || "[tool result]"}</div>
+              )}
+              {msg.toolUse && msg.toolUse.length > 0 && (
+                <div className="chat-tools">
+                  {msg.toolUse.map((t) => (
+                    <span key={t.id} className="tool-badge">
+                      {t.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {history.length === 0 && !loadingHistory && (
+          <div className="no-sessions" style={{ padding: "40px 0" }}>
+            No messages yet
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="fullscreen-actions">
+        {hasTerminal && (
+          <button
+            type="button"
+            className="action-btn terminal-btn"
+            onClick={() => onOpenTerminal(session.multiplexerSession!, session.multiplexer!)}
+          >
+            Open Terminal
+          </button>
+        )}
+        {(session.status === "exited" || session.status === "done" || !hasTerminal) && (
+          <button
+            type="button"
+            className="action-btn resume-btn"
+            onClick={() => onResume(session.sessionId, session.projectPath, session.agentType)}
+          >
+            Resume
+          </button>
+        )}
+        {hasTerminal && (
+          <button type="button" className="action-btn kill-btn" onClick={handleKillSession}>
+            Close Agent
+          </button>
+        )}
+        {extraActions}
+      </div>
+
+      {hasTerminal && (
+        <div className="fullscreen-input">
+          <SendMessage
+            machineId={machineId}
+            multiplexer={session.multiplexer!}
+            session={session.multiplexerSession!}
+            onSent={handleSent}
+          />
+        </div>
+      )}
+    </>
+  );
+}

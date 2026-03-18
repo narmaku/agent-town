@@ -24,7 +24,11 @@ export function MessageView({ lastMessage, fullMessage }: Props) {
               code({ className, children, ...props }) {
                 const isInline = !className;
                 if (isInline) {
-                  return <code className="inline-code" {...props}>{children}</code>;
+                  return (
+                    <code className="inline-code" {...props}>
+                      {children}
+                    </code>
+                  );
                 }
                 return (
                   <pre className="code-block">
@@ -45,6 +49,7 @@ export function MessageView({ lastMessage, fullMessage }: Props) {
 
       {hasFullMessage && (
         <button
+          type="button"
           className="message-toggle"
           onClick={(e) => {
             e.stopPropagation();

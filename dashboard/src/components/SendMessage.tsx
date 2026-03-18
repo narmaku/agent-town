@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { API } from "../utils";
 
 interface Props {
   machineId: string;
@@ -10,6 +11,7 @@ interface Props {
 export function SendMessage({ machineId, multiplexer, session, onSent }: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -21,16 +23,17 @@ export function SendMessage({ machineId, multiplexer, session, onSent }: Props) 
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 200) + "px";
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
     }
-  }, [text]);
+  }, []);
 
   async function handleSend() {
     if (!text.trim() || sending) return;
     setSending(true);
+    setError("");
 
     try {
-      const resp = await fetch("/api/sessions/send", {
+      const resp = await fetch(API.SESSIONS_SEND, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -44,9 +47,12 @@ export function SendMessage({ machineId, multiplexer, session, onSent }: Props) 
       if (resp.ok) {
         setText("");
         onSent?.();
+      } else {
+        const data = await resp.json().catch(() => ({ error: "Send failed" }));
+        setError(data.error || `Send failed (${resp.status})`);
       }
     } catch {
-      // silently fail
+      setError("Failed to connect to server");
     } finally {
       setSending(false);
     }
@@ -62,7 +68,8 @@ export function SendMessage({ machineId, multiplexer, session, onSent }: Props) 
   }
 
   return (
-    <div className="send-message" onClick={(e) => e.stopPropagation()}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation container, not interactive
+    <div className="send-message" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <textarea
         ref={textareaRef}
         className="send-textarea"
@@ -73,9 +80,15 @@ export function SendMessage({ machineId, multiplexer, session, onSent }: Props) 
         rows={2}
         disabled={sending}
       />
+      {error && (
+        <div className="form-error" style={{ marginTop: 4 }}>
+          {error}
+        </div>
+      )}
       <div className="send-footer">
         <span className="send-hint">Ctrl+Enter to send</span>
         <button
+          type="button"
           className="send-btn"
           onClick={(e) => {
             e.stopPropagation();

@@ -14,5 +14,8 @@
     "dev:dashboard": "bun run --filter agent-town-dashboard dev",
     "test": "bun test",
     "build": "bun run --filter agent-town-dashboard build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.7"
   }
 }

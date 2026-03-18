@@ -1,0 +1,60 @@
+import type { AgentType, SessionInfo, TerminalMultiplexer } from "@agent-town/shared";
+import { useEffect } from "react";
+import { SessionDetail } from "./SessionDetail";
+
+interface Props {
+  session: SessionInfo;
+  machineId: string;
+  onClose: () => void;
+  onOpenTerminal: (sessionName: string, multiplexer: TerminalMultiplexer) => void;
+  onResume: (sessionId: string, projectDir: string, agentType: AgentType) => void;
+  autoDeleteOnClose?: boolean;
+}
+
+export function SessionFullscreen({ session, machineId, onClose, onOpenTerminal, onResume, autoDeleteOnClose }: Props) {
+  // Lock body scroll while overlay is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  // Escape to close
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  function handleOverlayClick(e: React.MouseEvent) {
+    if (e.target === e.currentTarget) onClose();
+  }
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop dismissal
+    <div
+      className="fullscreen-overlay"
+      onClick={handleOverlayClick}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+      role="presentation"
+    >
+      <div className="fullscreen-panel">
+        <SessionDetail
+          session={session}
+          machineId={machineId}
+          onOpenTerminal={onOpenTerminal}
+          onResume={onResume}
+          onClose={onClose}
+          autoDeleteOnClose={autoDeleteOnClose}
+        />
+      </div>
+    </div>
+  );
+}

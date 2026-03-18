@@ -1,17 +1,30 @@
 import { readFile, readlink } from "node:fs/promises";
-import type { TerminalMultiplexer } from "@agent-town/shared";
+import { createLogger, type TerminalMultiplexer } from "@agent-town/shared";
+import {
+  extractClaudeSessionIdFromArgs,
+  findSessionCandidates,
+  matchSessionByBirthTime,
+  type SessionCandidate,
+} from "./providers/claude-code/process-mapper";
+import { getAllProviders } from "./providers/registry";
+import type { AgentProcess } from "./providers/types";
+import { resolveSessionName } from "./terminal-server";
 
-interface ProcessMapping {
-  pid: number;
-  cwd: string;
-  multiplexer: TerminalMultiplexer | null;
-  multiplexerSession: string | null;
+const log = createLogger("mapper");
+
+export interface ProcessMapping {
+  multiplexer: TerminalMultiplexer;
+  session: string; // multiplexer session name
+  sessionId?: string; // agent session ID
+  hasActiveChildren: boolean;
 }
+
+// Re-export for tests
+export { extractClaudeSessionIdFromArgs as extractSessionIdFromArgs, matchSessionByBirthTime, type SessionCandidate };
 
 async function getEnvVar(pid: number, varName: string): Promise<string | null> {
   try {
     const env = await readFile(`/proc/${pid}/environ`);
-    const prefix = Buffer.from(`${varName}=`);
     for (const entry of splitBuffer(env, 0)) {
       const str = entry.toString();
       if (str.startsWith(`${varName}=`)) {
@@ -35,19 +48,6 @@ function* splitBuffer(buf: Buffer, _sep: number): Generator<Buffer> {
   if (start < buf.length) yield buf.subarray(start);
 }
 
-async function getPpid(pid: number): Promise<number | null> {
-  try {
-    const stat = await readFile(`/proc/${pid}/stat`, "utf-8");
-    // Format: pid (comm) state ppid ...
-    // comm can contain spaces/parens, so find the last ) then parse
-    const lastParen = stat.lastIndexOf(")");
-    const rest = stat.slice(lastParen + 2).split(" ");
-    return parseInt(rest[1]); // ppid is the 2nd field after state
-  } catch {
-    return null;
-  }
-}
-
 async function getCwd(pid: number): Promise<string | null> {
   try {
     return await readlink(`/proc/${pid}/cwd`);
@@ -56,10 +56,8 @@ async function getCwd(pid: number): Promise<string | null> {
   }
 }
 
-async function runPs(): Promise<
-  Array<{ pid: number; ppid: number; args: string }>
-> {
-  const proc = Bun.spawn(["ps", "-eo", "pid,ppid,args", "--no-headers"], {
+export async function runPs(): Promise<AgentProcess[]> {
+  const proc = Bun.spawn(["ps", "-eo", "pid,ppid,etimes,args", "--no-headers"], {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -71,90 +69,116 @@ async function runPs(): Promise<
     .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const parts = line.trim().split(/\s+/, 3);
-      if (parts.length < 3) return null;
+      const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.+)/);
+      if (!match) return null;
       return {
-        pid: parseInt(parts[0]),
-        ppid: parseInt(parts[1]),
-        args: parts[2],
+        pid: parseInt(match[1], 10),
+        ppid: parseInt(match[2], 10),
+        etimes: parseInt(match[3], 10),
+        args: match[4],
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
 /**
- * Discovers which multiplexer session each running Claude Code process
- * belongs to by checking the parent shell's environment variables.
- *
- * Returns a map of projectPath -> { multiplexer, session }
+ * Resolve the multiplexer session for a process by checking its parent
+ * shell's environment variables for ZELLIJ_SESSION_NAME or TMUX.
  */
-export async function discoverProcessMappings(): Promise<
-  Map<string, { multiplexer: TerminalMultiplexer; session: string }>
-> {
-  const mappings = new Map<
-    string,
-    { multiplexer: TerminalMultiplexer; session: string }
-  >();
+async function resolveMultiplexerSession(
+  proc: AgentProcess,
+): Promise<{ multiplexer: TerminalMultiplexer; session: string } | null> {
+  const zellijSession = await getEnvVar(proc.ppid, "ZELLIJ_SESSION_NAME");
+  if (zellijSession) {
+    return { multiplexer: "zellij", session: resolveSessionName(zellijSession) };
+  }
+
+  const tmuxEnv = await getEnvVar(proc.ppid, "TMUX");
+  if (tmuxEnv) {
+    try {
+      const ttyLink = await readlink(`/proc/${proc.pid}/fd/0`);
+      const tty = ttyLink.split("/").pop();
+      const tmuxProc = Bun.spawn(["tmux", "list-panes", "-a", "-F", "#{pane_tty}:#{session_name}"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const tmuxOutput = await new Response(tmuxProc.stdout).text();
+      await tmuxProc.exited;
+
+      for (const line of tmuxOutput.trim().split("\n")) {
+        if (tty && line.includes(tty)) {
+          const sessionName = line.split(":")[1];
+          if (sessionName) {
+            return { multiplexer: "tmux", session: sessionName };
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      log.debug(`tmux pane lookup failed for pid=${proc.pid}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Discovers which multiplexer session each running agent process belongs to.
+ *
+ * Iterates over all registered providers, finds their processes, and matches
+ * them to multiplexer sessions and JSONL/DB sessions.
+ */
+export async function discoverProcessMappings(): Promise<Map<string, ProcessMapping>> {
+  const mappings = new Map<string, ProcessMapping>();
 
   try {
-    const processes = await runPs();
+    const allProcesses = await runPs();
+    const providers = getAllProviders();
 
-    // Find all "claude" processes (the main CLI, not subprocesses)
-    const claudeProcs = processes.filter((p) => {
-      const bin = p.args.split("/").pop()?.split(" ")[0];
-      return bin === "claude";
-    });
+    for (const provider of providers) {
+      const agentProcs = provider.filterAgentProcesses(allProcesses);
+      // Sort by etimes ascending (newest first)
+      agentProcs.sort((a, b) => a.etimes - b.etimes);
 
-    for (const proc of claudeProcs) {
-      const cwd = await getCwd(proc.pid);
-      if (!cwd) continue;
+      const claimedIds = new Set<string>();
 
-      // Check parent shell for multiplexer session info
-      const zellijSession = await getEnvVar(proc.ppid, "ZELLIJ_SESSION_NAME");
-      if (zellijSession) {
-        mappings.set(cwd, { multiplexer: "zellij", session: zellijSession });
-        continue;
-      }
+      for (const proc of agentProcs) {
+        const cwd = await getCwd(proc.pid);
+        if (!cwd) continue;
 
-      const tmuxEnv = await getEnvVar(proc.ppid, "TMUX");
-      if (tmuxEnv) {
-        // For tmux, get the session name by checking which pane this process is in
-        try {
-          const ttyLink = await readlink(`/proc/${proc.pid}/fd/0`);
-          const tty = ttyLink.split("/").pop();
-          const tmuxProc = Bun.spawn(
-            [
-              "tmux",
-              "list-panes",
-              "-a",
-              "-F",
-              "#{pane_tty}:#{session_name}",
-            ],
-            { stdout: "pipe", stderr: "pipe" }
-          );
-          const tmuxOutput = await new Response(tmuxProc.stdout).text();
-          await tmuxProc.exited;
+        const muxInfo = await resolveMultiplexerSession(proc);
+        if (!muxInfo) continue;
 
-          for (const line of tmuxOutput.trim().split("\n")) {
-            if (tty && line.includes(tty)) {
-              const sessionName = line.split(":")[1];
-              if (sessionName) {
-                mappings.set(cwd, {
-                  multiplexer: "tmux",
-                  session: sessionName,
-                });
-              }
-              break;
-            }
-          }
-        } catch {
-          // tmux not available or pane lookup failed
+        const MAX_CHILD_AGE_S = 600;
+        const hasActiveChildren = allProcesses.some((p) => p.ppid === proc.pid && p.etimes < MAX_CHILD_AGE_S);
+
+        const mapping: ProcessMapping = {
+          multiplexer: muxInfo.multiplexer,
+          session: muxInfo.session,
+          hasActiveChildren,
+        };
+
+        // Determine session ID
+        let sessionId = provider.extractSessionIdFromArgs(proc.args);
+
+        // Fallback: let the provider match using its native storage
+        if (!sessionId) {
+          const processStartMs = Date.now() - proc.etimes * 1000;
+          sessionId = await provider.matchProcessToSessionId(cwd, processStartMs, claimedIds);
         }
-        continue;
+
+        if (sessionId) claimedIds.add(sessionId);
+        mapping.sessionId = sessionId;
+
+        const key = sessionId || `cwd:${cwd}`;
+        mappings.set(key, mapping);
+        log.debug(
+          `pid=${proc.pid} agent=${provider.type} mux=${mapping.session} key=${key.slice(0, 20)} etimes=${proc.etimes}`,
+        );
       }
     }
-  } catch {
-    // ps command failed or /proc not available
+  } catch (err) {
+    log.warn(`discoverProcessMappings failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return mappings;

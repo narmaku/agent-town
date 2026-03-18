@@ -1,6 +1,13 @@
-import { describe, expect, test, beforeEach } from "bun:test";
-import { upsertMachine, getAllMachines, getMachine, renameSession } from "./store";
+import { describe, expect, test } from "bun:test";
 import type { Heartbeat } from "@agent-town/shared";
+import {
+  addPendingSession,
+  getAllMachines,
+  getMachine,
+  getSavedSessionName,
+  renameSession,
+  upsertMachine,
+} from "./store";
 
 function makeHeartbeat(overrides: Partial<Heartbeat> = {}): Heartbeat {
   return {
@@ -23,9 +30,9 @@ describe("store", () => {
 
     const machine = getMachine("test-machine-1");
     expect(machine).not.toBeUndefined();
-    expect(machine!.hostname).toBe("test-host");
-    expect(machine!.platform).toBe("linux");
-    expect(machine!.multiplexers).toEqual(["zellij"]);
+    expect(machine?.hostname).toBe("test-host");
+    expect(machine?.platform).toBe("linux");
+    expect(machine?.multiplexers).toEqual(["zellij"]);
   });
 
   test("upsertMachine updates existing machine", () => {
@@ -45,12 +52,12 @@ describe("store", () => {
             cwd: "/home/user/project",
           },
         ],
-      })
+      }),
     );
 
     const machine = getMachine("test-machine-1");
-    expect(machine!.sessions).toHaveLength(1);
-    expect(machine!.sessions[0].status).toBe("working");
+    expect(machine?.sessions).toHaveLength(1);
+    expect(machine?.sessions[0].status).toBe("working");
   });
 
   test("getAllMachines returns all non-expired machines", () => {
@@ -78,14 +85,14 @@ describe("store", () => {
             cwd: "/project",
           },
         ],
-      })
+      }),
     );
 
     const ok = renameSession("rename-test", "s1", "My Custom Name");
     expect(ok).toBe(true);
 
     const machine = getMachine("rename-test");
-    expect(machine!.sessions[0].customName).toBe("My Custom Name");
+    expect(machine?.sessions[0].customName).toBe("My Custom Name");
   });
 
   test("renameSession persists across heartbeats", () => {
@@ -108,7 +115,7 @@ describe("store", () => {
     upsertMachine(makeHeartbeat({ machineId: "persist-test", sessions: [session] }));
 
     const machine = getMachine("persist-test");
-    expect(machine!.sessions[0].customName).toBe("Renamed");
+    expect(machine?.sessions[0].customName).toBe("Renamed");
   });
 
   test("renameSession with empty string clears name", () => {
@@ -128,14 +135,14 @@ describe("store", () => {
             cwd: "/p",
           },
         ],
-      })
+      }),
     );
 
     renameSession("clear-test", "s3", "Named");
     renameSession("clear-test", "s3", "");
 
     const machine = getMachine("clear-test");
-    expect(machine!.sessions[0].customName).toBeUndefined();
+    expect(machine?.sessions[0].customName).toBeUndefined();
   });
 
   test("renameSession returns false for unknown machine", () => {
@@ -150,7 +157,7 @@ describe("store", () => {
         machineId: "old-id",
         hostname: "same-host",
         sessions: [],
-      })
+      }),
     );
 
     // New agent registers with different machineId but same hostname
@@ -159,7 +166,7 @@ describe("store", () => {
         machineId: "new-id",
         hostname: "same-host",
         sessions: [],
-      })
+      }),
     );
 
     const machines = getAllMachines();
@@ -181,19 +188,172 @@ describe("store", () => {
       cwd: "/p",
     };
 
-    upsertMachine(
-      makeHeartbeat({ machineId: "old-id-2", hostname: "migrate-host", sessions: [session] })
-    );
+    upsertMachine(makeHeartbeat({ machineId: "old-id-2", hostname: "migrate-host", sessions: [session] }));
     renameSession("old-id-2", "s-migrate", "My Name");
 
     // New agent with different id, same hostname
-    upsertMachine(
-      makeHeartbeat({ machineId: "new-id-2", hostname: "migrate-host", sessions: [session] })
-    );
+    upsertMachine(makeHeartbeat({ machineId: "new-id-2", hostname: "migrate-host", sessions: [session] }));
 
     const machine = getMachine("new-id-2");
     expect(machine).not.toBeUndefined();
-    expect(machine!.sessions[0].customName).toBe("My Name");
+    expect(machine?.sessions[0].customName).toBe("My Name");
+  });
+
+  test("auto-populated multiplexer name is persisted to sessionNames", () => {
+    const session = {
+      sessionId: "s-auto",
+      slug: "test-slug",
+      projectPath: "/project",
+      projectName: "project",
+      gitBranch: "",
+      status: "working" as const,
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/project",
+      multiplexerSession: "my-cool-session",
+    };
+
+    upsertMachine(makeHeartbeat({ machineId: "auto-test", sessions: [session] }));
+
+    // Auto-populated name should be persisted so getSavedSessionName returns it
+    expect(getSavedSessionName("s-auto")).toBe("my-cool-session");
+  });
+
+  test("auto-populated name does not overwrite explicit rename", () => {
+    const session = {
+      sessionId: "s-no-overwrite",
+      slug: "slug",
+      projectPath: "/p",
+      projectName: "p",
+      gitBranch: "",
+      status: "working" as const,
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/p",
+      multiplexerSession: "mux-name",
+    };
+
+    upsertMachine(makeHeartbeat({ machineId: "no-overwrite-test", sessions: [session] }));
+    renameSession("no-overwrite-test", "s-no-overwrite", "User Chosen Name");
+
+    // New heartbeat arrives with multiplexerSession — should NOT overwrite the explicit rename
+    upsertMachine(makeHeartbeat({ machineId: "no-overwrite-test", sessions: [session] }));
+
+    expect(getSavedSessionName("s-no-overwrite")).toBe("User Chosen Name");
+    const machine = getMachine("no-overwrite-test");
+    expect(machine?.sessions[0].customName).toBe("User Chosen Name");
+  });
+
+  test("auto-populated name survives multiplexer session disappearing", () => {
+    const sessionWithMux = {
+      sessionId: "s-survive",
+      slug: "slug",
+      projectPath: "/p",
+      projectName: "p",
+      gitBranch: "",
+      status: "working" as const,
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/p",
+      multiplexerSession: "agent-session",
+    };
+
+    upsertMachine(makeHeartbeat({ machineId: "survive-test", sessions: [sessionWithMux] }));
+    expect(getSavedSessionName("s-survive")).toBe("agent-session");
+
+    // Multiplexer session dies — next heartbeat has no multiplexerSession
+    const sessionWithoutMux = { ...sessionWithMux };
+    delete (sessionWithoutMux as Record<string, unknown>).multiplexerSession;
+    upsertMachine(makeHeartbeat({ machineId: "survive-test", sessions: [sessionWithoutMux] }));
+
+    // Name should survive because it was persisted
+    const machine = getMachine("survive-test");
+    expect(machine?.sessions[0].customName).toBe("agent-session");
+    expect(getSavedSessionName("s-survive")).toBe("agent-session");
+  });
+
+  test("pending session appears as starting placeholder in getAllMachines", () => {
+    upsertMachine(makeHeartbeat({ machineId: "pending-test", hostname: "pending-host" }));
+
+    addPendingSession("pending-test", "my-new-agent", "/home/user/project", "tmux");
+
+    const machines = getAllMachines();
+    const machine = machines.find((m) => m.machineId === "pending-test");
+    expect(machine).not.toBeUndefined();
+
+    const pending = machine?.sessions.find((s) => s.sessionId === "pending-my-new-agent");
+    expect(pending).not.toBeUndefined();
+    expect(pending?.status).toBe("starting");
+    expect(pending?.multiplexer).toBe("tmux");
+    expect(pending?.multiplexerSession).toBe("my-new-agent");
+    expect(pending?.customName).toBe("my-new-agent");
+    expect(pending?.projectPath).toBe("/home/user/project");
+    expect(pending?.lastMessage).toContain("connect to the terminal");
+  });
+
+  test("pending session is removed when heartbeat matches by mux name", () => {
+    upsertMachine(makeHeartbeat({ machineId: "pending-match", hostname: "pending-match-host" }));
+
+    addPendingSession("pending-match", "agent-abc", "/home/user/project", "zellij");
+
+    // Verify pending appears
+    let machines = getAllMachines();
+    let machine = machines.find((m) => m.machineId === "pending-match");
+    expect(machine?.sessions.find((s) => s.status === "starting")).not.toBeUndefined();
+
+    // Heartbeat arrives with a real session that has the same multiplexerSession name
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "pending-match",
+        hostname: "pending-match-host",
+        sessions: [
+          {
+            sessionId: "real-session-id",
+            slug: "agent-abc",
+            projectPath: "/home/user/project",
+            projectName: "project",
+            gitBranch: "main",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "Working on it",
+            cwd: "/home/user/project",
+            multiplexerSession: "agent-abc",
+            multiplexer: "zellij",
+          },
+        ],
+      }),
+    );
+
+    // Pending should be gone, replaced by the real session
+    machines = getAllMachines();
+    machine = machines.find((m) => m.machineId === "pending-match");
+    expect(machine?.sessions.find((s) => s.status === "starting")).toBeUndefined();
+    expect(machine?.sessions.find((s) => s.sessionId === "real-session-id")).not.toBeUndefined();
+  });
+
+  test("pending session is not duplicated if real session already has same mux name", () => {
+    const session = {
+      sessionId: "existing-s",
+      slug: "existing-agent",
+      projectPath: "/project",
+      projectName: "project",
+      gitBranch: "",
+      status: "working" as const,
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/project",
+      multiplexerSession: "existing-agent",
+      multiplexer: "tmux" as const,
+    };
+
+    upsertMachine(makeHeartbeat({ machineId: "no-dup-test", hostname: "no-dup-host", sessions: [session] }));
+    addPendingSession("no-dup-test", "existing-agent", "/project", "tmux");
+
+    const machines = getAllMachines();
+    const machine = machines.find((m) => m.machineId === "no-dup-test");
+    // Should only have the real session, not a pending duplicate
+    expect(machine?.sessions).toHaveLength(1);
+    expect(machine?.sessions[0].sessionId).toBe("existing-s");
   });
 
   test("getAllMachines excludes expired machines", () => {
@@ -203,7 +363,7 @@ describe("store", () => {
         machineId: "expired-machine",
         hostname: "old-host",
         timestamp: oldTimestamp,
-      })
+      }),
     );
 
     const machines = getAllMachines();

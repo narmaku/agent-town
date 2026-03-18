@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from "react";
 import type { MachineInfo, SessionInfo, WebSocketMessage } from "@agent-town/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function requestNotificationPermission() {
   if ("Notification" in window && Notification.permission === "default") {
@@ -38,27 +38,31 @@ export function useWebSocket() {
     const prevStatuses = prevSessionStatusRef.current;
     const newSessions = getAllSessions(newMachines);
 
-    // Check for sessions that just changed to "needs_attention"
+    // Check for sessions that just changed to awaiting_input or action_required
     const newAttentionSessions: SessionInfo[] = [];
     for (const session of newSessions) {
       const prevStatus = prevStatuses.get(session.sessionId);
       if (
-        session.status === "needs_attention" &&
-        prevStatus !== "needs_attention"
+        (session.status === "awaiting_input" || session.status === "action_required") &&
+        prevStatus !== session.status
       ) {
         newAttentionSessions.push(session);
       }
     }
 
-    // Send browser notification if any sessions need attention
+    // Send browser notification
     if (newAttentionSessions.length > 0) {
-      const names = newAttentionSessions
-        .map((s) => s.customName || s.projectName)
-        .join(", ");
-      sendNotification(
-        "Agent needs attention",
-        `${names} — waiting for your input`
-      );
+      const actionSessions = newAttentionSessions.filter((s) => s.status === "action_required");
+      const awaitingSessions = newAttentionSessions.filter((s) => s.status === "awaiting_input");
+
+      if (actionSessions.length > 0) {
+        const names = actionSessions.map((s) => s.customName || s.projectName).join(", ");
+        sendNotification("Action required", `${names} — agent is asking a question`);
+      }
+      if (awaitingSessions.length > 0) {
+        const names = awaitingSessions.map((s) => s.customName || s.projectName).join(", ");
+        sendNotification("Agent awaiting input", `${names} — waiting for your input`);
+      }
     }
 
     // Update the status map

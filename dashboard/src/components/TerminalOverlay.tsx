@@ -1,8 +1,8 @@
-import { useEffect, useRef, useCallback } from "react";
-import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { Terminal } from "@xterm/xterm";
+import { useCallback, useEffect, useRef } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalMultiplexer } from "@agent-town/shared";
 
@@ -13,12 +13,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function TerminalOverlay({
-  machineId,
-  sessionName,
-  multiplexer,
-  onClose,
-}: Props) {
+export function TerminalOverlay({ machineId, sessionName, multiplexer, onClose }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -87,7 +82,7 @@ export function TerminalOverlay({
           type: "resize",
           cols: term.cols,
           rows: term.rows,
-        })
+        }),
       );
     };
 
@@ -121,7 +116,7 @@ export function TerminalOverlay({
             type: "resize",
             cols: term.cols,
             rows: term.rows,
-          })
+          }),
         );
       }
     });
@@ -155,7 +150,7 @@ export function TerminalOverlay({
         </div>
         <div className="terminal-controls">
           <span className="terminal-hint">ESC ESC to close</span>
-          <button className="terminal-close-btn" onClick={handleClose}>
+          <button type="button" className="terminal-close-btn" onClick={handleClose}>
             Close
           </button>
         </div>

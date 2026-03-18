@@ -1,46 +1,19 @@
-import { useState, useRef, useEffect } from "react";
-import type { SessionInfo, SessionStatus, TerminalMultiplexer } from "@agent-town/shared";
+import type { AgentType, SessionInfo, TerminalMultiplexer } from "@agent-town/shared";
+import { useEffect, useRef, useState } from "react";
+import { API, STATUS_CONFIG, timeAgo } from "../utils";
 import { MessageView } from "./MessageView";
 import { SendMessage } from "./SendMessage";
-
-const STATUS_CONFIG: Record<
-  SessionStatus,
-  { label: string; color: string; bg: string; pulse: boolean }
-> = {
-  working: { label: "Working", color: "#22c55e", bg: "#052e16", pulse: true },
-  needs_attention: {
-    label: "Needs Attention",
-    color: "#eab308",
-    bg: "#422006",
-    pulse: true,
-  },
-  idle: { label: "Idle", color: "#6b7280", bg: "#1f2937", pulse: false },
-  done: { label: "Done", color: "#3b82f6", bg: "#172554", pulse: false },
-  error: { label: "Error", color: "#ef4444", bg: "#450a0a", pulse: true },
-};
-
-function timeAgo(timestamp: string): string {
-  const seconds = Math.floor(
-    (Date.now() - new Date(timestamp).getTime()) / 1000
-  );
-  if (seconds < 10) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
-}
 
 interface Props {
   session: SessionInfo;
   machineId: string;
-  onOpenTerminal: (
-    sessionName: string,
-    multiplexer: TerminalMultiplexer
-  ) => void;
+  onOpenTerminal: (sessionName: string, multiplexer: TerminalMultiplexer) => void;
+  onResume: (sessionId: string, projectDir: string, agentType: AgentType) => void;
+  onFullscreen: (session: SessionInfo) => void;
+  autoDeleteOnClose?: boolean;
 }
 
-export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
+export function SessionCard({ session, machineId, onOpenTerminal, onResume, onFullscreen, autoDeleteOnClose }: Props) {
   const config = STATUS_CONFIG[session.status];
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -64,7 +37,7 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
     if (trimmed === (session.customName || "")) return;
 
     try {
-      await fetch("/api/sessions/rename", {
+      await fetch(API.SESSIONS_RENAME, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -88,7 +61,7 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
   }
 
   function handleCardClick(e: React.MouseEvent) {
-    if ((e.target as HTMLElement).closest(".session-slug")) return;
+    if ((e.target as HTMLElement).closest(".session-name-primary")) return;
     if ((e.target as HTMLElement).closest(".card-actions")) return;
     setExpanded((prev) => !prev);
   }
@@ -111,7 +84,7 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
     if (!window.confirm(`Close session "${session.multiplexerSession}"? This will terminate the agent.`)) return;
 
     try {
-      await fetch("/api/sessions/kill", {
+      const resp = await fetch(API.SESSIONS_KILL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -120,76 +93,109 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
           session: session.multiplexerSession,
         }),
       });
+
+      if (resp.ok && autoDeleteOnClose) {
+        try {
+          await fetch(API.SESSIONS_DELETE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              machineId,
+              sessionId: session.sessionId,
+            }),
+          });
+        } catch {
+          // deletion is best-effort
+        }
+      }
     } catch {
       // will disappear on next heartbeat
     }
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: card component with complex content, not a simple button
     <div
       className={`session-card ${expanded ? "expanded" : ""}`}
       style={{ borderLeftColor: config.color, background: config.bg }}
       onClick={handleCardClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleCardClick(e as unknown as React.MouseEvent);
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       <div className="session-header">
         <div className="session-status">
-          <span
-            className={`status-dot ${config.pulse ? "pulse" : ""}`}
-            style={{ background: config.color }}
-          />
+          <span className={`status-dot ${config.pulse ? "pulse" : ""}`} style={{ background: config.color }} />
           <span className="status-label" style={{ color: config.color }}>
             {config.label}
           </span>
+          {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
+          {session.agentType && session.agentType !== "claude-code" && (
+            <span className="agent-type-badge" title={`Agent: ${session.agentType}`}>
+              {session.agentType === "opencode" ? "OC" : session.agentType}
+            </span>
+          )}
+          {session.status !== "starting" && (
+            <span
+              className={`tracking-badge ${session.hookEnabled ? "hook" : "heuristic"}`}
+              title={session.hookEnabled ? "Real-time tracking via hooks" : "Estimated status (no hooks)"}
+            >
+              {session.hookEnabled ? "LIVE" : "EST"}
+            </span>
+          )}
         </div>
         <span className="session-time">{timeAgo(session.lastActivity)}</span>
       </div>
 
       <div className="session-project">
-        <span className="project-name">{session.projectName}</span>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: double-click rename is secondary interaction */}
+        <span
+          className="session-name-primary"
+          onDoubleClick={startRename}
+          title={
+            hasTerminal
+              ? `${session.multiplexer}: ${session.multiplexerSession} — double-click to rename`
+              : "Double-click to rename"
+          }
+        >
+          {editing ? (
+            <input
+              ref={inputRef}
+              className="rename-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={handleRename}
+              onKeyDown={handleKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              placeholder={session.slug}
+            />
+          ) : (
+            <span className="session-name">{displayName}</span>
+          )}
+        </span>
         {session.gitBranch && (
           <span className="git-branch" title="Git branch">
             {session.gitBranch}
           </span>
         )}
-        {hasTerminal && (
-          <span className="mux-badge" title={`${session.multiplexer}: ${session.multiplexerSession}`}>
-            {session.multiplexerSession}
-          </span>
-        )}
       </div>
 
-      <div className="session-slug" onDoubleClick={startRename}>
-        {editing ? (
-          <input
-            ref={inputRef}
-            className="rename-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={handleRename}
-            onKeyDown={handleKeyDown}
-            onClick={(e) => e.stopPropagation()}
-            placeholder={session.slug}
-          />
-        ) : (
-          <span className="session-name" title="Double-click to rename">
-            {displayName}
-          </span>
-        )}
-      </div>
-
-      {!expanded && session.lastMessage && (
-        <div className="session-message">
-          {session.lastMessage}
-        </div>
+      {!expanded && session.status === "action_required" && (
+        <div className="session-message action-hint">Agent is asking a question — open terminal to respond</div>
+      )}
+      {!expanded && session.status !== "action_required" && session.lastMessage && (
+        <div className="session-message">{session.lastMessage}</div>
       )}
 
       {expanded && (
         <div className="session-details">
           {/* Rich-formatted last assistant message */}
-          <MessageView
-            lastMessage={session.lastMessage}
-            fullMessage={session.lastAssistantMessage}
-          />
+          <MessageView lastMessage={session.lastMessage} fullMessage={session.lastAssistantMessage} />
           <div className="detail-row">
             <span className="detail-label">Session ID</span>
             <span className="detail-value mono">{session.sessionId}</span>
@@ -198,6 +204,12 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
             <span className="detail-label">Working Dir</span>
             <span className="detail-value mono">{session.cwd}</span>
           </div>
+          {session.gitBranch && (
+            <div className="detail-row">
+              <span className="detail-label">Branch</span>
+              <span className="detail-value mono">{session.gitBranch}</span>
+            </div>
+          )}
           {session.model && (
             <div className="detail-row">
               <span className="detail-label">Model</span>
@@ -210,31 +222,68 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
               <span className="detail-value mono">v{session.version}</span>
             </div>
           )}
-          {hasTerminal && (
-            <div className="detail-row">
-              <span className="detail-label">Terminal</span>
-              <span className="detail-value mono">
-                {session.multiplexer}: {session.multiplexerSession}
-              </span>
-            </div>
-          )}
           <div className="card-actions">
-            <button className="action-btn rename-btn" onClick={startRename}>
-              Rename
+            <button
+              type="button"
+              className="action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFullscreen(session);
+              }}
+              title="Expand to fullscreen"
+            >
+              Expand
             </button>
             {hasTerminal && (
-              <button
-                className="action-btn terminal-btn"
-                onClick={handleOpenTerminal}
-              >
+              <button type="button" className="action-btn terminal-btn" onClick={handleOpenTerminal}>
                 Open Terminal
               </button>
             )}
-            {hasTerminal && (
+            {(session.status === "exited" || session.status === "done" || !hasTerminal) && (
               <button
-                className="action-btn kill-btn"
-                onClick={handleKillSession}
+                type="button"
+                className="action-btn resume-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onResume(session.sessionId, session.projectPath, session.agentType);
+                }}
               >
+                Resume
+              </button>
+            )}
+            {!hasTerminal && (
+              <button
+                type="button"
+                className="action-btn kill-btn"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (
+                    !window.confirm(
+                      `Permanently delete session "${session.customName || session.slug}"?\n\nThis removes the conversation history and cannot be undone.`,
+                    )
+                  )
+                    return;
+                  try {
+                    await fetch(API.SESSIONS_DELETE, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        machineId,
+                        sessionId: session.sessionId,
+                        multiplexer: session.multiplexer,
+                        multiplexerSession: session.multiplexerSession,
+                      }),
+                    });
+                  } catch {
+                    // will disappear on next heartbeat
+                  }
+                }}
+              >
+                Delete
+              </button>
+            )}
+            {hasTerminal && (
+              <button type="button" className="action-btn kill-btn" onClick={handleKillSession}>
                 Close Agent
               </button>
             )}
@@ -256,9 +305,7 @@ export function SessionCard({ session, machineId, onOpenTerminal }: Props) {
           <span className="session-cwd" title={session.cwd}>
             {session.cwd}
           </span>
-          {session.model && (
-            <span className="session-model">{session.model}</span>
-          )}
+          {session.model && <span className="session-model">{session.model}</span>}
         </div>
       )}
     </div>

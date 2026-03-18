@@ -1,10 +1,29 @@
-import { useState } from "react";
-import type { TerminalMultiplexer } from "@agent-town/shared";
-import { useWebSocket } from "./hooks/useWebSocket";
-import { MachineGroup } from "./components/MachineGroup";
-import { TerminalOverlay } from "./components/TerminalOverlay";
-import { SettingsModal } from "./components/SettingsModal";
+import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ExplorerLayout } from "./components/ExplorerLayout";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
+import { MachineGroup } from "./components/MachineGroup";
+import { ResumeAgentModal } from "./components/ResumeAgentModal";
+import { SessionFullscreen } from "./components/SessionFullscreen";
+import { SettingsModal } from "./components/SettingsModal";
+import { TerminalOverlay } from "./components/TerminalOverlay";
+import { useWebSocket } from "./hooks/useWebSocket";
+import { API } from "./utils";
+
+export type SortMode = "recent" | "alphabetical" | "status";
+export type TimeFilter = "24h" | "3d" | "7d" | "all";
+export type GroupMode = "directory" | "status" | "none";
+export type LayoutMode = "cards" | "explorer";
+
+const STORAGE_KEYS = {
+  THEME: "agentTown:theme",
+  FONT_SIZE: "agentTown:fontSize",
+  HIDE_IDLE: "agentTown:hideIdle",
+  SORT_MODE: "agentTown:sortMode",
+  TIME_FILTER: "agentTown:timeFilter",
+  GROUP_MODE: "agentTown:groupMode",
+  LAYOUT_MODE: "agentTown:layoutMode",
+} as const;
 
 interface TerminalTarget {
   machineId: string;
@@ -12,21 +31,123 @@ interface TerminalTarget {
   multiplexer: TerminalMultiplexer;
 }
 
+interface ResumeTarget {
+  machineId: string;
+  sessionId: string;
+  projectDir: string;
+  agentType: AgentType;
+}
+
+interface FullscreenTarget {
+  machineId: string;
+  sessionId: string;
+}
+
+function loadLocalStorage<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? (JSON.parse(stored) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function filterMachinesBySearch(machines: MachineInfo[], query: string): MachineInfo[] {
+  if (!query.trim()) return machines;
+  const q = query.toLowerCase();
+  return machines
+    .map((machine) => ({
+      ...machine,
+      sessions: machine.sessions.filter((s) => {
+        const name = (s.customName || s.slug).toLowerCase();
+        const project = s.projectName.toLowerCase();
+        const path = s.projectPath.toLowerCase();
+        const cwd = s.cwd.toLowerCase();
+        const branch = (s.gitBranch || "").toLowerCase();
+        const status = s.status.replace("_", " ").toLowerCase();
+        return (
+          name.includes(q) ||
+          project.includes(q) ||
+          path.includes(q) ||
+          cwd.includes(q) ||
+          branch.includes(q) ||
+          status.includes(q)
+        );
+      }),
+    }))
+    .filter((m) => m.sessions.length > 0);
+}
+
 export function App() {
   const { machines, connected } = useWebSocket();
   const [terminal, setTerminal] = useState<TerminalTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false);
+  const [hideIdle, setHideIdle] = useState(false);
+  const [resumeTarget, setResumeTarget] = useState<ResumeTarget | null>(null);
+  const [fullscreen, setFullscreen] = useState<FullscreenTarget | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("24h");
+  const [autoDeleteOnClose, setAutoDeleteOnClose] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">(() => loadLocalStorage(STORAGE_KEYS.THEME, "dark"));
+  const [fontSize, setFontSize] = useState<"small" | "medium" | "large">(() =>
+    loadLocalStorage(STORAGE_KEYS.FONT_SIZE, "small"),
+  );
+  const [groupMode, setGroupMode] = useState<GroupMode>(() => loadLocalStorage(STORAGE_KEYS.GROUP_MODE, "directory"));
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLocalStorage(STORAGE_KEYS.LAYOUT_MODE, "cards"));
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Persist layout and group preferences
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.GROUP_MODE, JSON.stringify(groupMode));
+  }, [groupMode]);
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.LAYOUT_MODE, JSON.stringify(layoutMode));
+  }, [layoutMode]);
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify(theme));
+  }, [theme]);
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.FONT_SIZE, JSON.stringify(fontSize));
+  }, [fontSize]);
+
+  const fetchSettings = useCallback(() => {
+    fetch(API.SETTINGS)
+      .then((r) => r.json())
+      .then((s: Settings) => {
+        setAutoDeleteOnClose(s.autoDeleteOnClose);
+        setTheme(s.theme);
+        setFontSize(s.fontSize);
+      })
+      .catch((err) => console.warn("Failed to load settings:", err));
+  }, []);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  // Filter machines by search query
+  const filteredMachines = useMemo(() => filterMachinesBySearch(machines, searchQuery), [machines, searchQuery]);
+
+  // Derive live session for fullscreen from machines array (real-time updates)
+  const fullscreenSession = fullscreen
+    ? machines
+        .find((m) => m.machineId === fullscreen.machineId)
+        ?.sessions.find((s) => s.sessionId === fullscreen.sessionId)
+    : null;
 
   const totalSessions = machines.reduce((sum, m) => sum + m.sessions.length, 0);
   const totalAttention = machines.reduce(
-    (sum, m) =>
-      sum + m.sessions.filter((s) => s.status === "needs_attention").length,
-    0
+    (sum, m) => sum + m.sessions.filter((s) => s.status === "awaiting_input").length,
+    0,
   );
 
+  function handleOpenTerminal(machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) {
+    setTerminal({ machineId, sessionName, multiplexer });
+  }
+
   return (
-    <div className="app">
+    <div className={`app theme-${theme} font-${fontSize} ${layoutMode === "explorer" ? "app-explorer" : ""}`}>
       <header className="app-header">
         <div className="header-left">
           <h1 className="app-title">Agent Town</h1>
@@ -42,56 +163,161 @@ export function App() {
             <span className="header-stat">
               {totalSessions} session{totalSessions !== 1 ? "s" : ""}
             </span>
-            {totalAttention > 0 && (
-              <span className="header-stat attention">
-                {totalAttention} need attention
-              </span>
-            )}
+            {totalAttention > 0 && <span className="header-stat attention">{totalAttention} need attention</span>}
           </div>
           <div className="header-actions">
-            <button
-              className="header-btn"
-              onClick={() => setLaunchOpen(true)}
-              title="Launch new agent"
+            <input
+              className="search-input"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search sessions..."
+            />
+            <select
+              className="header-sort-select"
+              value={groupMode}
+              onChange={(e) => setGroupMode(e.target.value as GroupMode)}
+              title="Group sessions"
             >
+              <option value="directory">By directory</option>
+              <option value="status">By status</option>
+              <option value="none">No grouping</option>
+            </select>
+            <select
+              className="header-sort-select"
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
+              title="Filter by age"
+            >
+              <option value="24h">Last 24h</option>
+              <option value="3d">Last 3 days</option>
+              <option value="7d">Last 7 days</option>
+              <option value="all">All sessions</option>
+            </select>
+            <select
+              className="header-sort-select"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              title="Sort sessions"
+            >
+              <option value="recent">Recent first</option>
+              <option value="alphabetical">A-Z</option>
+              <option value="status">By status</option>
+            </select>
+            <button
+              type="button"
+              className={`header-btn ${hideIdle ? "active" : ""}`}
+              onClick={() => setHideIdle((h) => !h)}
+            >
+              Hide Idle
+            </button>
+            <div className="layout-toggle">
+              <button
+                type="button"
+                className={`layout-toggle-btn ${layoutMode === "cards" ? "active" : ""}`}
+                onClick={() => setLayoutMode("cards")}
+                title="Cards layout"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`layout-toggle-btn ${layoutMode === "explorer" ? "active" : ""}`}
+                onClick={() => setLayoutMode("explorer")}
+                title="Explorer layout"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5v-13zM4 3h12v2H4V3zm0 4h12v2H4V7zm0 4h12v2H4v-2z" />
+                </svg>
+              </button>
+            </div>
+            <button type="button" className="header-btn" onClick={() => setLaunchOpen(true)} title="Launch new agent">
               + New Agent
             </button>
             <button
+              type="button"
               className="header-btn header-btn-icon"
               onClick={() => setSettingsOpen(true)}
               title="Settings"
+              aria-label="Settings"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492ZM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0Z"/>
-                <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0a1.97 1.97 0 0 1-2.929 1.1c-1.541-.971-3.327.813-2.355 2.355a1.97 1.97 0 0 1-1.1 2.929c-1.79.527-1.79 3.065 0 3.592a1.97 1.97 0 0 1 1.1 2.929c-.972 1.541.813 3.327 2.355 2.355a1.97 1.97 0 0 1 2.929 1.1c.527 1.79 3.065 1.79 3.592 0a1.97 1.97 0 0 1 2.929-1.1c1.541.972 3.327-.813 2.355-2.355a1.97 1.97 0 0 1 1.1-2.929c1.79-.527 1.79-3.065 0-3.592a1.97 1.97 0 0 1-1.1-2.929c.972-1.541-.813-3.327-2.355-2.355a1.97 1.97 0 0 1-2.929-1.1ZM8 0c.463 0 .898.248 1.13.666.332.6 1.089.832 1.727.527.442-.212.957-.06 1.216.352.26.414.173.95-.18 1.282-.508.476-.554 1.27-.103 1.8.312.37.363.896.118 1.32-.247.427-.737.641-1.218.518-.69-.177-1.403.241-1.523.952-.083.494-.507.852-1.007.867a1.05 1.05 0 0 1-1.04-.83c-.14-.703-.862-1.131-1.554-.938-.482.135-.984-.066-1.242-.49a1.05 1.05 0 0 1 .083-1.166c.435-.54.37-1.324-.147-1.784-.36-.32-.457-.85-.207-1.267.252-.42.765-.58 1.215-.377.644.29 1.406.047 1.729-.562A1.3 1.3 0 0 1 8 0Z"/>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
               </svg>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="app-main">
-        {machines.length === 0 && (
-          <div className="empty-state">
-            <h2>No machines connected</h2>
-            <p>
-              Start an agent on a machine to see its sessions here.
-            </p>
-            <pre>
-              <code>AGENT_TOWN_SERVER=http://&lt;this-server&gt;:4680 bun run agent/src/index.ts</code>
-            </pre>
-          </div>
-        )}
-        {machines.map((machine) => (
-          <MachineGroup
-            key={machine.machineId}
-            machine={machine}
-            onOpenTerminal={(sessionName, multiplexer) =>
-              setTerminal({ machineId: machine.machineId, sessionName, multiplexer })
-            }
-          />
-        ))}
-      </main>
+      {layoutMode === "cards" ? (
+        <main className="app-main">
+          {filteredMachines.length === 0 && machines.length === 0 && (
+            <div className="empty-state">
+              <h2>No machines connected</h2>
+              <p>Start an agent on a machine to see its sessions here.</p>
+              <pre>
+                <code>AGENT_TOWN_SERVER=http://&lt;this-server&gt;:4680 bun run agent/src/index.ts</code>
+              </pre>
+            </div>
+          )}
+          {filteredMachines.length === 0 && machines.length > 0 && searchQuery && (
+            <div className="empty-state">
+              <h2>No matching sessions</h2>
+              <p>No sessions match "{searchQuery}"</p>
+            </div>
+          )}
+          {filteredMachines.map((machine) => (
+            <MachineGroup
+              key={machine.machineId}
+              machine={machine}
+              hideIdle={hideIdle}
+              sortMode={sortMode}
+              timeFilter={timeFilter}
+              groupMode={groupMode}
+              onOpenTerminal={(sessionName, multiplexer) =>
+                handleOpenTerminal(machine.machineId, sessionName, multiplexer)
+              }
+              onResume={(sessionId, projectDir, agentType) =>
+                setResumeTarget({ machineId: machine.machineId, sessionId, projectDir, agentType })
+              }
+              onFullscreen={(session) => setFullscreen({ machineId: machine.machineId, sessionId: session.sessionId })}
+              autoDeleteOnClose={autoDeleteOnClose}
+            />
+          ))}
+        </main>
+      ) : (
+        <ExplorerLayout
+          machines={filteredMachines}
+          allMachines={machines}
+          groupMode={groupMode}
+          sortMode={sortMode}
+          hideIdle={hideIdle}
+          timeFilter={timeFilter}
+          autoDeleteOnClose={autoDeleteOnClose}
+          onOpenTerminal={handleOpenTerminal}
+          onResume={(machineId, sessionId, projectDir, agentType) => setResumeTarget({ machineId, sessionId, projectDir, agentType })}
+        />
+      )}
 
       {terminal && (
         <TerminalOverlay
@@ -102,11 +328,43 @@ export function App() {
         />
       )}
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {fullscreen && fullscreenSession && (
+        <SessionFullscreen
+          session={fullscreenSession}
+          machineId={fullscreen.machineId}
+          onClose={() => setFullscreen(null)}
+          onOpenTerminal={(sessionName, multiplexer) => {
+            setFullscreen(null);
+            handleOpenTerminal(fullscreen.machineId, sessionName, multiplexer);
+          }}
+          onResume={(sessionId, projectDir, agentType) => {
+            setFullscreen(null);
+            setResumeTarget({ machineId: fullscreen.machineId, sessionId, projectDir, agentType });
+          }}
+          autoDeleteOnClose={autoDeleteOnClose}
+        />
+      )}
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+          fetchSettings();
+        }}
+      />
       <LaunchAgentModal
         open={launchOpen}
         onClose={() => setLaunchOpen(false)}
         machines={machines}
+        onLaunched={(machineId, sessionName, multiplexer) => handleOpenTerminal(machineId, sessionName, multiplexer)}
+      />
+      <ResumeAgentModal
+        open={!!resumeTarget}
+        onClose={() => setResumeTarget(null)}
+        machineId={resumeTarget?.machineId || ""}
+        sessionId={resumeTarget?.sessionId || ""}
+        projectDir={resumeTarget?.projectDir || ""}
+        agentType={resumeTarget?.agentType || "claude-code"}
       />
     </div>
   );
