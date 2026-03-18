@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createLogger, type SessionInfo, type SessionStatus } from "@agent-town/shared";
-import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
+import { type OpenCodeClientInstance, withSDKFallback } from "./sdk-client";
 
 const log = createLogger("opencode:sessions");
 
@@ -19,26 +19,14 @@ const OPENCODE_DB_PATH = join(getOpenCodeDataDir(), "opencode.db");
  * Uses the SDK REST API if the server is running, falls back to SQLite.
  */
 export async function discoverOpenCodeSessions(): Promise<SessionInfo[]> {
-  // Try SDK first
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
-      return await discoverViaSDK(client);
-    } catch (err) {
-      log.debug(
-        `SDK session discovery failed, falling back to SQLite: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      resetOpenCodeClient();
-    }
-  }
-
-  // Fallback: direct SQLite
-  return discoverViaSQLite();
+  return withSDKFallback(
+    (client) => discoverViaSDK(client),
+    () => discoverViaSQLite(),
+    "discoverOpenCodeSessions",
+  );
 }
 
-async function discoverViaSDK(
-  client: NonNullable<Awaited<ReturnType<typeof getOpenCodeClient>>>,
-): Promise<SessionInfo[]> {
+async function discoverViaSDK(client: OpenCodeClientInstance): Promise<SessionInfo[]> {
   const { data: sessions } = await client.session.list({ roots: true });
   if (!sessions) return [];
 
@@ -150,33 +138,34 @@ async function discoverViaSQLite(): Promise<SessionInfo[]> {
 
 /** Delete an OpenCode session. Uses SDK if available, falls back to SQLite. */
 export async function deleteOpenCodeSessionData(sessionId: string): Promise<boolean> {
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
+  return withSDKFallback(
+    async (client) => {
       const { data } = await client.session.delete({ sessionID: sessionId });
       if (data) {
         log.info(`deleted OpenCode session via SDK: ${sessionId}`);
         return true;
       }
-    } catch (err) {
-      log.debug(`SDK delete failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  // Fallback: SQLite
-  try {
-    const { Database } = await import("bun:sqlite");
-    const db = new Database(OPENCODE_DB_PATH);
-    const result = db.run("DELETE FROM session WHERE id = ?", sessionId);
-    db.close();
-    if (result.changes > 0) {
-      log.info(`deleted OpenCode session via SQLite: ${sessionId}`);
-      return true;
-    }
-  } catch (err) {
-    log.warn(`deleteOpenCodeSessionData: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  return false;
+      // SDK returned no data — fall through to fallback by throwing
+      throw new Error("SDK delete returned no data");
+    },
+    async () => {
+      try {
+        const { Database } = await import("bun:sqlite");
+        const db = new Database(OPENCODE_DB_PATH);
+        const result = db.run("DELETE FROM session WHERE id = ?", sessionId);
+        db.close();
+        if (result.changes > 0) {
+          log.info(`deleted OpenCode session via SQLite: ${sessionId}`);
+          return true;
+        }
+      } catch (err) {
+        log.warn(`deleteOpenCodeSessionData: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return false;
+    },
+    "deleteOpenCodeSessionData",
+    { resetOnError: false },
+  );
 }
 
 /** Find the most recently updated session in a directory (for process matching). */
@@ -184,9 +173,8 @@ export async function findOpenCodeSessionByDir(
   directory: string,
   claimedIds: Set<string>,
 ): Promise<string | undefined> {
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
+  return withSDKFallback(
+    async (client) => {
       const { data: sessions } = await client.session.list({ roots: true });
       if (sessions) {
         const sorted = sessions
@@ -194,31 +182,32 @@ export async function findOpenCodeSessionByDir(
           .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0));
         if (sorted.length > 0) return sorted[0].id;
       }
-    } catch {
-      // fall through to SQLite
-    }
-  }
+      return undefined;
+    },
+    async () => {
+      try {
+        const { Database } = await import("bun:sqlite");
+        const db = new Database(OPENCODE_DB_PATH, { readonly: true });
+        const rows = db
+          .query<{ id: string }, [string]>(
+            `SELECT id FROM session
+           WHERE directory = ? AND parent_id IS NULL
+           ORDER BY time_updated DESC`,
+          )
+          .all(directory);
+        db.close();
 
-  // Fallback: SQLite
-  try {
-    const { Database } = await import("bun:sqlite");
-    const db = new Database(OPENCODE_DB_PATH, { readonly: true });
-    const rows = db
-      .query<{ id: string }, [string]>(
-        `SELECT id FROM session
-       WHERE directory = ? AND parent_id IS NULL
-       ORDER BY time_updated DESC`,
-      )
-      .all(directory);
-    db.close();
-
-    for (const row of rows) {
-      if (!claimedIds.has(row.id)) return row.id;
-    }
-  } catch (err) {
-    log.debug(`findOpenCodeSessionByDir: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  return undefined;
+        for (const row of rows) {
+          if (!claimedIds.has(row.id)) return row.id;
+        }
+      } catch (err) {
+        log.debug(`findOpenCodeSessionByDir: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return undefined;
+    },
+    "findOpenCodeSessionByDir",
+    { resetOnError: false },
+  );
 }
 
 export { OPENCODE_DB_PATH };

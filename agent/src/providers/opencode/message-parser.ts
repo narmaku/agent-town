@@ -1,5 +1,5 @@
 import { createLogger, type SessionMessage, type SessionMessagesResponse } from "@agent-town/shared";
-import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
+import { type OpenCodeClientInstance, withSDKFallback } from "./sdk-client";
 import { OPENCODE_DB_PATH } from "./session-discovery";
 
 const log = createLogger("opencode:messages");
@@ -13,21 +13,15 @@ export async function getOpenCodeSessionMessages(
   offset: number,
   limit: number,
 ): Promise<SessionMessagesResponse> {
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
-      return await getMessagesViaSDK(client, sessionId, offset, limit);
-    } catch (err) {
-      log.debug(`SDK messages failed, falling back to SQLite: ${err instanceof Error ? err.message : String(err)}`);
-      resetOpenCodeClient();
-    }
-  }
-
-  return getMessagesViaSQLite(sessionId, offset, limit);
+  return withSDKFallback(
+    (client) => getMessagesViaSDK(client, sessionId, offset, limit),
+    () => getMessagesViaSQLite(sessionId, offset, limit),
+    "getOpenCodeSessionMessages",
+  );
 }
 
 async function getMessagesViaSDK(
-  client: NonNullable<Awaited<ReturnType<typeof getOpenCodeClient>>>,
+  client: OpenCodeClientInstance,
   sessionId: string,
   offset: number,
   limit: number,

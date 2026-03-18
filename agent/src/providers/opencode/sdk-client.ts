@@ -47,3 +47,39 @@ export function resetOpenCodeClient(): void {
   client = null;
   lastCheckMs = 0;
 }
+
+/** Export the resolved client type for use in SDK functions. */
+export type OpenCodeClientInstance = NonNullable<Awaited<OpencodeClient>>;
+
+interface SDKFallbackOptions {
+  /** Reset the SDK client on error so the next call re-establishes the connection. Default: true. */
+  resetOnError?: boolean;
+}
+
+/**
+ * Try an operation via the OpenCode SDK, falling back to an alternative on failure.
+ *
+ * Gets the SDK client, runs `sdkFn` if available, and on any error logs the
+ * failure, optionally resets the client, and delegates to `fallbackFn`.
+ * If no client is available, `fallbackFn` is called directly.
+ */
+export async function withSDKFallback<T>(
+  sdkFn: (client: OpenCodeClientInstance) => Promise<T>,
+  fallbackFn: () => Promise<T>,
+  context: string,
+  options?: SDKFallbackOptions,
+): Promise<T> {
+  const sdkClient = await getOpenCodeClient();
+  if (sdkClient) {
+    try {
+      return await sdkFn(sdkClient);
+    } catch (err) {
+      log.debug(`${context}: SDK failed, falling back: ${err instanceof Error ? err.message : String(err)}`);
+      if (options?.resetOnError !== false) {
+        resetOpenCodeClient();
+      }
+    }
+  }
+
+  return fallbackFn();
+}
