@@ -13,6 +13,7 @@ function getOpenCodeDataDir(): string {
 }
 
 const OPENCODE_DB_PATH = join(getOpenCodeDataDir(), "opencode.db");
+const SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
  * Discover OpenCode sessions.
