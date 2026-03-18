@@ -134,8 +134,9 @@ const _server = Bun.serve({
       try {
         const heartbeat: Heartbeat = await req.json();
 
-        // Store the agent's address from the request for terminal proxying
-        const agentAddress = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || new URL(req.url).hostname;
+        // Store the agent's address from the socket IP (not X-Forwarded-For, which is spoofable)
+        const socketIP = server.requestIP(req);
+        const agentAddress = socketIP?.address || "localhost";
         upsertMachine(heartbeat);
 
         // Update the agent address after upsert
