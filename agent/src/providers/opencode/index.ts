@@ -1,8 +1,9 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
 import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
-import { handleOpenCodeEvent } from "./event-handler";
+import { handleOpenCodeEvent, isSSEActive, startOpenCodeEventStream } from "./event-handler";
 import { getOpenCodeSessionMessages } from "./message-parser";
 import { extractOpenCodeSessionIdFromArgs, filterOpenCodeProcesses } from "./process-mapper";
+import { getOpenCodeClient } from "./sdk-client";
 import { deleteOpenCodeSessionData, discoverOpenCodeSessions, findOpenCodeSessionByDir } from "./session-discovery";
 
 async function isBinaryAvailable(binary: string): Promise<boolean> {
@@ -43,8 +44,6 @@ export class OpenCodeProvider implements AgentProvider {
   buildLaunchCommand(opts: LaunchOptions): string {
     const parts = ["opencode"];
     if (opts.model) parts.push(`--model ${opts.model}`);
-    // OpenCode uses config-based permissions, not a CLI flag.
-    // Autonomous mode is handled by ensuring opencode.json has permission: "allow".
     return parts.join(" ");
   }
 
@@ -68,5 +67,28 @@ export class OpenCodeProvider implements AgentProvider {
 
   async deleteSessionData(sessionId: string): Promise<boolean> {
     return deleteOpenCodeSessionData(sessionId);
+  }
+
+  /** Start SSE event subscription if server is available. */
+  async startEventStream(onEvent: (result: HookEventResult) => void): Promise<void> {
+    if (!isSSEActive()) {
+      await startOpenCodeEventStream(onEvent);
+    }
+  }
+
+  /** Send text to an OpenCode session via SDK TUI methods. Returns true if successful. */
+  async sendViaTUI(text: string): Promise<boolean> {
+    const client = await getOpenCodeClient();
+    if (!client) return false;
+
+    try {
+      // Clear, append text, then submit
+      await client.tui.clearPrompt();
+      await client.tui.appendPrompt({ text });
+      await client.tui.submitPrompt();
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

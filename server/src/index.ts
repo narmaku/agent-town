@@ -354,6 +354,7 @@ const _server = Bun.serve({
           multiplexer: string;
           session: string;
           text: string;
+          agentType?: string;
         };
 
         const machine = getMachine(body.machineId);
@@ -368,6 +369,7 @@ const _server = Bun.serve({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             multiplexer: body.multiplexer,
+            agentType: body.agentType,
             session: body.session,
             text: body.text,
           }),

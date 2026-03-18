@@ -3,10 +3,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname, platform } from "node:os";
 import { basename, join } from "node:path";
 import { createLogger, type Heartbeat, type SessionInfo, type TerminalMultiplexer } from "@agent-town/shared";
-import { getHookState } from "./hook-store";
+import { getHookState, updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
 import { discoverProcessMappings } from "./process-mapper";
-import { initializeProviders } from "./providers/registry";
+import type { OpenCodeProvider } from "./providers/opencode/index";
+import { getProvider, initializeProviders } from "./providers/registry";
 import { discoverSessions } from "./session-parser";
 import { startTerminalServer } from "./terminal-server";
 
@@ -302,6 +303,14 @@ async function main(): Promise<void> {
 
   // Initialize agent providers (Claude Code, OpenCode, etc.)
   await initializeProviders();
+
+  // Start OpenCode SSE event subscription for real-time status
+  const openCodeProvider = getProvider("opencode") as OpenCodeProvider | undefined;
+  if (openCodeProvider?.startEventStream) {
+    openCodeProvider.startEventStream((result) => {
+      updateHookState(result);
+    });
+  }
 
   startTerminalServer(TERMINAL_PORT, MACHINE_ID);
 

@@ -16,6 +16,8 @@
     "build": "bun run --filter agent-town-dashboard build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.7"
+    "@anthropic-ai/claude-agent-sdk": "^0.2.77",
+    "@biomejs/biome": "^2.4.7",
+    "@opencode-ai/sdk": "^1.2.27"
   }
 }

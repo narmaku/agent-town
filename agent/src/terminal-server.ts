@@ -853,10 +853,26 @@ export function startTerminalServer(port: number, machineId: string) {
             multiplexer: "zellij" | "tmux";
             session: string;
             text: string;
+            agentType?: AgentType;
           };
 
           if (!body.session || !body.text) {
             return Response.json({ error: "Missing session or text" }, { status: 400 });
+          }
+
+          // Try OpenCode TUI SDK for reliable text sending
+          if (body.agentType === "opencode") {
+            const openCodeProvider = getProvider("opencode");
+            if (openCodeProvider && "sendViaTUI" in openCodeProvider) {
+              const sent = await (openCodeProvider as { sendViaTUI: (text: string) => Promise<boolean> }).sendViaTUI(
+                body.text,
+              );
+              if (sent) {
+                log.info(`send: session=${body.session} via OpenCode TUI SDK chars=${body.text.length}`);
+                return Response.json({ ok: true });
+              }
+              log.debug("send: OpenCode TUI SDK unavailable, falling back to multiplexer");
+            }
           }
 
           const cleanEnv = cleanMultiplexerEnv();
@@ -869,10 +885,11 @@ export function startTerminalServer(port: number, machineId: string) {
           if (!isMultiline) {
             // Single-line: use native multiplexer commands — reliable for all apps
             if (body.multiplexer === "zellij") {
-              const proc = Bun.spawn(
-                ["zellij", "--session", body.session, "action", "write-chars", `${body.text}\n`],
-                { env: cleanEnv, stdout: "pipe", stderr: "pipe" },
-              );
+              const proc = Bun.spawn(["zellij", "--session", body.session, "action", "write-chars", `${body.text}\n`], {
+                env: cleanEnv,
+                stdout: "pipe",
+                stderr: "pipe",
+              });
               await proc.exited;
             } else {
               const proc = Bun.spawn(["tmux", "send-keys", "-t", body.session, body.text, "Enter"], {

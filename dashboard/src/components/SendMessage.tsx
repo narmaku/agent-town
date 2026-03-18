@@ -1,3 +1,4 @@
+import type { AgentType } from "@agent-town/shared";
 import { useEffect, useRef, useState } from "react";
 import { API } from "../utils";
 
@@ -5,10 +6,11 @@ interface Props {
   machineId: string;
   multiplexer: string;
   session: string;
+  agentType?: AgentType;
   onSent?: () => void;
 }
 
-export function SendMessage({ machineId, multiplexer, session, onSent }: Props) {
+export function SendMessage({ machineId, multiplexer, session, agentType, onSent }: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -41,6 +43,7 @@ export function SendMessage({ machineId, multiplexer, session, onSent }: Props) 
           multiplexer,
           session,
           text: text.trim(),
+          agentType,
         }),
       });
 

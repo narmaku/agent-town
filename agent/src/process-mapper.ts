@@ -2,7 +2,6 @@ import { readFile, readlink } from "node:fs/promises";
 import { createLogger, type TerminalMultiplexer } from "@agent-town/shared";
 import {
   extractClaudeSessionIdFromArgs,
-  findSessionCandidates,
   matchSessionByBirthTime,
   type SessionCandidate,
 } from "./providers/claude-code/process-mapper";

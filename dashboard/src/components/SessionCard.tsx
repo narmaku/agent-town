@@ -295,6 +295,7 @@ export function SessionCard({ session, machineId, onOpenTerminal, onResume, onFu
               machineId={machineId}
               multiplexer={session.multiplexer!}
               session={session.multiplexerSession!}
+              agentType={session.agentType}
             />
           )}
         </div>

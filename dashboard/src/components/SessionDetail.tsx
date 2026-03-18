@@ -135,7 +135,7 @@ export function SessionDetail({
     } catch {
       // silently fail
     }
-  }, [machineId, session.sessionId]);
+  }, [machineId, session.sessionId, session.agentType]);
 
   // Load initial messages
   useEffect(() => {
@@ -335,6 +335,7 @@ export function SessionDetail({
             machineId={machineId}
             multiplexer={session.multiplexer!}
             session={session.multiplexerSession!}
+            agentType={session.agentType}
             onSent={handleSent}
           />
         </div>

@@ -1,15 +1,82 @@
-import { readdir, stat, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, join } from "node:path";
 import { createLogger, type SessionInfo, type SessionStatus } from "@agent-town/shared";
 
 const log = createLogger("claude:sessions");
 
-const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
+/**
+ * Session discovery using the Claude Agent SDK.
+ *
+ * Uses `listSessions()` and `getSessionMessages()` from
+ * @anthropic-ai/claude-agent-sdk instead of manually scanning JSONL files.
+ */
 
-const IDLE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
-const PERMISSION_WAIT_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
-const USER_INPUT_WAIT_THRESHOLD_MS = 60 * 1000; // 1 minute
+interface SDKSessionInfo {
+  sessionId: string;
+  summary: string;
+  lastModified: number;
+  fileSize?: number;
+  customTitle?: string;
+  firstPrompt?: string;
+  gitBranch?: string;
+  cwd?: string;
+  tag?: string;
+  createdAt?: number;
+}
+
+export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
+  const sessions: SessionInfo[] = [];
+
+  try {
+    const { listSessions } = await import("@anthropic-ai/claude-agent-sdk");
+    const sdkSessions: SDKSessionInfo[] = await listSessions();
+
+    const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    for (const s of sdkSessions) {
+      if (s.lastModified < sevenDaysAgoMs) continue;
+
+      const cwd = s.cwd || "";
+      const projectName = cwd.split("/").pop() || "unknown";
+      const status = detectClaudeStatus(s.lastModified);
+
+      sessions.push({
+        sessionId: s.sessionId,
+        agentType: "claude-code",
+        slug: s.sessionId.slice(0, 8),
+        customName: s.customTitle,
+        projectPath: cwd,
+        projectName,
+        gitBranch: s.gitBranch && s.gitBranch !== "HEAD" ? s.gitBranch : "",
+        status,
+        lastActivity: new Date(s.lastModified).toISOString(),
+        lastMessage: s.summary || s.firstPrompt?.slice(0, 120) || "",
+        cwd,
+      });
+    }
+  } catch (err) {
+    log.debug(`discoverClaudeSessions: SDK failed: ${err instanceof Error ? err.message : String(err)}`);
+    // Fall back to JSONL scanning if SDK not available
+    return discoverClaudeSessionsFallback();
+  }
+
+  return sessions;
+}
+
+function detectClaudeStatus(lastModifiedMs: number): SessionStatus {
+  const age = Date.now() - lastModifiedMs;
+
+  if (age < 30_000) return "working";
+  if (age < 60_000) return "awaiting_input";
+  if (age < 10 * 60 * 1000) return "idle";
+  return "done";
+}
+
+// --- Fallback: JSONL scanning (if SDK import fails) ---
+
+import { readdir, stat, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
+
+const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
 export interface ClaudeJsonlEntry {
   type: "user" | "assistant";
@@ -27,124 +94,44 @@ export interface ClaudeJsonlEntry {
   toolUseResult?: string;
 }
 
-export function detectStatus(lastEntry: ClaudeJsonlEntry, lastModifiedMs: number): SessionStatus {
-  const age = Date.now() - lastModifiedMs;
+async function discoverClaudeSessionsFallback(): Promise<SessionInfo[]> {
+  log.info("using JSONL fallback for session discovery");
+  const sessions: SessionInfo[] = [];
 
-  if (age < 30_000) {
-    return "working";
-  }
-
-  if (lastEntry.type === "user") {
-    return age < IDLE_THRESHOLD_MS ? "working" : "idle";
-  }
-
-  if (lastEntry.type === "assistant" && lastEntry.message?.content) {
-    const content = lastEntry.message.content;
-    if (Array.isArray(content)) {
-      const toolUseBlocks = content.filter((block: { type?: string }) => block.type === "tool_use") as {
-        type: string;
-        name?: string;
-      }[];
-      const hasToolUse = toolUseBlocks.length > 0;
-
-      const hasAskUser = toolUseBlocks.some((block) => block.name === "AskUserQuestion");
-      if (hasAskUser) {
-        return "action_required";
-      }
-
-      if (hasToolUse) {
-        if (age < PERMISSION_WAIT_THRESHOLD_MS) return "working";
-        if (age < IDLE_THRESHOLD_MS) return "awaiting_input";
-        return "idle";
-      }
-      const hasText = content.some((block: { type?: string }) => block.type === "text");
-      if (hasText) {
-        if (age < USER_INPUT_WAIT_THRESHOLD_MS) return "working";
-        if (age < IDLE_THRESHOLD_MS) return "awaiting_input";
-        return "idle";
-      }
-    }
-  }
-
-  return age < IDLE_THRESHOLD_MS ? "idle" : "done";
-}
-
-function summarizeLastMessage(entry: ClaudeJsonlEntry): string {
-  const content = entry.message?.content;
-  if (!content) return "";
-
-  if (typeof content === "string") {
-    return content.slice(0, 120);
-  }
-
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if ((block as { type: string; text?: string }).type === "text") {
-        return ((block as { text: string }).text || "").slice(0, 120);
-      }
-      if ((block as { type: string; name?: string }).type === "tool_use") {
-        return `[Tool: ${(block as { name: string }).name}]`;
-      }
-      if ((block as { type: string }).type === "tool_result") {
-        return "[Waiting for response...]";
-      }
-    }
-  }
-  return "";
-}
-
-async function readFirstEntryWithCwd(filePath: string): Promise<ClaudeJsonlEntry | null> {
-  const file = Bun.file(filePath);
-  const text = await file.text();
-  const lines = text.split("\n");
-  const limit = Math.min(lines.length, 20);
-  for (let i = 0; i < limit; i++) {
-    if (!lines[i].trim()) continue;
-    try {
-      const entry: ClaudeJsonlEntry = JSON.parse(lines[i]);
-      if (entry.cwd) return entry;
-    } catch {}
-  }
-  return null;
-}
-
-async function readLastLines(filePath: string, count: number): Promise<string[]> {
-  const file = Bun.file(filePath);
-  const text = await file.text();
-  const lines = text.trim().split("\n");
-  return lines.slice(-count);
-}
-
-function extractFullAssistantText(entry: ClaudeJsonlEntry): string | undefined {
-  if (entry.type !== "assistant") return undefined;
-  const content = entry.message?.content;
-  if (!content || !Array.isArray(content)) return undefined;
-
-  const textBlocks: string[] = [];
-  for (const block of content) {
-    const b = block as { type: string; text?: string };
-    if (b.type === "text" && b.text) {
-      textBlocks.push(b.text);
-    }
-  }
-  return textBlocks.length > 0 ? textBlocks.join("\n\n") : undefined;
-}
-
-function findLastAssistantText(lines: string[]): string | undefined {
-  for (let i = lines.length - 1; i >= 0; i--) {
-    try {
-      const entry: ClaudeJsonlEntry = JSON.parse(lines[i]);
-      const text = extractFullAssistantText(entry);
-      if (text) return text;
-    } catch {}
-  }
-  return undefined;
-}
-
-export async function parseClaudeSession(jsonlPath: string): Promise<SessionInfo | null> {
   try {
-    const fileStat = await stat(jsonlPath);
-    const lastLines = await readLastLines(jsonlPath, 200);
+    const projectDirs = await readdir(CLAUDE_PROJECTS_DIR);
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+    for (const dir of projectDirs) {
+      const projectDir = join(CLAUDE_PROJECTS_DIR, dir);
+      const dirStat = await stat(projectDir);
+      if (!dirStat.isDirectory()) continue;
+
+      const files = await readdir(projectDir);
+      const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+
+      for (const jsonlFile of jsonlFiles) {
+        const jsonlPath = join(projectDir, jsonlFile);
+        const jsonlStat = await stat(jsonlPath);
+
+        if (Date.now() - jsonlStat.mtimeMs > sevenDaysMs) continue;
+
+        const session = await parseClaudeSessionFromJsonl(jsonlPath, jsonlStat.mtimeMs);
+        if (session) sessions.push(session);
+      }
+    }
+  } catch (err) {
+    log.debug(`discoverClaudeSessionsFallback: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  return sessions;
+}
+
+async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): Promise<SessionInfo | null> {
+  try {
+    const text = await Bun.file(jsonlPath).text();
+    const lines = text.trim().split("\n");
+    const lastLines = lines.slice(-200);
     if (lastLines.length === 0) return null;
 
     let lastEntry: ClaudeJsonlEntry | null = null;
@@ -159,66 +146,55 @@ export async function parseClaudeSession(jsonlPath: string): Promise<SessionInfo
     }
     if (!lastEntry) return null;
 
-    const lastAssistantMessage = findLastAssistantText(lastLines);
-    const firstCwdEntry = await readFirstEntryWithCwd(jsonlPath);
-    const projectRoot = firstCwdEntry?.cwd || lastEntry.cwd;
-    const projectName = basename(projectRoot);
+    // Find first entry with cwd (project root)
+    let projectRoot = lastEntry.cwd;
+    const limit = Math.min(lines.length, 20);
+    for (let i = 0; i < limit; i++) {
+      if (!lines[i].trim()) continue;
+      try {
+        const entry: ClaudeJsonlEntry = JSON.parse(lines[i]);
+        if (entry.cwd) {
+          projectRoot = entry.cwd;
+          break;
+        }
+      } catch {}
+    }
+
+    const summary = summarizeLastMessage(lastEntry);
 
     return {
       sessionId: lastEntry.sessionId,
       agentType: "claude-code",
       slug: lastEntry.slug || lastEntry.sessionId.slice(0, 8),
       projectPath: projectRoot,
-      projectName,
+      projectName: basename(projectRoot),
       gitBranch: lastEntry.gitBranch && lastEntry.gitBranch !== "HEAD" ? lastEntry.gitBranch : "",
-      status: detectStatus(lastEntry, fileStat.mtimeMs),
-      lastActivity: lastEntry.timestamp || new Date(fileStat.mtimeMs).toISOString(),
-      lastMessage: summarizeLastMessage(lastEntry),
-      lastAssistantMessage,
+      status: detectClaudeStatus(mtimeMs),
+      lastActivity: lastEntry.timestamp || new Date(mtimeMs).toISOString(),
+      lastMessage: summary,
       cwd: lastEntry.cwd,
-      model: firstCwdEntry?.message?.model || lastEntry.message?.model,
+      model: lastEntry.message?.model,
       version: lastEntry.version,
     };
   } catch (err) {
-    log.debug(`parseClaudeSession failed for ${jsonlPath}: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`parseClaudeSessionFromJsonl: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
 
-export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
-  const sessions: SessionInfo[] = [];
-
-  try {
-    const projectDirs = await readdir(CLAUDE_PROJECTS_DIR);
-
-    for (const dir of projectDirs) {
-      const projectDir = join(CLAUDE_PROJECTS_DIR, dir);
-      const dirStat = await stat(projectDir);
-      if (!dirStat.isDirectory()) continue;
-
-      const files = await readdir(projectDir);
-      const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
-
-      for (const jsonlFile of jsonlFiles) {
-        const jsonlPath = join(projectDir, jsonlFile);
-        const jsonlStat = await stat(jsonlPath);
-
-        const ageMs = Date.now() - jsonlStat.mtimeMs;
-        if (ageMs > 7 * 24 * 60 * 60 * 1000) continue;
-
-        const session = await parseClaudeSession(jsonlPath);
-        if (session) {
-          sessions.push(session);
-        }
-      }
+function summarizeLastMessage(entry: ClaudeJsonlEntry): string {
+  const content = entry.message?.content;
+  if (!content) return "";
+  if (typeof content === "string") return content.slice(0, 120);
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      const b = block as { type: string; text?: string; name?: string };
+      if (b.type === "text") return (b.text || "").slice(0, 120);
+      if (b.type === "tool_use") return `[Tool: ${b.name}]`;
+      if (b.type === "tool_result") return "[Waiting for response...]";
     }
-  } catch (err) {
-    log.debug(
-      `discoverClaudeSessions: projects dir not accessible: ${err instanceof Error ? err.message : String(err)}`,
-    );
   }
-
-  return sessions;
+  return "";
 }
 
 /** Delete a Claude Code session's JSONL file. */
@@ -240,15 +216,14 @@ export async function deleteClaudeSessionData(sessionId: string): Promise<boolea
       }
     }
   } catch (err) {
-    log.warn(`deleteClaudeSessionData failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`deleteClaudeSessionData: ${err instanceof Error ? err.message : String(err)}`);
   }
   return false;
 }
-
-// --- Exported for process-mapper ---
 
 export function pathToProjectDir(fsPath: string): string {
   return fsPath.replace(/\//g, "-").replace(/^-/, "-");
 }
 
-export { CLAUDE_PROJECTS_DIR };
+// Re-export parseSession for tests
+export { CLAUDE_PROJECTS_DIR, parseClaudeSessionFromJsonl as parseClaudeSession };

@@ -451,7 +451,9 @@ export function ExplorerLayout({
               onOpenTerminal={(sessionName, multiplexer) =>
                 onOpenTerminal(selected.machineId, sessionName, multiplexer)
               }
-              onResume={(sessionId, projectDir, agentType) => onResume(selected.machineId, sessionId, projectDir, agentType)}
+              onResume={(sessionId, projectDir, agentType) =>
+                onResume(selected.machineId, sessionId, projectDir, agentType)
+              }
               autoDeleteOnClose={autoDeleteOnClose}
               extraActions={
                 <button

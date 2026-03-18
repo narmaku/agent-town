@@ -315,7 +315,9 @@ export function App() {
           timeFilter={timeFilter}
           autoDeleteOnClose={autoDeleteOnClose}
           onOpenTerminal={handleOpenTerminal}
-          onResume={(machineId, sessionId, projectDir, agentType) => setResumeTarget({ machineId, sessionId, projectDir, agentType })}
+          onResume={(machineId, sessionId, projectDir, agentType) =>
+            setResumeTarget({ machineId, sessionId, projectDir, agentType })
+          }
         />
       )}
 

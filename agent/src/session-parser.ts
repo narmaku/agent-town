@@ -1,9 +1,14 @@
+import { stat } from "node:fs/promises";
 import type { SessionInfo } from "@agent-town/shared";
 import { createLogger } from "@agent-town/shared";
+import { parseClaudeSession } from "./providers/claude-code/session-discovery";
 import { getAllProviders } from "./providers/registry";
 
-// Re-export parseClaudeSession for tests that use parseSession directly
-export { parseClaudeSession as parseSession } from "./providers/claude-code/session-discovery";
+/** Parse a single JSONL file into a SessionInfo. Used by tests. */
+export async function parseSession(jsonlPath: string): Promise<SessionInfo | null> {
+  const fileStat = await stat(jsonlPath);
+  return parseClaudeSession(jsonlPath, fileStat.mtimeMs);
+}
 
 const log = createLogger("session-parser");
 

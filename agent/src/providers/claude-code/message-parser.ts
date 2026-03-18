@@ -5,6 +5,19 @@ import { createLogger, type SessionMessage, type SessionMessagesResponse } from 
 
 const log = createLogger("claude:messages");
 
+// Type matching SDK's SessionMessage shape
+interface SDKSessionMessage {
+  type: "user" | "assistant";
+  uuid: string;
+  session_id: string;
+  message: {
+    role?: string;
+    model?: string;
+    content?: unknown;
+  };
+  parent_tool_use_id: string | null;
+}
+
 export interface ClaudeMessageEntry {
   type: string;
   sessionId: string;
@@ -14,27 +27,6 @@ export interface ClaudeMessageEntry {
     model?: string;
     content?: unknown;
   };
-}
-
-async function findJsonlFile(sessionId: string): Promise<string | null> {
-  const projectsDir = join(homedir(), ".claude", "projects");
-  const dirs = await readdir(projectsDir);
-
-  for (const dir of dirs) {
-    const dirPath = join(projectsDir, dir);
-    const dirStat = await stat(dirPath);
-    if (!dirStat.isDirectory()) continue;
-
-    const jsonlPath = join(dirPath, `${sessionId}.jsonl`);
-    try {
-      await stat(jsonlPath);
-      log.debug(`found JSONL for session=${sessionId.slice(0, 12)} at ${jsonlPath}`);
-      return jsonlPath;
-    } catch {
-      // not in this directory
-    }
-  }
-  return null;
 }
 
 export function formatClaudeEntry(entry: ClaudeMessageEntry): SessionMessage {
@@ -74,7 +66,77 @@ export function formatClaudeEntry(entry: ClaudeMessageEntry): SessionMessage {
   };
 }
 
+function formatSDKMessage(msg: SDKSessionMessage): SessionMessage {
+  const content = msg.message?.content;
+  let textContent = "";
+  let toolUse: { name: string; id: string }[] | undefined;
+  let toolResult: string | undefined;
+  const model = (msg.message as Record<string, unknown>)?.model as string | undefined;
+
+  if (typeof content === "string") {
+    textContent = content;
+  } else if (Array.isArray(content)) {
+    const textParts: string[] = [];
+    const tools: { name: string; id: string }[] = [];
+
+    for (const block of content) {
+      const b = block as Record<string, unknown>;
+      if (b.type === "text" && typeof b.text === "string") {
+        textParts.push(b.text);
+      } else if (b.type === "tool_use" && typeof b.name === "string" && typeof b.id === "string") {
+        tools.push({ name: b.name, id: b.id });
+      } else if (b.type === "tool_result") {
+        toolResult = typeof b.content === "string" ? b.content.slice(0, 500) : "[tool output]";
+      }
+    }
+
+    textContent = textParts.join("\n\n");
+    if (tools.length > 0) toolUse = tools;
+  }
+
+  return {
+    role: msg.type,
+    timestamp: new Date().toISOString(), // SDK doesn't expose per-message timestamps
+    content: textContent,
+    toolUse,
+    toolResult,
+    model,
+  };
+}
+
 export async function getClaudeSessionMessages(
+  sessionId: string,
+  offset: number,
+  limit: number,
+): Promise<SessionMessagesResponse> {
+  // Try SDK first
+  try {
+    const { getSessionMessages } = await import("@anthropic-ai/claude-agent-sdk");
+    const sdkMessages: SDKSessionMessage[] = await getSessionMessages(sessionId, {
+      limit,
+      offset,
+    });
+
+    const messages = sdkMessages.map(formatSDKMessage);
+    // SDK doesn't provide total count or hasMore directly,
+    // so we infer from the returned count
+    const hasMore = sdkMessages.length === limit;
+
+    log.debug(
+      `getClaudeSessionMessages (SDK): session=${sessionId.slice(0, 12)} returned=${messages.length} offset=${offset}`,
+    );
+    return { messages, total: offset + messages.length + (hasMore ? 1 : 0), hasMore };
+  } catch (err) {
+    log.debug(
+      `SDK getSessionMessages failed, using JSONL fallback: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Fallback: JSONL parsing
+  return getClaudeSessionMessagesFromJsonl(sessionId, offset, limit);
+}
+
+async function getClaudeSessionMessagesFromJsonl(
   sessionId: string,
   offset: number,
   limit: number,
@@ -110,7 +172,27 @@ export async function getClaudeSessionMessages(
   const messages = slice.map(formatClaudeEntry);
 
   log.debug(
-    `getClaudeSessionMessages: session=${sessionId.slice(0, 12)} total=${total} returned=${messages.length} offset=${offset}`,
+    `getClaudeSessionMessages (JSONL): session=${sessionId.slice(0, 12)} total=${total} returned=${messages.length} offset=${offset}`,
   );
   return { messages, total, hasMore };
+}
+
+async function findJsonlFile(sessionId: string): Promise<string | null> {
+  const projectsDir = join(homedir(), ".claude", "projects");
+  const dirs = await readdir(projectsDir);
+
+  for (const dir of dirs) {
+    const dirPath = join(projectsDir, dir);
+    const dirStat = await stat(dirPath);
+    if (!dirStat.isDirectory()) continue;
+
+    const jsonlPath = join(dirPath, `${sessionId}.jsonl`);
+    try {
+      await stat(jsonlPath);
+      return jsonlPath;
+    } catch {
+      // not in this directory
+    }
+  }
+  return null;
 }
