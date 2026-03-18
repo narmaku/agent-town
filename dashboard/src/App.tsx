@@ -1,4 +1,5 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ExplorerLayout } from "./components/ExplorerLayout";
@@ -82,7 +83,7 @@ function filterMachinesBySearch(machines: MachineInfo[], query: string): Machine
     .filter((m) => m.sessions.length > 0);
 }
 
-export function App() {
+export function App(): React.JSX.Element {
   const { machines, connected } = useWebSocket();
   const [terminal, setTerminal] = useState<TerminalTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);

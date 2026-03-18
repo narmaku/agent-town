@@ -1,4 +1,5 @@
 import type { AgentType, MachineInfo, SessionInfo, SessionStatus, TerminalMultiplexer } from "@agent-town/shared";
+import type React from "react";
 import type { GroupMode, SortMode, TimeFilter } from "../App";
 import { shortenPath, timeAgo } from "../utils";
 
@@ -117,7 +118,7 @@ export function MachineGroup({
   onResume,
   onFullscreen,
   autoDeleteOnClose,
-}: Props) {
+}: Props): React.JSX.Element {
   const needsAttention = machine.sessions.filter((s) => s.status === "awaiting_input").length;
   const working = machine.sessions.filter((s) => s.status === "working").length;
 

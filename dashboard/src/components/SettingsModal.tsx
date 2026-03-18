@@ -1,4 +1,5 @@
 import type { AgentType, RemoteNode, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import { createBrowserLogger } from "../logger";
@@ -13,7 +14,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function SettingsModal({ open, onClose }: Props) {
+export function SettingsModal({ open, onClose }: Props): React.JSX.Element | null {
   const [tab, setTab] = useState<Tab>("appearance");
   const [settings, setSettings] = useState<Settings>({
     defaultMultiplexer: "zellij",

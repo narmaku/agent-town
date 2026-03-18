@@ -1,3 +1,4 @@
+import type React from "react";
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -7,7 +8,7 @@ interface Props {
   fullMessage?: string;
 }
 
-export function MessageView({ lastMessage, fullMessage }: Props) {
+export function MessageView({ lastMessage, fullMessage }: Props): React.JSX.Element | null {
   const [showFull, setShowFull] = useState(false);
   const hasFullMessage = fullMessage && fullMessage.length > 0;
   const displayText = showFull && hasFullMessage ? fullMessage : lastMessage;

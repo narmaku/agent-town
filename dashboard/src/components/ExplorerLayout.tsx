@@ -1,4 +1,5 @@
 import type { AgentType, MachineInfo, SessionInfo, SessionStatus, TerminalMultiplexer } from "@agent-town/shared";
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { GroupMode, SortMode, TimeFilter } from "../App";
 import { API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
@@ -203,7 +204,7 @@ export function ExplorerLayout({
   autoDeleteOnClose,
   onOpenTerminal,
   onResume,
-}: Props) {
+}: Props): React.JSX.Element {
   const [selected, setSelected] = useState<SelectedSession | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [collapsedMachines, setCollapsedMachines] = useState<Set<string>>(new Set());

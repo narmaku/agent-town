@@ -26,7 +26,7 @@ function getAllSessions(machines: MachineInfo[]): SessionInfo[] {
   return machines.flatMap((m) => m.sessions);
 }
 
-export function useWebSocket() {
+export function useWebSocket(): { machines: MachineInfo[]; connected: boolean } {
   const [machines, setMachines] = useState<MachineInfo[]>([]);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);

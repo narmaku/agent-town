@@ -1,4 +1,5 @@
 import type { AgentType, SessionInfo, TerminalMultiplexer } from "@agent-town/shared";
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
 import { MessageView } from "./MessageView";
@@ -13,7 +14,14 @@ interface Props {
   autoDeleteOnClose?: boolean;
 }
 
-export function SessionCard({ session, machineId, onOpenTerminal, onResume, onFullscreen, autoDeleteOnClose }: Props) {
+export function SessionCard({
+  session,
+  machineId,
+  onOpenTerminal,
+  onResume,
+  onFullscreen,
+  autoDeleteOnClose,
+}: Props): React.JSX.Element {
   const config = STATUS_CONFIG[session.status];
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
