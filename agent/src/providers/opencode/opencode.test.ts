@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { handleOpenCodeEvent } from "./event-handler";
 import { OpenCodeProvider } from "./index";
-import { extractOpenCodeSessionIdFromArgs, filterOpenCodeProcesses } from "./process-mapper";
+import { filterProcessesByBinary } from "../utils";
+import { extractOpenCodeSessionIdFromArgs } from "./process-mapper";
 
 describe("OpenCodeProvider", () => {
   const provider = new OpenCodeProvider();
@@ -41,7 +42,7 @@ describe("OpenCodeProvider", () => {
   });
 });
 
-describe("filterOpenCodeProcesses", () => {
+describe("filterProcessesByBinary (opencode)", () => {
   test("filters only opencode binaries", () => {
     const processes = [
       { pid: 1, ppid: 0, etimes: 100, args: "/usr/bin/opencode --session abc" },
@@ -49,7 +50,7 @@ describe("filterOpenCodeProcesses", () => {
       { pid: 3, ppid: 0, etimes: 50, args: "opencode" },
       { pid: 4, ppid: 0, etimes: 300, args: "/home/user/.local/bin/node" },
     ];
-    const result = filterOpenCodeProcesses(processes);
+    const result = filterProcessesByBinary(processes, "opencode");
     expect(result).toHaveLength(2);
     expect(result[0].pid).toBe(1);
     expect(result[1].pid).toBe(3);
