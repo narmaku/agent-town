@@ -882,12 +882,10 @@ export function startTerminalServer(port: number, machineId: string) {
           await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
           if (body.agentType === "opencode") {
-            // Write char-by-char with small delays for Bubble Tea
-            for (const ch of body.text) {
-              proc.stdin.write(ch);
-              await new Promise((r) => setTimeout(r, 30));
-            }
-            proc.stdin.write("\r");
+            // Use bracketed paste mode — Bubble Tea handles the entire
+            // paste as one event instead of individual keystrokes.
+            // \x1b[200~ = paste start, \x1b[201~ = paste end
+            proc.stdin.write(`\x1b[200~${body.text}\x1b[201~\r`);
             await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
           } else {
             // Claude Code: write all at once (simple CLI prompt)
