@@ -885,7 +885,9 @@ export function startTerminalServer(port: number, machineId: string) {
             // Use bracketed paste mode — Bubble Tea handles the entire
             // paste as one event instead of individual keystrokes.
             // \x1b[200~ = paste start, \x1b[201~ = paste end
-            proc.stdin.write(`\x1b[200~${body.text}\x1b[201~\r`);
+            proc.stdin.write(`\x1b[200~${body.text}\x1b[201~`);
+            await new Promise((r) => setTimeout(r, 100));
+            proc.stdin.write("\r");
             await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
           } else {
             // Claude Code: write all at once (simple CLI prompt)

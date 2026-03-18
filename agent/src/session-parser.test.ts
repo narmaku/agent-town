@@ -158,19 +158,19 @@ describe("session-parser", () => {
 
   test("derives project name from cwd (handles hyphenated names)", async () => {
     const filePath = await createTempJsonl(tempDir, [
-      makeEntry({ cwd: "/home/nmunoz/development/rubric-kit" }),
-      makeEntry({ cwd: "/home/nmunoz/development/rubric-kit" }),
+      makeEntry({ cwd: "/tmp/development/rubric-kit" }),
+      makeEntry({ cwd: "/tmp/development/rubric-kit" }),
     ]);
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
     expect(session?.projectName).toBe("rubric-kit");
-    expect(session?.projectPath).toBe("/home/nmunoz/development/rubric-kit");
+    expect(session?.projectPath).toBe("/tmp/development/rubric-kit");
   });
 
   test("derives project name from cwd for nested paths", async () => {
     const filePath = await createTempJsonl(tempDir, [
-      makeEntry({ cwd: "/home/nmunoz/development/rls-unified-test-suite" }),
+      makeEntry({ cwd: "/tmp/development/rls-unified-test-suite" }),
     ]);
 
     const session = await parseSession(filePath);
