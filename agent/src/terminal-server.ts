@@ -861,44 +861,16 @@ export function startTerminalServer(port: number, machineId: string) {
           }
 
           const cleanEnv = cleanMultiplexerEnv();
+          cleanEnv.TERM = "xterm-256color";
 
+          const isMultiline = body.text.includes("\n");
           log.info(
             `send: session=${body.session} mux=${body.multiplexer} agent=${body.agentType || "claude-code"} chars=${body.text.length}`,
           );
 
-          // OpenCode (Bubble Tea TUI): use native multiplexer commands.
-          // PTY doesn't work — Bubble Tea processes chars one-by-one and
-          // the PTY kill truncates mid-stream. Native write-chars/send-keys
-          // deliver text atomically through the multiplexer's internal buffer.
-          if (body.agentType === "opencode") {
-            if (body.multiplexer === "zellij") {
-              // write 13 = Enter key (CR byte)
-              const write = Bun.spawn(
-                ["zellij", "--session", body.session, "action", "write-chars", body.text],
-                { env: cleanEnv, stdout: "pipe", stderr: "pipe" },
-              );
-              await write.exited;
-              const enter = Bun.spawn(
-                ["zellij", "--session", body.session, "action", "write", "13"],
-                { env: cleanEnv, stdout: "pipe", stderr: "pipe" },
-              );
-              await enter.exited;
-            } else {
-              const proc = Bun.spawn(["tmux", "send-keys", "-t", body.session, body.text, "Enter"], {
-                env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
-              });
-              await proc.exited;
-            }
-
-            return Response.json({ ok: true });
-          }
-
-          // Claude Code (CLI prompt): use PTY for reliable Enter/submit
-          cleanEnv.TERM = "xterm-256color";
-          const isMultiline = body.text.includes("\n");
-
+          // Send text via PTY attachment.
+          // For TUI apps (OpenCode), use a longer per-char delay since
+          // Bubble Tea processes characters as individual key events.
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
           const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
             stdin: "pipe",
@@ -908,10 +880,22 @@ export function startTerminalServer(port: number, machineId: string) {
           });
 
           await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
-          proc.stdin.write(`${body.text}\r`);
 
-          const inputDelay = PTY_INPUT_BASE_DELAY_MS + body.text.length * PTY_INPUT_PER_CHAR_MS;
-          await new Promise((r) => setTimeout(r, inputDelay));
+          if (body.agentType === "opencode") {
+            // Write char-by-char with small delays for Bubble Tea
+            for (const ch of body.text) {
+              proc.stdin.write(ch);
+              await new Promise((r) => setTimeout(r, 30));
+            }
+            proc.stdin.write("\r");
+            await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
+          } else {
+            // Claude Code: write all at once (simple CLI prompt)
+            proc.stdin.write(`${body.text}\r`);
+            const inputDelay = PTY_INPUT_BASE_DELAY_MS + body.text.length * PTY_INPUT_PER_CHAR_MS;
+            await new Promise((r) => setTimeout(r, inputDelay));
+          }
+
           proc.kill();
 
           // Backup Enter via native command in case PTY CR was swallowed
