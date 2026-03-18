@@ -1,4 +1,4 @@
-import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
+import { createLogger, type SessionInfo, type SessionMessagesResponse } from "@agent-town/shared";
 import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
 import { handleOpenCodeEvent, isSSEActive, startOpenCodeEventStream } from "./event-handler";
 import { getOpenCodeSessionMessages } from "./message-parser";
@@ -6,12 +6,15 @@ import { extractOpenCodeSessionIdFromArgs, filterOpenCodeProcesses } from "./pro
 import { getOpenCodeClient } from "./sdk-client";
 import { deleteOpenCodeSessionData, discoverOpenCodeSessions, findOpenCodeSessionByDir } from "./session-discovery";
 
+const log = createLogger("opencode:provider");
+
 async function isBinaryAvailable(binary: string): Promise<boolean> {
   try {
     const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "pipe" });
     await proc.exited;
     return proc.exitCode === 0;
-  } catch {
+  } catch (err) {
+    log.debug(`isBinaryAvailable: '${binary}' check failed: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
@@ -87,7 +90,8 @@ export class OpenCodeProvider implements AgentProvider {
       await client.tui.appendPrompt({ text });
       await client.tui.submitPrompt();
       return true;
-    } catch {
+    } catch (err) {
+      log.warn(`sendViaTUI: failed to send text via OpenCode TUI: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     }
   }

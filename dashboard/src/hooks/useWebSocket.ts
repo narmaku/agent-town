@@ -90,8 +90,8 @@ export function useWebSocket() {
         if (message.type === "machines_update") {
           handleUpdate(message.payload as MachineInfo[]);
         }
-      } catch {
-        // ignore malformed messages
+      } catch (err) {
+        console.warn("WebSocket: failed to parse message", err);
       }
     };
 

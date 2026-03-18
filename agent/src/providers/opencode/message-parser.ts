@@ -196,7 +196,8 @@ async function getMessagesViaSQLite(
 function safeParseJson<T>(str: string): T | null {
   try {
     return JSON.parse(str) as T;
-  } catch {
+  } catch (err) {
+    log.debug(`safeParseJson: failed to parse JSON: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }

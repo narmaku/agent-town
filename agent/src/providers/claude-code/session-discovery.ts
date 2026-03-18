@@ -80,7 +80,9 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
           lastEntry = entry;
           break;
         }
-      } catch {}
+      } catch (_err) {
+        // skip malformed JSONL line
+      }
     }
     if (!lastEntry) return null;
 
@@ -95,7 +97,9 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
           projectRoot = entry.cwd;
           break;
         }
-      } catch {}
+      } catch (_err) {
+        // skip malformed JSONL line
+      }
     }
 
     return {
@@ -147,8 +151,8 @@ export async function deleteClaudeSessionData(sessionId: string): Promise<boolea
         await stat(jsonlFile);
         await unlink(jsonlFile);
         return true;
-      } catch {
-        // not in this directory
+      } catch (_err) {
+        // not in this directory, continue searching
       }
     }
   } catch (err) {

@@ -30,8 +30,10 @@ async function getEnvVar(pid: number, varName: string): Promise<string | null> {
         return str.slice(varName.length + 1);
       }
     }
-  } catch {
-    // Process may have exited or we don't have permission
+  } catch (err) {
+    log.debug(
+      `getEnvVar: pid=${pid} var=${varName} failed (process may have exited): ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   return null;
 }
@@ -50,7 +52,10 @@ function* splitBuffer(buf: Buffer, _sep: number): Generator<Buffer> {
 async function getCwd(pid: number): Promise<string | null> {
   try {
     return await readlink(`/proc/${pid}/cwd`);
-  } catch {
+  } catch (err) {
+    log.debug(
+      `getCwd: pid=${pid} failed (process may have exited): ${err instanceof Error ? err.message : String(err)}`,
+    );
     return null;
   }
 }

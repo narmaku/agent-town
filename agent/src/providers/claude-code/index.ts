@@ -1,4 +1,4 @@
-import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
+import { createLogger, type SessionInfo, type SessionMessagesResponse } from "@agent-town/shared";
 import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
 import { handleClaudeHookEvent } from "./hook-handler";
 import { getClaudeSessionMessages } from "./message-parser";
@@ -10,12 +10,15 @@ import {
 } from "./process-mapper";
 import { deleteClaudeSessionData, discoverClaudeSessions } from "./session-discovery";
 
+const log = createLogger("claude:provider");
+
 async function isBinaryAvailable(binary: string): Promise<boolean> {
   try {
     const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "pipe" });
     await proc.exited;
     return proc.exitCode === 0;
-  } catch {
+  } catch (err) {
+    log.debug(`isBinaryAvailable: '${binary}' check failed: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }

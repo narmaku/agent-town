@@ -194,8 +194,10 @@ export async function findOpenCodeSessionByDir(
           .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0));
         if (sorted.length > 0) return sorted[0].id;
       }
-    } catch {
-      // fall through to SQLite
+    } catch (err) {
+      log.debug(
+        `findOpenCodeSessionByDir: SDK lookup failed, falling back to SQLite: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
