@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type AgentType, createLogger } from "@agent-town/shared";
+import { type AgentType, buildShellCommand, createLogger } from "@agent-town/shared";
 import type { Subprocess } from "bun";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { getAllProviders, getProvider } from "./providers/registry";
@@ -21,27 +21,6 @@ const PTY_INIT_DELAY_MS = 1000;
 const PTY_INPUT_BASE_DELAY_MS = 500;
 const PTY_INPUT_PER_CHAR_MS = 15; // extra delay per character for TUI apps
 const BACKUP_ENTER_DELAY_MS = 300;
-
-// --- Shell escaping ---
-
-/** Characters that are safe to leave unquoted in a shell argument. */
-const SAFE_SHELL_RE = /^[a-zA-Z0-9._:/@=+-]+$/;
-
-/** Escape a string for safe use as a shell argument using single-quote wrapping. */
-export function shellEscape(arg: string): string {
-  if (arg.length === 0) return "''";
-  if (SAFE_SHELL_RE.test(arg)) return arg;
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
-
-/** Join command parts into a shell-safe string, optionally prepending `cd <dir> &&`. */
-export function buildShellCommand(parts: string[], projectDir?: string): string {
-  const escaped = parts.map(shellEscape).join(" ");
-  if (projectDir) {
-    return `cd ${shellEscape(projectDir)} && ${escaped}`;
-  }
-  return escaped;
-}
 
 // --- Input validation ---
 
