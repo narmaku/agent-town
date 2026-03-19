@@ -1,3 +1,6 @@
+import { statSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { createLogger, type RemoteNode } from "@agent-town/shared";
 import type { Subprocess } from "bun";
 import { updateNodeStatus } from "./store";
@@ -26,11 +29,28 @@ let nextLocalPort = 14680;
 
 const HEALTH_CHECK_INTERVAL_MS = 15_000;
 
-function resolveHome(filePath: string): string {
+export function resolveHome(filePath: string): string {
   if (filePath.startsWith("~/")) {
     return filePath.replace("~", process.env.HOME || "/root");
   }
   return filePath;
+}
+
+/** Validate that an SSH key path points to an accessible regular file. */
+export function validateSshKeyPath(keyPath: string): string | null {
+  const resolved = resolve(resolveHome(keyPath));
+  try {
+    const stats = statSync(resolved);
+    if (!stats.isFile()) return `SSH key path is not a regular file: ${keyPath}`;
+    const mode = stats.mode & 0o777;
+    if ((mode & 0o077) !== 0) {
+      log.warn(`SSH key has permissive permissions (${mode.toString(8)}): ${keyPath}`);
+    }
+    return null;
+  } catch (err) {
+    log.warn("SSH key validation failed", { keyPath, error: String(err) });
+    return `SSH key not accessible: ${keyPath}`;
+  }
 }
 
 function buildSshOpts(node: { sshKeyPath: string; port: number }, extra?: string[]): string[] {
@@ -344,6 +364,14 @@ export async function connectNode(nodeId: string): Promise<void> {
   }
 
   try {
+    // Validate SSH key before attempting connection
+    const keyError = validateSshKeyPath(node.sshKeyPath);
+    if (keyError) {
+      log.error(`connect: [${node.name}] SSH key validation failed: ${keyError}`);
+      updateNodeStatus(nodeId, "error", keyError);
+      throw new Error(keyError);
+    }
+
     updateNodeStatus(nodeId, "connecting");
     log.info(`connect: [${node.name}] starting connection to ${node.user}@${node.host}:${node.port}`);
 
@@ -427,6 +455,14 @@ export async function testNodeConnection(node: {
   sshKeyPath: string;
 }): Promise<{ ok: boolean; error?: string; remoteInfo?: string }> {
   log.info(`test: SSH connection to ${node.user}@${node.host}:${node.port}`);
+
+  // Validate SSH key before attempting connection
+  const keyError = validateSshKeyPath(node.sshKeyPath);
+  if (keyError) {
+    log.warn(`test: SSH key validation failed for ${node.user}@${node.host}: ${keyError}`);
+    return { ok: false, error: keyError };
+  }
+
   try {
     const testProc = Bun.spawn(
       [
