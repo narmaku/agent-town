@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type AgentType, createLogger } from "@agent-town/shared";
+import { type AgentType, buildShellCommand, createLogger } from "@agent-town/shared";
 import type { Subprocess } from "bun";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { getAllProviders, getProvider } from "./providers/registry";
@@ -328,7 +328,7 @@ export function startTerminalServer(port: number, machineId: string) {
 
           const cleanEnv = cleanMultiplexerEnv();
 
-          const agentCmd = provider.buildLaunchCommand({
+          const agentParts = provider.buildLaunchCommand({
             model: body.model,
             autonomous: body.autonomous,
           });
@@ -356,6 +356,7 @@ export function startTerminalServer(port: number, machineId: string) {
             }
 
             // Send agent command
+            const agentCmd = buildShellCommand(agentParts);
             const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
               env: cleanEnv,
               stdout: "pipe",
@@ -440,8 +441,7 @@ export function startTerminalServer(port: number, machineId: string) {
           }
 
           // Send cd + agent command via write-chars (include \n to execute)
-          // projectDir and agentCmd are validated above (no shell metacharacters)
-          const fullCmd = `cd '${body.projectDir}' && ${agentCmd}\n`;
+          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
           const writeChars = Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
             stdout: "pipe",
@@ -524,7 +524,7 @@ export function startTerminalServer(port: number, machineId: string) {
 
           const cleanEnv = cleanMultiplexerEnv();
 
-          const agentCmd = provider.buildResumeCommand({
+          const agentParts = provider.buildResumeCommand({
             sessionId: body.sessionId,
             model: body.model,
             autonomous: body.autonomous,
@@ -552,6 +552,7 @@ export function startTerminalServer(port: number, machineId: string) {
               return Response.json({ error: `tmux new-session failed: ${stderr}` }, { status: 500 });
             }
 
+            const agentCmd = buildShellCommand(agentParts);
             Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
               env: cleanEnv,
               stdout: "pipe",
@@ -622,8 +623,7 @@ export function startTerminalServer(port: number, machineId: string) {
           }
 
           // Send resume command
-          // projectDir and agentCmd are validated above (no shell metacharacters)
-          const fullCmd = `cd '${body.projectDir}' && ${agentCmd}\n`;
+          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
           Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
             stdout: "pipe",
@@ -690,10 +690,11 @@ export function startTerminalServer(port: number, machineId: string) {
 
           const cleanEnv = cleanMultiplexerEnv();
 
-          const agentCmd = provider.buildResumeCommand({
+          const agentParts = provider.buildResumeCommand({
             sessionId: body.sessionId,
             model: body.model,
           });
+          const agentCmd = buildShellCommand(agentParts);
 
           if (body.multiplexer === "tmux") {
             const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.session, agentCmd, "Enter"], {

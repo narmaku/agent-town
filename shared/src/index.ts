@@ -1,4 +1,5 @@
 export { createLogger, type Logger } from "./logger";
+export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
 
 export type AgentType = "claude-code" | "opencode";
 

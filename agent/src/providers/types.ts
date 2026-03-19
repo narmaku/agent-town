@@ -63,11 +63,11 @@ export interface AgentProvider {
   /** Extract session ID from process command-line arguments. */
   extractSessionIdFromArgs(args: string): string | undefined;
 
-  /** Build the CLI command parts to launch a new session. */
-  buildLaunchCommand(opts: LaunchOptions): string;
+  /** Build the CLI command parts to launch a new session. Returns an array of arguments. */
+  buildLaunchCommand(opts: LaunchOptions): string[];
 
-  /** Build the CLI command parts to resume an existing session. */
-  buildResumeCommand(opts: ResumeOptions): string;
+  /** Build the CLI command parts to resume an existing session. Returns an array of arguments. */
+  buildResumeCommand(opts: ResumeOptions): string[];
 
   /** Parse an incoming hook/event payload and return normalized status. */
   handleHookEvent(payload: unknown): HookEventResult | null;
