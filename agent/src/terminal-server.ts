@@ -41,6 +41,8 @@ export function validateProjectDir(dir: string): string | null {
   if (!dir) return "Project directory is required";
   if (!dir.startsWith("/")) return "Project directory must be an absolute path";
   // Canonicalize and reject if the resolved path differs (catches .., //, ., trailing /)
+  // TODO: path.resolve() is lexical only — does not resolve symlinks.
+  // Consider using fs.realpathSync() if symlink-based traversal becomes a concern.
   const canonical = resolve(dir);
   if (canonical !== dir) return "Project directory must be a canonical absolute path (no .., //, or trailing /)";
   return null;
