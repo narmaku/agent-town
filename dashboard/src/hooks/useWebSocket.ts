@@ -1,6 +1,10 @@
 import type { MachineInfo, SessionInfo, WebSocketMessage } from "@agent-town/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { createBrowserLogger } from "../logger";
+
+const logger = createBrowserLogger("WebSocket");
+
 function requestNotificationPermission() {
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
@@ -91,7 +95,7 @@ export function useWebSocket() {
           handleUpdate(message.payload as MachineInfo[]);
         }
       } catch (err) {
-        console.warn("WebSocket: failed to parse message", err);
+        logger.warn("Failed to parse message", err);
       }
     };
 
