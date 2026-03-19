@@ -774,10 +774,7 @@ export function startTerminalServer(port: number, machineId: string) {
             if (proc.exitCode !== 0) {
               const stderr = await new Response(proc.stderr).text();
               log.error(`kill failed: tmux kill-session exit=${proc.exitCode} ${stderr}`);
-              return Response.json(
-                { error: "Failed to kill session" },
-                { status: 500 },
-              );
+              return Response.json({ error: "Failed to kill session" }, { status: 500 });
             }
           } else {
             // kill-session terminates running processes inside the session.
