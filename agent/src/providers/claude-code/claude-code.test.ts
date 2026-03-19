@@ -42,7 +42,14 @@ describe("ClaudeCodeProvider", () => {
       model: "claude-opus-4-6",
       autonomous: true,
     });
-    expect(parts).toEqual(["claude", "--resume", "abc-123-def", "--model", "claude-opus-4-6", "--dangerously-skip-permissions"]);
+    expect(parts).toEqual([
+      "claude",
+      "--resume",
+      "abc-123-def",
+      "--model",
+      "claude-opus-4-6",
+      "--dangerously-skip-permissions",
+    ]);
   });
 
   test("filterAgentProcesses filters only claude binaries", () => {
