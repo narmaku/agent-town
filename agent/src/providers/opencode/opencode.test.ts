@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { filterProcessesByBinary } from "../utils";
 import { handleOpenCodeEvent } from "./event-handler";
 import { OpenCodeProvider } from "./index";
-import { filterProcessesByBinary } from "../utils";
 import { extractOpenCodeSessionIdFromArgs } from "./process-mapper";
 
 describe("OpenCodeProvider", () => {
