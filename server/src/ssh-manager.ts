@@ -48,6 +48,7 @@ export function validateSshKeyPath(keyPath: string): string | null {
     }
     return null;
   } catch (err) {
+    log.warn("SSH key validation failed", { keyPath, error: String(err) });
     return `SSH key not accessible: ${keyPath}`;
   }
 }
@@ -363,6 +364,14 @@ export async function connectNode(nodeId: string): Promise<void> {
   }
 
   try {
+    // Validate SSH key before attempting connection
+    const keyError = validateSshKeyPath(node.sshKeyPath);
+    if (keyError) {
+      log.error(`connect: [${node.name}] SSH key validation failed: ${keyError}`);
+      updateNodeStatus(nodeId, "error", keyError);
+      throw new Error(keyError);
+    }
+
     updateNodeStatus(nodeId, "connecting");
     log.info(`connect: [${node.name}] starting connection to ${node.user}@${node.host}:${node.port}`);
 
@@ -446,6 +455,14 @@ export async function testNodeConnection(node: {
   sshKeyPath: string;
 }): Promise<{ ok: boolean; error?: string; remoteInfo?: string }> {
   log.info(`test: SSH connection to ${node.user}@${node.host}:${node.port}`);
+
+  // Validate SSH key before attempting connection
+  const keyError = validateSshKeyPath(node.sshKeyPath);
+  if (keyError) {
+    log.warn(`test: SSH key validation failed for ${node.user}@${node.host}: ${keyError}`);
+    return { ok: false, error: keyError };
+  }
+
   try {
     const testProc = Bun.spawn(
       [
