@@ -169,9 +169,7 @@ describe("session-parser", () => {
   });
 
   test("derives project name from cwd for nested paths", async () => {
-    const filePath = await createTempJsonl(tempDir, [
-      makeEntry({ cwd: "/tmp/development/rls-unified-test-suite" }),
-    ]);
+    const filePath = await createTempJsonl(tempDir, [makeEntry({ cwd: "/tmp/development/rls-unified-test-suite" })]);
 
     const session = await parseSession(filePath);
     expect(session).not.toBeNull();
