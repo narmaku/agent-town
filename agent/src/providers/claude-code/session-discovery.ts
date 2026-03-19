@@ -7,6 +7,8 @@ const log = createLogger("claude:sessions");
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
+const LAST_LINES_LIMIT = 200;
+
 export interface ClaudeJsonlEntry {
   type: "user" | "assistant";
   sessionId: string;
@@ -67,7 +69,7 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
   try {
     const text = await Bun.file(jsonlPath).text();
     const lines = text.trim().split("\n");
-    const lastLines = lines.slice(-200);
+    const lastLines = lines.slice(-LAST_LINES_LIMIT);
     if (lastLines.length === 0) return null;
 
     let lastEntry: ClaudeJsonlEntry | null = null;

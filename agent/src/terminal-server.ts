@@ -22,6 +22,10 @@ const PTY_INPUT_BASE_DELAY_MS = 500;
 const PTY_INPUT_PER_CHAR_MS = 15; // extra delay per character for TUI apps
 const BACKUP_ENTER_DELAY_MS = 300;
 
+// --- Terminal defaults ---
+const DEFAULT_TERMINAL_COLS = 120;
+const DEFAULT_TERMINAL_ROWS = 40;
+
 // --- Input validation ---
 
 const SAFE_NAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -262,8 +266,8 @@ export function startTerminalServer(port: number, machineId: string) {
           data: {
             multiplexer: url.searchParams.get("multiplexer") || "zellij",
             session: url.searchParams.get("session") || "",
-            cols: parseInt(url.searchParams.get("cols") || "120", 10),
-            rows: parseInt(url.searchParams.get("rows") || "40", 10),
+            cols: parseInt(url.searchParams.get("cols") || String(DEFAULT_TERMINAL_COLS), 10),
+            rows: parseInt(url.searchParams.get("rows") || String(DEFAULT_TERMINAL_ROWS), 10),
           },
         });
         if (!upgraded) {
@@ -873,12 +877,15 @@ export function startTerminalServer(port: number, machineId: string) {
           // For TUI apps (OpenCode), use a longer per-char delay since
           // Bubble Tea processes characters as individual key events.
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
-          const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
-            stdin: "pipe",
-            stdout: "pipe",
-            stderr: "pipe",
-            env: cleanEnv,
-          });
+          const proc = Bun.spawn(
+            ["python3", PTY_HELPER, String(DEFAULT_TERMINAL_COLS), String(DEFAULT_TERMINAL_ROWS), ...attachCmd],
+            {
+              stdin: "pipe",
+              stdout: "pipe",
+              stderr: "pipe",
+              env: cleanEnv,
+            },
+          );
 
           await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
