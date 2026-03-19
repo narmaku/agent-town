@@ -877,12 +877,15 @@ export function startTerminalServer(port: number, machineId: string) {
           // For TUI apps (OpenCode), use a longer per-char delay since
           // Bubble Tea processes characters as individual key events.
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
-          const proc = Bun.spawn(["python3", PTY_HELPER, String(DEFAULT_TERMINAL_COLS), String(DEFAULT_TERMINAL_ROWS), ...attachCmd], {
-            stdin: "pipe",
-            stdout: "pipe",
-            stderr: "pipe",
-            env: cleanEnv,
-          });
+          const proc = Bun.spawn(
+            ["python3", PTY_HELPER, String(DEFAULT_TERMINAL_COLS), String(DEFAULT_TERMINAL_ROWS), ...attachCmd],
+            {
+              stdin: "pipe",
+              stdout: "pipe",
+              stderr: "pipe",
+              env: cleanEnv,
+            },
+          );
 
           await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
