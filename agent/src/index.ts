@@ -104,16 +104,6 @@ function discoverAndMapSessions(
   multiplexerSessions: MultiplexerSessionInfo[],
   processMappings: Map<string, ProcessMapping>,
 ): Set<string> {
-  // --- Map claude sessions to multiplexer sessions ---
-  //
-  // The process mapper returns mappings keyed by session ID.
-  // Session names from ZELLIJ_SESSION_NAME env vars are already
-  // resolved through the rename map (stale env vars → current names).
-  //
-  // After mapping, validate that each multiplexer session actually
-  // exists. Zombie processes (whose multiplexer session was killed)
-  // retain stale env vars — assigning a non-existent multiplexer
-  // session would let the dashboard show "Close Agent" for a phantom.
   const activeMuxNames = new Set(multiplexerSessions.map((s) => s.name));
   log.debug(`active mux sessions: [${[...activeMuxNames].join(", ")}]`);
 
@@ -141,12 +131,6 @@ function discoverAndMapSessions(
  * 3. JSONL file modification time (least accurate — base heuristic)
  */
 function adjustSessionStatuses(sessions: SessionInfo[], processMappings: Map<string, ProcessMapping>): void {
-  // --- Adjust statuses ---
-  //
-  // Priority (highest → lowest):
-  // 1. Hook events (real-time, accurate — if hooks are enabled)
-  // 2. Process mapper (child process detection — fallback heuristic)
-  // 3. JSONL file modification time (least accurate — base heuristic)
   for (const session of sessions) {
     // Check if hooks are providing real-time status for this session
     const hookState = getHookState(session.sessionId);
@@ -180,11 +164,6 @@ function adjustSessionStatuses(sessions: SessionInfo[], processMappings: Map<str
  * as "exited" so the dashboard can offer reconnection.
  */
 function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessions: MultiplexerSessionInfo[]): void {
-  // --- Track & detect exited Claude sessions ---
-  //
-  // When Claude is running inside a mux session, record the association.
-  // When Claude exits but the mux session stays alive, mark the session
-  // as "exited" so the dashboard can offer reconnection.
   let muxAssocChanged = false;
   for (const session of sessions) {
     if (session.multiplexerSession && session.multiplexer) {
@@ -272,12 +251,6 @@ function createPlaceholderSessions(
   processMappings: Map<string, ProcessMapping>,
   activeMuxNames: Set<string>,
 ): void {
-  // --- Create placeholder sessions for running agents without JSONL ---
-  //
-  // When a new session is launched but hasn't exchanged any messages yet,
-  // there's no JSONL file. The process mapper finds the claude process
-  // but discoverSessions() has nothing to report. Create a synthetic
-  // session so the dashboard shows the agent immediately.
   const mappedMuxSessions = new Set(sessions.filter((s) => s.multiplexerSession).map((s) => s.multiplexerSession));
 
   for (const [key, mapping] of processMappings) {
