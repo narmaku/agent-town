@@ -20,6 +20,7 @@ const SESSION_READY_TIMEOUT_MS = 5000;
 const PTY_INIT_DELAY_MS = 1000;
 const PTY_INPUT_BASE_DELAY_MS = 500;
 const PTY_INPUT_PER_CHAR_MS = 15; // extra delay per character for TUI apps
+const BRACKETED_PASTE_DELAY_MS = 100;
 const BACKUP_ENTER_DELAY_MS = 300;
 
 // --- Terminal defaults ---
@@ -306,7 +307,7 @@ async function sendBracketedPaste(proc: Subprocess, text: string): Promise<void>
   // paste as one event instead of individual keystrokes.
   // \x1b[200~ = paste start, \x1b[201~ = paste end
   proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
   proc.stdin.write("\r");
   await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
 }
