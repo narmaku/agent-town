@@ -1,14 +1,16 @@
 # Agent Town
 
-A lightweight dashboard to monitor and connect to multiple Claude Code sessions across machines on your home network.
+A lightweight dashboard to monitor and connect to AI coding agent sessions across machines on your home network. Supports **Claude Code** and **OpenCode** via a provider abstraction, with more agents easily added.
 
 ## Features
 
+- **Multi-agent support**: Claude Code and OpenCode (extensible via provider plugins)
 - Real-time session monitoring via WebSocket
-- Status detection: Working, Needs Attention, Idle, Done
+- Status detection: `working`, `awaiting_input`, `action_required`, `idle`, `done`, `error` (display names: Working, Awaiting Input, Action Required, Idle, Done, Error — see `SessionStatus` type in `shared/src/index.ts` for all values)
 - Multi-machine support over LAN (no VPN needed)
 - Session renaming from the dashboard
 - Terminal relay: attach to zellij/tmux sessions from the browser
+- Launch and resume agent sessions from the dashboard
 - Supports both **zellij** and **tmux**
 
 ## Architecture
@@ -18,9 +20,9 @@ Browser (dashboard)
   |
 Server (:4680) --- receives heartbeats, serves dashboard, proxies terminals
   |
-Agent (per machine) --- watches ~/.claude/, reports sessions, relays terminals
+Agent (per machine) --- discovers sessions via providers, reports status, relays terminals
   |
-zellij/tmux sessions --- where Claude Code actually runs
+zellij/tmux sessions --- where AI coding agents (Claude Code, OpenCode) run
 ```
 
 ## Quick Start (local dev)
@@ -34,7 +36,7 @@ Open http://localhost:4680
 
 ## Best Practice: One Terminal Session Per Agent
 
-For the best experience with Agent Town, run each Claude Code agent in its **own named terminal session**. This makes it easy to attach to any agent directly from the dashboard.
+For the best experience with Agent Town, run each AI coding agent in its **own named terminal session**. This makes it easy to attach to any agent directly from the dashboard.
 
 ### With zellij (recommended: minimal layout)
 
@@ -149,10 +151,11 @@ tmux new-session -d -s agent-town -c ~/development/agent-town './dev.sh'
 
 ```
 agent-town/
-  agent/        # Runs on each machine, watches Claude Code sessions
+  agent/        # Runs on each machine, discovers sessions via provider plugins
+    providers/  # Agent type plugins (claude-code, opencode)
   server/       # Central hub, receives heartbeats, serves dashboard
   dashboard/    # React SPA with real-time status cards
-  shared/       # TypeScript types shared across packages
+  shared/       # TypeScript types and logger shared across packages
 ```
 
 ## Tests
