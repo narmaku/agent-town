@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname, platform } from "node:os";
 import { basename, join } from "node:path";
-import { createLogger, type Heartbeat, type SessionInfo, type TerminalMultiplexer } from "@agent-town/shared";
+import {
+  createLogger,
+  type Heartbeat,
+  type SessionInfo,
+  type TerminalMultiplexer,
+  truncateId,
+} from "@agent-town/shared";
 import { getHookState, updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
 import { discoverProcessMappings } from "./process-mapper";
@@ -112,7 +118,7 @@ async function sendHeartbeat(): Promise<void> {
           session.multiplexerSession = mapping.session;
         } else {
           log.debug(
-            `rejected mapping: session=${session.sessionId.slice(0, 12)} mux=${mapping.session} (not in active mux list)`,
+            `rejected mapping: session=${truncateId(session.sessionId)} mux=${mapping.session} (not in active mux list)`,
           );
         }
       }
@@ -197,7 +203,7 @@ async function sendHeartbeat(): Promise<void> {
         session.multiplexerSession = lastMux.session;
         session.status = "exited";
         claimedMuxNames.add(lastMux.session);
-        log.info(`exited (tracked): session=${session.sessionId.slice(0, 12)} mux=${lastMux.session}`);
+        log.info(`exited (tracked): session=${truncateId(session.sessionId)} mux=${lastMux.session}`);
         continue;
       }
 
@@ -216,7 +222,7 @@ async function sendHeartbeat(): Promise<void> {
         // Also record for future tracking
         lastKnownMux.set(session.sessionId, { session: matchedName, multiplexer: muxType });
         muxAssocChanged = true;
-        log.info(`exited (name match): session=${session.sessionId.slice(0, 12)} mux=${matchedName}`);
+        log.info(`exited (name match): session=${truncateId(session.sessionId)} mux=${matchedName}`);
       }
     }
 

@@ -1,4 +1,4 @@
-import { createLogger, type SessionStatus } from "@agent-town/shared";
+import { createLogger, type SessionStatus, truncateId } from "@agent-town/shared";
 import type { HookEventResult } from "./providers/types";
 
 const log = createLogger("hook-store");
@@ -34,7 +34,7 @@ export function updateHookState(result: HookEventResult): void {
     currentTool,
   });
 
-  log.debug(`hook: session=${sessionId.slice(0, 12)} status=${status}${currentTool ? ` tool=${currentTool}` : ""}`);
+  log.debug(`hook: session=${truncateId(sessionId)} status=${status}${currentTool ? ` tool=${currentTool}` : ""}`);
 }
 
 /**

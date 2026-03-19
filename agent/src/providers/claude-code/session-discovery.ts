@@ -1,7 +1,7 @@
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { createLogger, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
 
 const log = createLogger("claude:sessions");
 
@@ -38,8 +38,6 @@ export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
 
   try {
     const projectDirs = await readdir(CLAUDE_PROJECTS_DIR);
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-
     for (const dir of projectDirs) {
       const projectDir = join(CLAUDE_PROJECTS_DIR, dir);
       const dirStat = await stat(projectDir);
@@ -52,7 +50,7 @@ export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
         const jsonlPath = join(projectDir, jsonlFile);
         const jsonlStat = await stat(jsonlPath);
 
-        if (Date.now() - jsonlStat.mtimeMs > sevenDaysMs) continue;
+        if (Date.now() - jsonlStat.mtimeMs > SESSION_RETENTION_MS) continue;
 
         const session = await parseClaudeSessionFromJsonl(jsonlPath, jsonlStat.mtimeMs);
         if (session) sessions.push(session);

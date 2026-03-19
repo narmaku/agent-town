@@ -1,4 +1,11 @@
-import { createLogger, type SessionMessage, type SessionMessagesResponse } from "@agent-town/shared";
+import {
+  createLogger,
+  paginateFromEnd,
+  type SessionMessage,
+  type SessionMessagesResponse,
+  safeJsonParse,
+  truncateId,
+} from "@agent-town/shared";
 import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
 import { OPENCODE_DB_PATH } from "./session-discovery";
 
@@ -40,11 +47,7 @@ async function getMessagesViaSDK(
   const allMessages = data.filter((m) => m.info.role === "user" || m.info.role === "assistant");
 
   const total = allMessages.length;
-  const startFromEnd = offset + limit;
-  const startIndex = Math.max(0, total - startFromEnd);
-  const endIndex = Math.max(0, total - offset);
-  const slice = allMessages.slice(startIndex, endIndex);
-  const hasMore = startIndex > 0;
+  const { slice, hasMore } = paginateFromEnd(allMessages, offset, limit);
 
   const messages: SessionMessage[] = slice.map((m) => {
     const textParts: string[] = [];
@@ -75,7 +78,7 @@ async function getMessagesViaSDK(
   });
 
   log.debug(
-    `getOpenCodeSessionMessages (SDK): session=${sessionId.slice(0, 12)} total=${total} returned=${messages.length} offset=${offset}`,
+    `getOpenCodeSessionMessages (SDK): session=${truncateId(sessionId)} total=${total} returned=${messages.length} offset=${offset}`,
   );
   return { messages, total, hasMore };
 }
@@ -151,7 +154,7 @@ async function getMessagesViaSQLite(
     }
 
     const messages: SessionMessage[] = messageRows.map((row) => {
-      const msgData = safeParseJson<{ role: string; modelID?: string; providerID?: string }>(row.data);
+      const msgData = safeJsonParse<{ role: string; modelID?: string; providerID?: string }>(row.data);
       const parts = partsByMessage.get(row.id) || [];
       const role = (msgData?.role || "user") as "user" | "assistant";
 
@@ -159,7 +162,7 @@ async function getMessagesViaSQLite(
       const toolUse: { name: string; id: string }[] = [];
 
       for (const part of parts) {
-        const partData = safeParseJson<{ type: string; text?: string; name?: string; toolCallId?: string }>(part.data);
+        const partData = safeJsonParse<{ type: string; text?: string; name?: string; toolCallId?: string }>(part.data);
         if (!partData) continue;
 
         if (partData.type === "text" && partData.text) {
@@ -184,20 +187,11 @@ async function getMessagesViaSQLite(
 
     const hasMore = sqlOffset > 0;
     log.debug(
-      `getOpenCodeSessionMessages (SQLite): session=${sessionId.slice(0, 12)} total=${total} returned=${messages.length} offset=${offset}`,
+      `getOpenCodeSessionMessages (SQLite): session=${truncateId(sessionId)} total=${total} returned=${messages.length} offset=${offset}`,
     );
     return { messages, total, hasMore };
   } catch (err) {
     log.warn(`getOpenCodeSessionMessages: ${err instanceof Error ? err.message : String(err)}`);
     throw new Error("Session not found");
-  }
-}
-
-function safeParseJson<T>(str: string): T | null {
-  try {
-    return JSON.parse(str) as T;
-  } catch (err) {
-    log.debug(`safeParseJson: failed to parse JSON: ${err instanceof Error ? err.message : String(err)}`);
-    return null;
   }
 }

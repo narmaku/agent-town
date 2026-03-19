@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createLogger, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
 import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
 
 const log = createLogger("opencode:sessions");
@@ -42,7 +42,7 @@ async function discoverViaSDK(
   const { data: sessions } = await client.session.list({ roots: true });
   if (!sessions) return [];
 
-  const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const sevenDaysAgoMs = Date.now() - SESSION_RETENTION_MS;
 
   // Get session statuses for all sessions
   const { data: statuses } = await client.session.status();
@@ -112,7 +112,7 @@ async function discoverViaSQLite(): Promise<SessionInfo[]> {
     const { Database } = await import("bun:sqlite");
     const db = new Database(OPENCODE_DB_PATH, { readonly: true });
 
-    const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const sevenDaysAgoMs = Date.now() - SESSION_RETENTION_MS;
     const rows = db
       .query<SessionRow, [number]>(
         `SELECT id, title, directory, slug, parent_id, time_created, time_updated
