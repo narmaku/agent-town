@@ -1,23 +1,13 @@
 import { createLogger, type SessionInfo, type SessionMessagesResponse } from "@agent-town/shared";
 import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
+import { filterProcessesByBinary, isBinaryAvailable } from "../utils";
 import { handleOpenCodeEvent, isSSEActive, startOpenCodeEventStream } from "./event-handler";
 import { getOpenCodeSessionMessages } from "./message-parser";
-import { extractOpenCodeSessionIdFromArgs, filterOpenCodeProcesses } from "./process-mapper";
+import { extractOpenCodeSessionIdFromArgs } from "./process-mapper";
 import { getOpenCodeClient } from "./sdk-client";
 import { deleteOpenCodeSessionData, discoverOpenCodeSessions, findOpenCodeSessionByDir } from "./session-discovery";
 
 const log = createLogger("opencode:provider");
-
-async function isBinaryAvailable(binary: string): Promise<boolean> {
-  try {
-    const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "pipe" });
-    await proc.exited;
-    return proc.exitCode === 0;
-  } catch (err) {
-    log.debug(`isBinaryAvailable: '${binary}' check failed: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
-  }
-}
 
 export class OpenCodeProvider implements AgentProvider {
   readonly type = "opencode" as const;
@@ -37,7 +27,7 @@ export class OpenCodeProvider implements AgentProvider {
   }
 
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
-    return filterOpenCodeProcesses(processes);
+    return filterProcessesByBinary(processes, this.binaryName);
   }
 
   extractSessionIdFromArgs(args: string): string | undefined {

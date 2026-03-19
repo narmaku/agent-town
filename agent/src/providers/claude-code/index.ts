@@ -1,27 +1,12 @@
 import { createLogger, type SessionInfo, type SessionMessagesResponse } from "@agent-town/shared";
 import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
+import { filterProcessesByBinary, isBinaryAvailable } from "../utils";
 import { handleClaudeHookEvent } from "./hook-handler";
 import { getClaudeSessionMessages } from "./message-parser";
-import {
-  extractClaudeSessionIdFromArgs,
-  filterClaudeProcesses,
-  findSessionCandidates,
-  matchSessionByBirthTime,
-} from "./process-mapper";
+import { extractClaudeSessionIdFromArgs, findSessionCandidates, matchSessionByBirthTime } from "./process-mapper";
 import { deleteClaudeSessionData, discoverClaudeSessions } from "./session-discovery";
 
 const log = createLogger("claude:provider");
-
-async function isBinaryAvailable(binary: string): Promise<boolean> {
-  try {
-    const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "pipe" });
-    await proc.exited;
-    return proc.exitCode === 0;
-  } catch (err) {
-    log.debug(`isBinaryAvailable: '${binary}' check failed: ${err instanceof Error ? err.message : String(err)}`);
-    return false;
-  }
-}
 
 export class ClaudeCodeProvider implements AgentProvider {
   readonly type = "claude-code" as const;
@@ -41,7 +26,7 @@ export class ClaudeCodeProvider implements AgentProvider {
   }
 
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
-    return filterClaudeProcesses(processes);
+    return filterProcessesByBinary(processes, this.binaryName);
   }
 
   extractSessionIdFromArgs(args: string): string | undefined {

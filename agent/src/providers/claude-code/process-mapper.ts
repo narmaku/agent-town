@@ -1,18 +1,9 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createLogger } from "@agent-town/shared";
-import type { AgentProcess } from "../types";
 import { CLAUDE_PROJECTS_DIR, pathToProjectDir } from "./session-discovery";
 
 const log = createLogger("claude:process-mapper");
-
-/** Filter processes to only those running the "claude" binary. */
-export function filterClaudeProcesses(processes: AgentProcess[]): AgentProcess[] {
-  return processes.filter((p) => {
-    const bin = p.args.split("/").pop()?.split(" ")[0];
-    return bin === "claude";
-  });
-}
 
 /** Extract session ID from `--resume <uuid>` in command args. */
 export function extractClaudeSessionIdFromArgs(args: string): string | undefined {
