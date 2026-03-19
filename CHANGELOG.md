@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Biome linter and formatter configuration
 - .editorconfig for consistent editor settings
 
+### Changed
+- Extracted shared utilities to reduce code duplication
+- Improved error handling with proper logging and user feedback
+
 ### Fixed
 - Input validation on launch/resume API endpoints (prevent command injection)
 - Shell escaping for command construction
