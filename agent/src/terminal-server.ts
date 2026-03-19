@@ -261,13 +261,14 @@ function buildAttachCommand(multiplexer: "zellij" | "tmux", sessionName: string)
 // --- Send-text helpers ---
 
 /**
- * Send text via PTY attachment with bracketed paste mode.
- * Uses escape sequences so the terminal handles the entire paste
- * as one event instead of individual keystrokes.
+ * Send text via PTY attachment to a multiplexer session.
+ * Uses bracketed paste for TUI apps (OpenCode) and direct write
+ * for CLI prompts (Claude Code).
  */
 async function sendViaPTY(
   attachCmd: string[],
   text: string,
+  agentType: AgentType | undefined,
   cleanEnv: Record<string, string | undefined>,
 ): Promise<void> {
   const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
@@ -279,14 +280,19 @@ async function sendViaPTY(
 
   await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
-  // Bracketed paste mode for all agents — the terminal handles
-  // the entire paste as one event instead of individual keystrokes.
-  // \x1b[200~ = paste start, \x1b[201~ = paste end
-  proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
-  await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
-  proc.stdin.write("\r");
-  await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
+  if (agentType === "opencode") {
+    // Bracketed paste for Bubble Tea TUI — handles the entire paste
+    // as one event instead of individual keystrokes.
+    // \x1b[200~ = paste start, \x1b[201~ = paste end
+    proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
+    await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
+    proc.stdin.write("\r");
+  } else {
+    // Claude Code: direct write to readline CLI prompt
+    proc.stdin.write(`${text}\r`);
+  }
 
+  await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
   proc.kill();
 }
 
@@ -936,7 +942,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
           );
 
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
-          await sendViaPTY(attachCmd, body.text, cleanEnv);
+          await sendViaPTY(attachCmd, body.text, body.agentType, cleanEnv);
 
           // Backup Enter via native command in case PTY CR was swallowed
           await sendBackupEnter(body.multiplexer, body.session, cleanEnv);
