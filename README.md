@@ -6,7 +6,7 @@ A lightweight dashboard to monitor and connect to AI coding agent sessions acros
 
 - **Multi-agent support**: Claude Code and OpenCode (extensible via provider plugins)
 - Real-time session monitoring via WebSocket
-- Status detection: Working, Awaiting Input, Action Required, Idle, Done, Error
+- Status detection: `working`, `awaiting_input`, `action_required`, `idle`, `done`, `error` (display names: Working, Awaiting Input, Action Required, Idle, Done, Error — see `SessionStatus` type in `shared/src/index.ts` for all values)
 - Multi-machine support over LAN (no VPN needed)
 - Session renaming from the dashboard
 - Terminal relay: attach to zellij/tmux sessions from the browser
