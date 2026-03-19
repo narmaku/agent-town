@@ -356,7 +356,8 @@ export function startTerminalServer(port: number, machineId: string) {
             await newSession.exited;
             if (newSession.exitCode !== 0) {
               const stderr = await new Response(newSession.stderr).text();
-              return Response.json({ error: `tmux new-session failed: ${stderr}` }, { status: 500 });
+              log.error(`tmux new-session failed: ${stderr}`);
+              return Response.json({ error: "Failed to create multiplexer session" }, { status: 500 });
             }
 
             // Send agent command
@@ -553,7 +554,8 @@ export function startTerminalServer(port: number, machineId: string) {
             await newSession.exited;
             if (newSession.exitCode !== 0) {
               const stderr = await new Response(newSession.stderr).text();
-              return Response.json({ error: `tmux new-session failed: ${stderr}` }, { status: 500 });
+              log.error(`tmux new-session failed: ${stderr}`);
+              return Response.json({ error: "Failed to create multiplexer session" }, { status: 500 });
             }
 
             const agentCmd = buildShellCommand(agentParts);
@@ -709,7 +711,8 @@ export function startTerminalServer(port: number, machineId: string) {
             await sendKeys.exited;
             if (sendKeys.exitCode !== 0) {
               const stderr = await new Response(sendKeys.stderr).text();
-              return Response.json({ error: `tmux send-keys failed: ${stderr}` }, { status: 500 });
+              log.error(`tmux send-keys failed: ${stderr}`);
+              return Response.json({ error: "Failed to send command to session" }, { status: 500 });
             }
           } else {
             const writeChars = Bun.spawn(
@@ -719,7 +722,8 @@ export function startTerminalServer(port: number, machineId: string) {
             await writeChars.exited;
             if (writeChars.exitCode !== 0) {
               const stderr = await new Response(writeChars.stderr).text();
-              return Response.json({ error: `zellij write-chars failed: ${stderr}` }, { status: 500 });
+              log.error(`zellij write-chars failed: ${stderr}`);
+              return Response.json({ error: "Failed to send command to session" }, { status: 500 });
             }
           }
 
@@ -775,10 +779,7 @@ export function startTerminalServer(port: number, machineId: string) {
             if (proc.exitCode !== 0) {
               const stderr = await new Response(proc.stderr).text();
               log.error(`kill failed: tmux kill-session exit=${proc.exitCode} ${stderr}`);
-              return Response.json(
-                { error: `Failed to kill session "${body.session}": ${stderr.trim() || "unknown error"}` },
-                { status: 500 },
-              );
+              return Response.json({ error: "Failed to kill session" }, { status: 500 });
             }
           } else {
             // kill-session terminates running processes inside the session.
@@ -959,7 +960,8 @@ export function startTerminalServer(port: number, machineId: string) {
             await proc.exited;
             if (proc.exitCode !== 0) {
               const stderr = await new Response(proc.stderr).text();
-              return Response.json({ error: `tmux rename failed: ${stderr}` }, { status: 500 });
+              log.error(`tmux rename failed: ${stderr}`);
+              return Response.json({ error: "Failed to rename session" }, { status: 500 });
             }
           } else {
             // zellij: rename-session action requires targeting the session
@@ -970,7 +972,8 @@ export function startTerminalServer(port: number, machineId: string) {
             await proc.exited;
             if (proc.exitCode !== 0) {
               const stderr = await new Response(proc.stderr).text();
-              return Response.json({ error: `zellij rename failed: ${stderr}` }, { status: 500 });
+              log.error(`zellij rename failed: ${stderr}`);
+              return Response.json({ error: "Failed to rename session" }, { status: 500 });
             }
           }
 
