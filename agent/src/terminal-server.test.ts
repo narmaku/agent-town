@@ -88,6 +88,17 @@ describe("validateProjectDir", () => {
     expect(validateProjectDir("/home/user/../etc/passwd")).not.toBeNull();
     expect(validateProjectDir("/tmp/../../etc")).not.toBeNull();
   });
+
+  test("rejects paths with redundant slashes or dot segments", () => {
+    expect(validateProjectDir("/home/user/./project")).not.toBeNull();
+    expect(validateProjectDir("/home//user/project")).not.toBeNull();
+    expect(validateProjectDir("/home/user/project/")).not.toBeNull();
+  });
+
+  test("returns the canonicalized path for valid inputs", () => {
+    const result = validateProjectDir("/home/user/project");
+    expect(result).toBeNull();
+  });
 });
 
 describe("validateModel", () => {

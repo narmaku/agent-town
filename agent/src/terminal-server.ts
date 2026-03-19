@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
 import type { Subprocess } from "bun";
 import { clearHookSession, updateHookState } from "./hook-store";
@@ -40,7 +40,11 @@ export function validateSessionName(name: string): string | null {
 export function validateProjectDir(dir: string): string | null {
   if (!dir) return "Project directory is required";
   if (!dir.startsWith("/")) return "Project directory must be an absolute path";
-  if (dir.includes("..")) return "Project directory must not contain '..'";
+  // Canonicalize and reject if the resolved path differs (catches .., //, ., trailing /)
+  // TODO: path.resolve() is lexical only — does not resolve symlinks.
+  // Consider using fs.realpathSync() if symlink-based traversal becomes a concern.
+  const canonical = resolve(dir);
+  if (canonical !== dir) return "Project directory must be a canonical absolute path (no .., //, or trailing /)";
   return null;
 }
 
