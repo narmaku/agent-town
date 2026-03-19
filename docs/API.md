@@ -737,10 +737,15 @@ The dashboard connects to `ws://server:4680/ws` for real-time updates.
 
 ```typescript
 interface WebSocketMessage {
-  type: "machines_update";
-  payload: MachineInfo[];
+  type: "heartbeat" | "machines_update" | "terminal_data" | "terminal_resize";
+  payload: unknown;
 }
 ```
+
+> **Note:** The full `WebSocketMessage` type (defined in `shared/src/index.ts`) covers all
+> WebSocket communication including terminal streaming. For the dashboard `/ws` endpoint,
+> only `machines_update` messages are sent, with `payload` being `MachineInfo[]`.
+> The `terminal_data` and `terminal_resize` types are used by the `/ws/terminal` endpoint.
 
 The server broadcasts a `machines_update` message whenever:
 - A heartbeat is received from any agent
