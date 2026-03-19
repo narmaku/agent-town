@@ -5,6 +5,11 @@ import { createBrowserLogger } from "../logger";
 
 const logger = createBrowserLogger("WebSocket");
 
+interface UseWebSocketResult {
+  machines: MachineInfo[];
+  connected: boolean;
+}
+
 function requestNotificationPermission() {
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
@@ -26,7 +31,7 @@ function getAllSessions(machines: MachineInfo[]): SessionInfo[] {
   return machines.flatMap((m) => m.sessions);
 }
 
-export function useWebSocket(): { machines: MachineInfo[]; connected: boolean } {
+export function useWebSocket(): UseWebSocketResult {
   const [machines, setMachines] = useState<MachineInfo[]>([]);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);

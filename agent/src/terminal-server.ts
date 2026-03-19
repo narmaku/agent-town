@@ -259,7 +259,6 @@ function buildAttachCommand(multiplexer: "zellij" | "tmux", sessionName: string)
   return ["tmux", "attach-session", "-t", sessionName];
 }
 
-<<<<<<< HEAD
 // --- Send-text helpers ---
 
 /**
