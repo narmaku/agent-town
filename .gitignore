@@ -1,7 +1,24 @@
 node_modules/
 dist/
+.vite/
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Data files
 *.db
 *.db-journal
-.vite/
 .machine-id
+
+# Logs
+*.log
+
+# Keys and secrets
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db
