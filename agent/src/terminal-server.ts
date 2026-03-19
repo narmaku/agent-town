@@ -20,6 +20,7 @@ const SESSION_READY_TIMEOUT_MS = 5000;
 const PTY_INIT_DELAY_MS = 1000;
 const PTY_INPUT_BASE_DELAY_MS = 500;
 const PTY_INPUT_PER_CHAR_MS = 15; // extra delay per character for TUI apps
+const BRACKETED_PASTE_DELAY_MS = 100;
 const BACKUP_ENTER_DELAY_MS = 300;
 
 // --- Terminal defaults ---
@@ -256,6 +257,86 @@ function buildAttachCommand(multiplexer: "zellij" | "tmux", sessionName: string)
     return ["zellij", "attach", sessionName];
   }
   return ["tmux", "attach-session", "-t", sessionName];
+}
+
+// --- Send-text helpers ---
+
+/**
+ * Send text via PTY attachment to a multiplexer session.
+ * Spawns the python PTY helper, waits for init, then delegates to
+ * the appropriate write strategy based on agent type.
+ */
+async function sendViaPTY(
+  attachCmd: string[],
+  text: string,
+  agentType: AgentType | undefined,
+  cleanEnv: Record<string, string | undefined>,
+): Promise<void> {
+  // Send text via PTY attachment.
+  // For TUI apps (OpenCode), use a longer per-char delay since
+  // Bubble Tea processes characters as individual key events.
+  const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: cleanEnv,
+  });
+
+  await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
+
+  if (agentType === "opencode") {
+    await sendBracketedPaste(proc, text);
+  } else {
+    // Claude Code: write all at once (simple CLI prompt)
+    proc.stdin.write(`${text}\r`);
+    const inputDelay = PTY_INPUT_BASE_DELAY_MS + text.length * PTY_INPUT_PER_CHAR_MS;
+    await new Promise((r) => setTimeout(r, inputDelay));
+  }
+
+  proc.kill();
+}
+
+/**
+ * Send text using bracketed paste mode for TUI apps (OpenCode / Bubble Tea).
+ * Wraps the text in escape sequences so the TUI handles the entire paste
+ * as one event instead of individual keystrokes.
+ * \x1b[200~ = paste start, \x1b[201~ = paste end
+ */
+async function sendBracketedPaste(proc: Subprocess, text: string): Promise<void> {
+  // Use bracketed paste mode — Bubble Tea handles the entire
+  // paste as one event instead of individual keystrokes.
+  // \x1b[200~ = paste start, \x1b[201~ = paste end
+  proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
+  await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
+  proc.stdin.write("\r");
+  await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
+}
+
+/**
+ * Send a backup Enter keystroke via native multiplexer command
+ * in case the PTY carriage return was swallowed.
+ */
+async function sendBackupEnter(
+  multiplexer: "zellij" | "tmux",
+  session: string,
+  cleanEnv: Record<string, string | undefined>,
+): Promise<void> {
+  await new Promise((r) => setTimeout(r, BACKUP_ENTER_DELAY_MS));
+  if (multiplexer === "zellij") {
+    const enter = Bun.spawn(["zellij", "--session", session, "action", "write", "13"], {
+      env: cleanEnv,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await enter.exited;
+  } else {
+    const enter = Bun.spawn(["tmux", "send-keys", "-t", session, "Enter"], {
+      env: cleanEnv,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await enter.exited;
+  }
 }
 
 export function startTerminalServer(port: number, machineId: string) {
@@ -878,57 +959,12 @@ export function startTerminalServer(port: number, machineId: string) {
             `send: session=${body.session} mux=${body.multiplexer} agent=${body.agentType || "claude-code"} chars=${body.text.length}`,
           );
 
-          // Send text via PTY attachment.
-          // For TUI apps (OpenCode), use a longer per-char delay since
-          // Bubble Tea processes characters as individual key events.
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
-          const proc = Bun.spawn(
-            ["python3", PTY_HELPER, String(DEFAULT_TERMINAL_COLS), String(DEFAULT_TERMINAL_ROWS), ...attachCmd],
-            {
-              stdin: "pipe",
-              stdout: "pipe",
-              stderr: "pipe",
-              env: cleanEnv,
-            },
-          );
-
-          await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
-
-          if (body.agentType === "opencode") {
-            // Use bracketed paste mode — Bubble Tea handles the entire
-            // paste as one event instead of individual keystrokes.
-            // \x1b[200~ = paste start, \x1b[201~ = paste end
-            proc.stdin.write(`\x1b[200~${body.text}\x1b[201~`);
-            await new Promise((r) => setTimeout(r, 100));
-            proc.stdin.write("\r");
-            await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
-          } else {
-            // Claude Code: write all at once (simple CLI prompt)
-            proc.stdin.write(`${body.text}\r`);
-            const inputDelay = PTY_INPUT_BASE_DELAY_MS + body.text.length * PTY_INPUT_PER_CHAR_MS;
-            await new Promise((r) => setTimeout(r, inputDelay));
-          }
-
-          proc.kill();
+          await sendViaPTY(attachCmd, body.text, body.agentType, cleanEnv);
 
           // Backup Enter via native command in case PTY CR was swallowed
           if (isMultiline) {
-            await new Promise((r) => setTimeout(r, BACKUP_ENTER_DELAY_MS));
-            if (body.multiplexer === "zellij") {
-              const enter = Bun.spawn(["zellij", "--session", body.session, "action", "write", "13"], {
-                env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
-              });
-              await enter.exited;
-            } else {
-              const enter = Bun.spawn(["tmux", "send-keys", "-t", body.session, "Enter"], {
-                env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
-              });
-              await enter.exited;
-            }
+            await sendBackupEnter(body.multiplexer, body.session, cleanEnv);
           }
 
           log.debug("send: completed");
