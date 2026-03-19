@@ -1044,17 +1044,20 @@ export function startTerminalServer(port: number, machineId: string) {
               if (done) break;
               try {
                 ws.send(value);
-              } catch {
+              } catch (err) {
+                log.debug(
+                  `terminal:${session} ws send failed, stopping reader: ${err instanceof Error ? err.message : String(err)}`,
+                );
                 break;
               }
             }
-          } catch {
-            // process ended
+          } catch (err) {
+            log.debug(`terminal:${session} stdout reader ended: ${err instanceof Error ? err.message : String(err)}`);
           }
           try {
             ws.close();
-          } catch {
-            // already closed
+          } catch (err) {
+            log.debug(`terminal:${session} ws already closed: ${err instanceof Error ? err.message : String(err)}`);
           }
         })();
 
@@ -1067,8 +1070,8 @@ export function startTerminalServer(port: number, machineId: string) {
               if (done) break;
               log.debug(`terminal:${session} stderr: ${new TextDecoder().decode(value).trim()}`);
             }
-          } catch {
-            // process ended
+          } catch (err) {
+            log.debug(`terminal:${session} stderr reader ended: ${err instanceof Error ? err.message : String(err)}`);
           }
         })();
       },
@@ -1086,7 +1089,7 @@ export function startTerminalServer(port: number, machineId: string) {
               );
               return;
             }
-          } catch {
+          } catch (_err) {
             // Not JSON, treat as terminal input
           }
           terminal.process.stdin.write(message);

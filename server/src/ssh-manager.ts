@@ -311,8 +311,8 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
         const text = new TextDecoder().decode(value).trim();
         if (text) log.debug(`tunnel: ${node.name} stderr: ${text}`);
       }
-    } catch {
-      // tunnel ended
+    } catch (err) {
+      log.debug(`tunnel: ${node.name} stderr reader ended: ${err instanceof Error ? err.message : String(err)}`);
     }
   })();
 

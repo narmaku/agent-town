@@ -1,6 +1,10 @@
 import type { AgentType, RemoteNode, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import { useCallback, useEffect, useState } from "react";
+
+import { createBrowserLogger } from "../logger";
 import { API } from "../utils";
+
+const logger = createBrowserLogger("SettingsModal");
 
 type Tab = "appearance" | "agent" | "nodes";
 
@@ -64,7 +68,7 @@ export function SettingsModal({ open, onClose }: Props) {
       fetch(API.SETTINGS)
         .then((r) => r.json())
         .then((s: Settings) => setSettings(s))
-        .catch((err) => console.warn("Failed to load settings:", err));
+        .catch((err) => logger.warn("Failed to load settings:", err));
       loadNodes();
     }
   }, [open, loadNodes]);
@@ -89,7 +93,7 @@ export function SettingsModal({ open, onClose }: Props) {
       });
       if (resp.ok) onClose();
     } catch (err) {
-      console.warn("Failed to save settings:", err);
+      logger.warn("Failed to save settings:", err);
     } finally {
       setSaving(false);
     }

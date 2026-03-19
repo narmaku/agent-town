@@ -74,8 +74,8 @@ export async function getClaudeSessionMessages(
       if (entry.type === "user" || entry.type === "assistant") {
         entries.push(entry);
       }
-    } catch {
-      // skip malformed lines
+    } catch (_err) {
+      // skip malformed JSONL line
     }
   }
 
@@ -107,8 +107,8 @@ async function findJsonlFile(sessionId: string): Promise<string | null> {
     try {
       await stat(jsonlPath);
       return jsonlPath;
-    } catch {
-      // not in this directory
+    } catch (_err) {
+      // not in this directory, continue searching
     }
   }
   return null;

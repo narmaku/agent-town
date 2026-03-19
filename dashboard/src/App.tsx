@@ -1,5 +1,6 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { ExplorerLayout } from "./components/ExplorerLayout";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
 import { MachineGroup } from "./components/MachineGroup";
@@ -8,7 +9,10 @@ import { SessionFullscreen } from "./components/SessionFullscreen";
 import { SettingsModal } from "./components/SettingsModal";
 import { TerminalOverlay } from "./components/TerminalOverlay";
 import { useWebSocket } from "./hooks/useWebSocket";
+import { createBrowserLogger } from "./logger";
 import { API } from "./utils";
+
+const logger = createBrowserLogger("App");
 
 export type SortMode = "recent" | "alphabetical" | "status";
 export type TimeFilter = "24h" | "3d" | "7d" | "all";
@@ -119,7 +123,7 @@ export function App() {
         setTheme(s.theme);
         setFontSize(s.fontSize);
       })
-      .catch((err) => console.warn("Failed to load settings:", err));
+      .catch((err) => logger.warn("Failed to load settings:", err));
   }, []);
 
   useEffect(() => {

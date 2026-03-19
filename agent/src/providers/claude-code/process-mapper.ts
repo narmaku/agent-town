@@ -1,7 +1,10 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { createLogger } from "@agent-town/shared";
 import type { AgentProcess } from "../types";
 import { CLAUDE_PROJECTS_DIR, pathToProjectDir } from "./session-discovery";
+
+const log = createLogger("claude:process-mapper");
 
 /** Filter processes to only those running the "claude" binary. */
 export function filterClaudeProcesses(processes: AgentProcess[]): AgentProcess[] {
@@ -35,7 +38,8 @@ async function getBirthtimeMs(filePath: string): Promise<number> {
     await proc.exited;
     const seconds = parseInt(output.trim(), 10);
     return seconds > 0 ? seconds * 1000 : 0;
-  } catch {
+  } catch (err) {
+    log.debug(`getBirthtimeMs: failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     return 0;
   }
 }
@@ -62,7 +66,8 @@ export async function findSessionCandidates(cwd: string): Promise<SessionCandida
       });
     }
     return candidates;
-  } catch {
+  } catch (err) {
+    log.debug(`findSessionCandidates: failed for cwd=${cwd}: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }
