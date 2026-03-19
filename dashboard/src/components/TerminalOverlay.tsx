@@ -2,6 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
+import type React from "react";
 import { useCallback, useEffect, useRef } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalMultiplexer } from "@agent-town/shared";
@@ -13,7 +14,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function TerminalOverlay({ machineId, sessionName, multiplexer, onClose }: Props) {
+export function TerminalOverlay({ machineId, sessionName, multiplexer, onClose }: Props): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);

@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
-import type { Subprocess } from "bun";
+import type { Server, Subprocess } from "bun";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { getAllProviders, getProvider } from "./providers/registry";
 import { getSessionMessages } from "./session-messages";
@@ -339,7 +339,7 @@ async function sendBackupEnter(
   }
 }
 
-export function startTerminalServer(port: number, machineId: string) {
+export function startTerminalServer(port: number, machineId: string): Server {
   const server = Bun.serve({
     port,
     hostname: "0.0.0.0",

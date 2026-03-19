@@ -1,4 +1,5 @@
 import type { AgentType } from "@agent-town/shared";
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { API } from "../utils";
 
@@ -10,7 +11,7 @@ interface Props {
   onSent?: () => void;
 }
 
-export function SendMessage({ machineId, multiplexer, session, agentType, onSent }: Props) {
+export function SendMessage({ machineId, multiplexer, session, agentType, onSent }: Props): React.JSX.Element {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");

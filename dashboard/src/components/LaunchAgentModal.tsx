@@ -1,4 +1,5 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API } from "../utils";
 
@@ -14,7 +15,7 @@ interface Props {
   onLaunched: (machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) => void;
 }
 
-export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props) {
+export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props): React.JSX.Element | null {
   const [sessionName, setSessionName] = useState("");
   const [projectDir, setProjectDir] = useState("");
   const [machineId, setMachineId] = useState("");

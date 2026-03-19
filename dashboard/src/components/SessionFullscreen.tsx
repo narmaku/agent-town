@@ -1,4 +1,5 @@
 import type { AgentType, SessionInfo, TerminalMultiplexer } from "@agent-town/shared";
+import type React from "react";
 import { useEffect } from "react";
 import { SessionDetail } from "./SessionDetail";
 
@@ -11,7 +12,14 @@ interface Props {
   autoDeleteOnClose?: boolean;
 }
 
-export function SessionFullscreen({ session, machineId, onClose, onOpenTerminal, onResume, autoDeleteOnClose }: Props) {
+export function SessionFullscreen({
+  session,
+  machineId,
+  onClose,
+  onOpenTerminal,
+  onResume,
+  autoDeleteOnClose,
+}: Props): React.JSX.Element {
   // Lock body scroll while overlay is open
   useEffect(() => {
     document.body.style.overflow = "hidden";

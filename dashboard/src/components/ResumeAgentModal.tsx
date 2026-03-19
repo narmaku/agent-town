@@ -1,4 +1,5 @@
 import type { AgentType } from "@agent-town/shared";
+import type React from "react";
 import { useState } from "react";
 import { API } from "../utils";
 
@@ -11,7 +12,14 @@ interface Props {
   agentType: AgentType;
 }
 
-export function ResumeAgentModal({ open, onClose, sessionId, projectDir, machineId, agentType }: Props) {
+export function ResumeAgentModal({
+  open,
+  onClose,
+  sessionId,
+  projectDir,
+  machineId,
+  agentType,
+}: Props): React.JSX.Element | null {
   const [autonomous, setAutonomous] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState("");

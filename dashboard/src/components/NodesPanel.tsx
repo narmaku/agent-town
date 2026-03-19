@@ -1,4 +1,5 @@
 import type { NodeStatus, RemoteNode } from "@agent-town/shared";
+import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { API } from "../utils";
 
@@ -23,7 +24,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function NodesPanel({ open, onClose }: Props) {
+export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
   const [nodes, setNodes] = useState<RemoteNode[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [testing, setTesting] = useState(false);
