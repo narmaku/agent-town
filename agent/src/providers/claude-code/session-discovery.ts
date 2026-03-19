@@ -7,7 +7,6 @@ const log = createLogger("claude:sessions");
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
-const SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const LAST_LINES_LIMIT = 200;
 
 export interface ClaudeJsonlEntry {
