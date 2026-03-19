@@ -19,7 +19,6 @@ const SESSION_READY_POLL_MS = 300;
 const SESSION_READY_TIMEOUT_MS = 5000;
 const PTY_INIT_DELAY_MS = 1000;
 const PTY_INPUT_BASE_DELAY_MS = 500;
-const PTY_INPUT_PER_CHAR_MS = 15; // extra delay per character for TUI apps
 const BRACKETED_PASTE_DELAY_MS = 100;
 const BACKUP_ENTER_DELAY_MS = 300;
 
@@ -262,19 +261,15 @@ function buildAttachCommand(multiplexer: "zellij" | "tmux", sessionName: string)
 // --- Send-text helpers ---
 
 /**
- * Send text via PTY attachment to a multiplexer session.
- * Spawns the python PTY helper, waits for init, then delegates to
- * the appropriate write strategy based on agent type.
+ * Send text via PTY attachment with bracketed paste mode.
+ * Uses escape sequences so the terminal handles the entire paste
+ * as one event instead of individual keystrokes.
  */
 async function sendViaPTY(
   attachCmd: string[],
   text: string,
-  agentType: AgentType | undefined,
   cleanEnv: Record<string, string | undefined>,
 ): Promise<void> {
-  // Send text via PTY attachment.
-  // For TUI apps (OpenCode), use a longer per-char delay since
-  // Bubble Tea processes characters as individual key events.
   const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
     stdin: "pipe",
     stdout: "pipe",
@@ -284,32 +279,15 @@ async function sendViaPTY(
 
   await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
-  if (agentType === "opencode") {
-    await sendBracketedPaste(proc, text);
-  } else {
-    // Claude Code: write all at once (simple CLI prompt)
-    proc.stdin.write(`${text}\r`);
-    const inputDelay = PTY_INPUT_BASE_DELAY_MS + text.length * PTY_INPUT_PER_CHAR_MS;
-    await new Promise((r) => setTimeout(r, inputDelay));
-  }
-
-  proc.kill();
-}
-
-/**
- * Send text using bracketed paste mode for TUI apps (OpenCode / Bubble Tea).
- * Wraps the text in escape sequences so the TUI handles the entire paste
- * as one event instead of individual keystrokes.
- * \x1b[200~ = paste start, \x1b[201~ = paste end
- */
-async function sendBracketedPaste(proc: Subprocess, text: string): Promise<void> {
-  // Use bracketed paste mode — Bubble Tea handles the entire
-  // paste as one event instead of individual keystrokes.
+  // Bracketed paste mode for all agents — the terminal handles
+  // the entire paste as one event instead of individual keystrokes.
   // \x1b[200~ = paste start, \x1b[201~ = paste end
   proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
   await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
   proc.stdin.write("\r");
   await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
+
+  proc.kill();
 }
 
 /**
@@ -934,10 +912,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
 
       // HTTP endpoint: send text to a multiplexer session
       //
-      // Uses native multiplexer commands (write-chars / send-keys) for reliable
-      // text delivery to both CLI prompts and TUI apps (OpenCode Bubble Tea).
-      // For multi-line text, falls back to PTY-based paste to handle bracketed
-      // paste mode correctly.
+      // Uses PTY attachment with bracketed paste mode for reliable text delivery
+      // to both CLI prompts (Claude Code) and TUI apps (OpenCode Bubble Tea).
+      // A backup Enter is sent via native multiplexer commands to ensure submission.
       if (url.pathname === "/api/send" && req.method === "POST") {
         try {
           const body = (await req.json()) as {
@@ -954,18 +931,15 @@ export function startTerminalServer(port: number, machineId: string): Server {
           const cleanEnv = cleanMultiplexerEnv();
           cleanEnv.TERM = "xterm-256color";
 
-          const isMultiline = body.text.includes("\n");
           log.info(
             `send: session=${body.session} mux=${body.multiplexer} agent=${body.agentType || "claude-code"} chars=${body.text.length}`,
           );
 
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
-          await sendViaPTY(attachCmd, body.text, body.agentType, cleanEnv);
+          await sendViaPTY(attachCmd, body.text, cleanEnv);
 
           // Backup Enter via native command in case PTY CR was swallowed
-          if (isMultiline) {
-            await sendBackupEnter(body.multiplexer, body.session, cleanEnv);
-          }
+          await sendBackupEnter(body.multiplexer, body.session, cleanEnv);
 
           log.debug("send: completed");
           return Response.json({ ok: true });

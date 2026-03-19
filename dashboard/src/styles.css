@@ -854,10 +854,9 @@ body {
   font-size: 13px;
   font-family: "SF Mono", "Fira Code", monospace;
   padding: 8px 10px;
-  resize: none;
+  resize: vertical;
   outline: none;
   min-height: 48px;
-  max-height: 200px;
 }
 
 .send-textarea:focus {
