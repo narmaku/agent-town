@@ -76,6 +76,8 @@ function broadcastToClients(message: WebSocketMessage): void {
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:",
 };
 
 function withSecurityHeaders(response: Response): Response {
@@ -334,8 +336,8 @@ async function routeRequest(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ multiplexer: muxType, session: muxSession }),
           });
-        } catch {
-          // best-effort — mux may already be dead
+        } catch (err) {
+          log.debug("best-effort mux kill failed", { error: String(err) });
         }
       }
 
