@@ -1335,9 +1335,16 @@ body {
   font-family: "SF Mono", "Fira Code", monospace;
 }
 
+.chat-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .load-previous-btn {
   display: block;
-  margin: 8px auto 16px;
   padding: 6px 16px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -1355,6 +1362,136 @@ body {
 .load-previous-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.tool-toggle-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.tool-toggle-btn:hover {
+  color: var(--text);
+  border-color: #555;
+}
+
+.chat-controls .load-previous-btn {
+  margin: 0;
+}
+
+.chat-tools-summary {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-empty-hint {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.chat-tool-calls {
+  margin-top: 6px;
+}
+
+.tool-call-group {
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.tool-call-header:hover {
+  filter: brightness(1.1);
+}
+
+.tool-call-chevron {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.tool-call-detail {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+
+.tool-call-input,
+.tool-call-result {
+  margin: 4px 0;
+}
+
+.tool-call-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.tool-call-input pre,
+.tool-call-result pre {
+  margin: 0;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+.tool-call-result {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.thinking-block {
+  margin: 6px 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.thinking-block summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.thinking-content {
+  padding: 8px;
+  margin-top: 4px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 0.8rem;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
 }
 
 .fullscreen-actions {
@@ -1862,6 +1999,31 @@ body {
 /* Load previous button */
 .app.theme-light .load-previous-btn:hover {
   background: #e2e8f0;
+}
+
+/* Tool toggle button */
+.app.theme-light .tool-toggle-btn {
+  border-color: var(--border);
+}
+
+.app.theme-light .tool-toggle-btn:hover {
+  background: #e5e5e5;
+  border-color: #ccc;
+}
+
+/* Tool call blocks */
+.app.theme-light .tool-call-header {
+  background: var(--bg-elevated);
+}
+
+.app.theme-light .tool-call-input pre,
+.app.theme-light .tool-call-result pre {
+  background: #f5f5f5;
+}
+
+/* Thinking block */
+.app.theme-light .thinking-content {
+  background: #f5f5f5;
 }
 
 /* Picker option hover */

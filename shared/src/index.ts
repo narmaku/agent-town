@@ -111,8 +111,10 @@ export interface SessionMessage {
   role: "user" | "assistant";
   timestamp: string;
   content: string;
-  toolUse?: { name: string; id: string }[];
+  toolUse?: { name: string; id: string; input?: string }[];
   toolResult?: string;
+  toolResults?: { toolUseId: string; content: string }[];
+  thinking?: string;
   model?: string;
 }
 

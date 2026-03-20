@@ -7,6 +7,55 @@ import { SendMessage } from "./SendMessage";
 
 const BATCH_SIZE = 10;
 
+function isToolResultMessage(msg: SessionMessage): boolean {
+  return msg.role === "user" && !msg.content.trim() && !!(msg.toolResult || msg.toolResults?.length);
+}
+
+function isToolOnlyMessage(msg: SessionMessage): boolean {
+  return msg.role === "assistant" && !msg.content.trim() && !msg.thinking && !!msg.toolUse?.length;
+}
+
+function ToolCallBlock({
+  tool,
+  toolResults,
+}: {
+  tool: { name: string; id: string; input?: string };
+  toolResults?: { toolUseId: string; content: string }[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const result = toolResults?.find((r) => r.toolUseId === tool.id);
+
+  return (
+    <div className="tool-call-group">
+      <button
+        type="button"
+        className="tool-call-header"
+        onClick={() => setExpanded(!expanded)}
+        aria-label={`${expanded ? "Collapse" : "Expand"} ${tool.name} tool call`}
+      >
+        <span className="tool-badge">{tool.name}</span>
+        <span className="tool-call-chevron">{expanded ? "\u25BC" : "\u25B6"}</span>
+      </button>
+      {expanded && (
+        <div className="tool-call-detail">
+          {tool.input && (
+            <div className="tool-call-input">
+              <div className="tool-call-label">Input</div>
+              <pre>{tool.input}</pre>
+            </div>
+          )}
+          {result && (
+            <div className="tool-call-result">
+              <div className="tool-call-label">Result</div>
+              <pre>{result.content}</pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const markdownComponents: Record<
   string,
   React.ComponentType<{ className?: string; children?: React.ReactNode; [key: string]: unknown }>
@@ -58,6 +107,7 @@ export function SessionDetail({
   const [offset, setOffset] = useState(0);
   const [flash, setFlash] = useState(false);
   const [, setTick] = useState(0);
+  const [showToolDetails, setShowToolDetails] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
@@ -264,42 +314,93 @@ export function SessionDetail({
       </div>
 
       <div className={`fullscreen-messages ${flash ? "flash" : ""}`} ref={messageContainerRef}>
-        {hasMore && (
-          <button type="button" className="load-previous-btn" onClick={loadPrevious} disabled={loadingHistory}>
-            {loadingHistory ? "Loading..." : "Load previous messages"}
-          </button>
-        )}
-
-        {history.map((msg) => (
-          <div
-            key={`${msg.timestamp}-${msg.role}-${msg.content?.slice(0, 20) ?? ""}`}
-            className={`chat-message chat-${msg.role}`}
+        <div className="chat-controls">
+          {hasMore && (
+            <button type="button" className="load-previous-btn" onClick={loadPrevious} disabled={loadingHistory}>
+              {loadingHistory ? "Loading..." : "Load previous messages"}
+            </button>
+          )}
+          <button
+            type="button"
+            className="tool-toggle-btn"
+            onClick={() => setShowToolDetails((prev) => !prev)}
+            aria-label={showToolDetails ? "Hide tool details" : "Show tool details"}
           >
-            <div className="chat-message-header">
-              <span className="chat-role">{msg.role === "user" ? "You" : "Assistant"}</span>
-              <span className="chat-timestamp">{new Date(msg.timestamp).toLocaleString()}</span>
-              {msg.model && <span className="chat-model">{msg.model}</span>}
+            {showToolDetails ? "Hide tool details" : "Show tool details"}
+          </button>
+        </div>
+
+        {history
+          .filter((msg) => showToolDetails || !isToolResultMessage(msg))
+          .map((msg) => (
+            <div
+              key={`${msg.timestamp}-${msg.role}-${msg.content?.slice(0, 20) ?? ""}`}
+              className={`chat-message chat-${msg.role}`}
+            >
+              <div className="chat-message-header">
+                <span className="chat-role">{msg.role === "user" ? "You" : "Assistant"}</span>
+                <span className="chat-timestamp">{new Date(msg.timestamp).toLocaleString()}</span>
+                {msg.model && <span className="chat-model">{msg.model}</span>}
+              </div>
+              <div className="chat-message-body">
+                {msg.thinking && (
+                  <details className="thinking-block">
+                    <summary>Thinking...</summary>
+                    <div className="thinking-content">{msg.thinking}</div>
+                  </details>
+                )}
+                {msg.role === "assistant" ? (
+                  <>
+                    {msg.content.trim() ? (
+                      <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {msg.content}
+                      </Markdown>
+                    ) : isToolOnlyMessage(msg) && !showToolDetails ? (
+                      <div className="chat-tools-summary">
+                        Used{" "}
+                        {msg.toolUse!.map((t) => (
+                          <span key={t.id} className="tool-badge">
+                            {t.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : msg.toolUse?.length && showToolDetails ? null : !msg.thinking ? (
+                      <span className="chat-empty-hint">[No text content]</span>
+                    ) : null}
+                    {msg.toolUse && msg.toolUse.length > 0 && showToolDetails && (
+                      <div className="chat-tool-calls">
+                        {msg.toolUse.map((t) => (
+                          <ToolCallBlock key={t.id} tool={t} toolResults={msg.toolResults} />
+                        ))}
+                      </div>
+                    )}
+                    {msg.toolUse && msg.toolUse.length > 0 && !showToolDetails && msg.content.trim() && (
+                      <div className="chat-tools">
+                        {msg.toolUse.map((t) => (
+                          <span key={t.id} className="tool-badge">
+                            {t.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="chat-user-text">
+                    {msg.content.trim()
+                      ? msg.content
+                      : showToolDetails && msg.toolResults?.length
+                        ? msg.toolResults.map((tr) => (
+                            <div key={tr.toolUseId} className="tool-call-result">
+                              <div className="tool-call-label">Result ({tr.toolUseId})</div>
+                              <pre>{tr.content}</pre>
+                            </div>
+                          ))
+                        : msg.content || "[tool result]"}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="chat-message-body">
-              {msg.role === "assistant" ? (
-                <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                  {msg.content || "[No text content]"}
-                </Markdown>
-              ) : (
-                <div className="chat-user-text">{msg.content || "[tool result]"}</div>
-              )}
-              {msg.toolUse && msg.toolUse.length > 0 && (
-                <div className="chat-tools">
-                  {msg.toolUse.map((t) => (
-                    <span key={t.id} className="tool-badge">
-                      {t.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+          ))}
 
         {history.length === 0 && !loadingHistory && (
           <div className="no-sessions" style={{ padding: "40px 0" }}>

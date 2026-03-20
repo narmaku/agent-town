@@ -284,6 +284,202 @@ describe("formatClaudeEntry", () => {
     expect(result.toolResult).toHaveLength(500);
     expect(result.toolResult).toBe(exactContent);
   });
+
+  // --- Thinking block tests ---
+
+  test("extracts a single thinking block", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "Let me analyze this problem step by step." },
+          { type: "text", text: "Here is my answer." },
+        ],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.thinking).toBe("Let me analyze this problem step by step.");
+    expect(result.content).toBe("Here is my answer.");
+  });
+
+  test("joins multiple thinking blocks with double newline", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "First thought." },
+          { type: "thinking", thinking: "Second thought." },
+          { type: "text", text: "Final answer." },
+        ],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.thinking).toBe("First thought.\n\nSecond thought.");
+    expect(result.content).toBe("Final answer.");
+  });
+
+  test("thinking is undefined when no thinking blocks exist", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "No thinking here." }],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.thinking).toBeUndefined();
+  });
+
+  test("skips thinking blocks with non-string thinking property", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: 42 },
+          { type: "text", text: "Result." },
+        ],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.thinking).toBeUndefined();
+  });
+
+  // --- Tool input extraction tests ---
+
+  test("extracts tool_use input as JSON string", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            name: "Read",
+            id: "tool_1",
+            input: { file_path: "/home/user/file.ts" },
+          },
+        ],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.toolUse).toHaveLength(1);
+    expect(result.toolUse?.[0].input).toBeDefined();
+    const parsed = JSON.parse(result.toolUse![0].input!);
+    expect(parsed.file_path).toBe("/home/user/file.ts");
+  });
+
+  test("truncates tool_use input to 2000 characters", () => {
+    const longInput = { data: "x".repeat(3000) };
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", name: "Bash", id: "tool_2", input: longInput }],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.toolUse?.[0].input).toBeDefined();
+    expect(result.toolUse![0].input!.length).toBeLessThanOrEqual(2000);
+  });
+
+  test("tool_use input is undefined when input is not provided", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", name: "Read", id: "tool_3" }],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.toolUse?.[0].input).toBeUndefined();
+  });
+
+  // --- Multiple tool results tests ---
+
+  test("collects multiple tool_result blocks into toolResults array", () => {
+    const entry = makeEntry({
+      type: "user",
+      message: {
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: "tool_1", content: "Result one" },
+          { type: "tool_result", tool_use_id: "tool_2", content: "Result two" },
+        ],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.toolResults).toHaveLength(2);
+    expect(result.toolResults?.[0]).toEqual({ toolUseId: "tool_1", content: "Result one" });
+    expect(result.toolResults?.[1]).toEqual({ toolUseId: "tool_2", content: "Result two" });
+  });
+
+  test("handles tool_result with array content (text blocks inside)", () => {
+    const entry = makeEntry({
+      type: "user",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "tool_5",
+            content: [
+              { type: "text", text: "Line one" },
+              { type: "text", text: "Line two" },
+            ],
+          },
+        ],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.toolResults).toHaveLength(1);
+    expect(result.toolResults?.[0].content).toBe("Line one\nLine two");
+    expect(result.toolResults?.[0].toolUseId).toBe("tool_5");
+  });
+
+  test("truncates tool_result content to 2000 characters in toolResults", () => {
+    const longContent = "z".repeat(3000);
+    const entry = makeEntry({
+      type: "user",
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "tool_6", content: longContent }],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.toolResults?.[0].content.length).toBeLessThanOrEqual(2000);
+  });
+
+  test("toolResults is undefined when no tool_result blocks exist", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "No tools." }],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.toolResults).toBeUndefined();
+  });
+
+  // --- Mixed content tests ---
+
+  test("handles message with text, thinking, tool calls, and tool results", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "I need to read the file." },
+          { type: "text", text: "Let me check that file." },
+          { type: "tool_use", name: "Read", id: "tool_r1", input: { path: "/tmp/test.ts" } },
+          { type: "tool_result", tool_use_id: "tool_r1", content: "file contents" },
+        ],
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.thinking).toBe("I need to read the file.");
+    expect(result.content).toBe("Let me check that file.");
+    expect(result.toolUse).toHaveLength(1);
+    expect(result.toolUse?.[0].name).toBe("Read");
+    expect(result.toolUse?.[0].input).toBeDefined();
+    expect(result.toolResults).toHaveLength(1);
+    expect(result.toolResults?.[0].toolUseId).toBe("tool_r1");
+    expect(result.toolResult).toBe("file contents");
+  });
 });
 
 describe("getClaudeSessionMessages", () => {
