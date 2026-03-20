@@ -837,5 +837,144 @@ describe("getOpenCodeSessionMessages", () => {
         { name: "Edit", id: "tc2" },
       ]);
     });
+
+    test("extracts tool-invocation input args in SQLite", async () => {
+      const db = createTestDb();
+      insertMessage(db, "msg1", "ses_abc", Date.now(), { role: "assistant" });
+      insertPart(db, "part1", "msg1", {
+        type: "tool-invocation",
+        name: "Read",
+        toolCallId: "tc1",
+        args: { file_path: "/home/user/test.ts" },
+      });
+      db.close();
+
+      const result = await getOpenCodeSessionMessages("ses_abc", 0, 10);
+      expect(result.messages[0].toolUse?.[0].input).toBeDefined();
+      const parsed = JSON.parse(result.messages[0].toolUse![0].input!);
+      expect(parsed.file_path).toBe("/home/user/test.ts");
+    });
+
+    test("extracts tool-invocation result in SQLite into toolResults", async () => {
+      const db = createTestDb();
+      insertMessage(db, "msg1", "ses_abc", Date.now(), { role: "assistant" });
+      insertPart(db, "part1", "msg1", {
+        type: "tool-invocation",
+        name: "Read",
+        toolCallId: "tc1",
+        state: "completed",
+        result: "file contents here",
+      });
+      db.close();
+
+      const result = await getOpenCodeSessionMessages("ses_abc", 0, 10);
+      expect(result.messages[0].toolResults).toHaveLength(1);
+      expect(result.messages[0].toolResults?.[0]).toEqual({
+        toolUseId: "tc1",
+        content: "file contents here",
+      });
+    });
+
+    test("toolResults is undefined when no tool results exist in SQLite", async () => {
+      const db = createTestDb();
+      insertMessage(db, "msg1", "ses_abc", Date.now(), { role: "assistant" });
+      insertPart(db, "part1", "msg1", { type: "text", text: "Just text." });
+      db.close();
+
+      const result = await getOpenCodeSessionMessages("ses_abc", 0, 10);
+      expect(result.messages[0].toolResults).toBeUndefined();
+    });
+  });
+
+  // =====================
+  // SDK tool results tests
+  // =====================
+
+  describe("SDK tool result extraction", () => {
+    test("extracts tool-invocation input args via SDK", async () => {
+      const sdkMessages: SdkMessage[] = [
+        makeSdkMessage({
+          info: {
+            role: "assistant",
+            time: { created: "2026-03-19T10:00:00.000Z" },
+          },
+          parts: [
+            {
+              id: "p1",
+              type: "tool-invocation",
+              name: "Read",
+              toolCallId: "tc_001",
+              args: { file_path: "/tmp/test.ts" },
+            } as SdkPart & { args: Record<string, unknown> },
+          ],
+        }),
+      ];
+
+      mockClient = {
+        session: {
+          messages: mock(() => Promise.resolve({ data: sdkMessages })),
+        },
+      };
+
+      const result = await getOpenCodeSessionMessages("ses_test123", 0, 10);
+      expect(result.messages[0].toolUse?.[0].input).toBeDefined();
+      const parsed = JSON.parse(result.messages[0].toolUse![0].input!);
+      expect(parsed.file_path).toBe("/tmp/test.ts");
+    });
+
+    test("extracts tool-invocation result via SDK into toolResults", async () => {
+      const sdkMessages: SdkMessage[] = [
+        makeSdkMessage({
+          info: {
+            role: "assistant",
+            time: { created: "2026-03-19T10:00:00.000Z" },
+          },
+          parts: [
+            {
+              id: "p1",
+              type: "tool-invocation",
+              name: "Read",
+              toolCallId: "tc_001",
+              state: "completed",
+              result: "the file contents",
+            } as SdkPart & { state: string; result: string },
+          ],
+        }),
+      ];
+
+      mockClient = {
+        session: {
+          messages: mock(() => Promise.resolve({ data: sdkMessages })),
+        },
+      };
+
+      const result = await getOpenCodeSessionMessages("ses_test123", 0, 10);
+      expect(result.messages[0].toolResults).toHaveLength(1);
+      expect(result.messages[0].toolResults?.[0]).toEqual({
+        toolUseId: "tc_001",
+        content: "the file contents",
+      });
+    });
+
+    test("toolResults is undefined when no tool results exist via SDK", async () => {
+      const sdkMessages: SdkMessage[] = [
+        makeSdkMessage({
+          info: {
+            role: "assistant",
+            time: { created: "2026-03-19T10:00:00.000Z" },
+          },
+          parts: [{ id: "p1", type: "text", text: "No tools here." }],
+        }),
+      ];
+
+      mockClient = {
+        session: {
+          messages: mock(() => Promise.resolve({ data: sdkMessages })),
+        },
+      };
+
+      const result = await getOpenCodeSessionMessages("ses_test123", 0, 10);
+      expect(result.messages[0].toolResults).toBeUndefined();
+    });
   });
 });

@@ -22,31 +22,48 @@ export interface ClaudeMessageEntry {
   };
 }
 
+const TOOL_CONTENT_MAX_LENGTH = 2000;
+
 export function formatClaudeEntry(entry: ClaudeMessageEntry): SessionMessage {
   const content = entry.message?.content;
   let textContent = "";
-  let toolUse: { name: string; id: string }[] | undefined;
+  let toolUse: { name: string; id: string; input?: string }[] | undefined;
   let toolResult: string | undefined;
+  let toolResults: { toolUseId: string; content: string }[] | undefined;
+  let thinking: string | undefined;
 
   if (typeof content === "string") {
     textContent = content;
   } else if (Array.isArray(content)) {
     const textParts: string[] = [];
-    const tools: { name: string; id: string }[] = [];
+    const tools: { name: string; id: string; input?: string }[] = [];
+    const thinkingParts: string[] = [];
+    const results: { toolUseId: string; content: string }[] = [];
 
     for (const block of content) {
       const b = block as Record<string, unknown>;
       if (b.type === "text" && typeof b.text === "string") {
         textParts.push(b.text);
+      } else if (b.type === "thinking" && typeof b.thinking === "string") {
+        thinkingParts.push(b.thinking);
       } else if (b.type === "tool_use" && typeof b.name === "string" && typeof b.id === "string") {
-        tools.push({ name: b.name, id: b.id });
+        const input = b.input ? JSON.stringify(b.input, null, 2).slice(0, TOOL_CONTENT_MAX_LENGTH) : undefined;
+        tools.push({ name: b.name, id: b.id, input });
       } else if (b.type === "tool_result") {
-        toolResult = typeof b.content === "string" ? b.content.slice(0, 500) : "[tool output]";
+        const resultContent = extractToolResultContent(b);
+        const toolUseId = (b.tool_use_id || b.id || "") as string;
+        results.push({ toolUseId, content: resultContent });
+        // Keep legacy single toolResult for backward compat
+        if (!toolResult) {
+          toolResult = typeof b.content === "string" ? b.content.slice(0, 500) : "[tool output]";
+        }
       }
     }
 
     textContent = textParts.join("\n\n");
     if (tools.length > 0) toolUse = tools;
+    if (thinkingParts.length > 0) thinking = thinkingParts.join("\n\n");
+    if (results.length > 0) toolResults = results;
   }
 
   return {
@@ -55,8 +72,24 @@ export function formatClaudeEntry(entry: ClaudeMessageEntry): SessionMessage {
     content: textContent,
     toolUse,
     toolResult,
+    toolResults,
+    thinking,
     model: entry.message?.model,
   };
+}
+
+function extractToolResultContent(b: Record<string, unknown>): string {
+  if (typeof b.content === "string") {
+    return b.content.slice(0, TOOL_CONTENT_MAX_LENGTH);
+  }
+  if (Array.isArray(b.content)) {
+    return (b.content as Array<Record<string, unknown>>)
+      .filter((c) => c.type === "text" && typeof c.text === "string")
+      .map((c) => c.text as string)
+      .join("\n")
+      .slice(0, TOOL_CONTENT_MAX_LENGTH);
+  }
+  return "[tool output]";
 }
 
 export async function getClaudeSessionMessages(

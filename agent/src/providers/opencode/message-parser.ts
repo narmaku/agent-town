@@ -51,7 +51,8 @@ async function getMessagesViaSDK(
 
   const messages: SessionMessage[] = slice.map((m) => {
     const textParts: string[] = [];
-    const toolUse: { name: string; id: string }[] = [];
+    const toolUse: { name: string; id: string; input?: string }[] = [];
+    const toolResults: { toolUseId: string; content: string }[] = [];
 
     for (const part of m.parts) {
       if (part.type === "text" && part.text) {
@@ -59,7 +60,12 @@ async function getMessagesViaSDK(
       } else if (part.type === "tool-invocation" || (part as Record<string, unknown>).type === "tool") {
         const p = part as Record<string, unknown>;
         const name = (p.name || p.toolName || "unknown") as string;
-        toolUse.push({ name, id: (p.toolCallId || part.id) as string });
+        const id = (p.toolCallId || part.id) as string;
+        const input = p.args ? JSON.stringify(p.args, null, 2).slice(0, 2000) : undefined;
+        toolUse.push({ name, id, input });
+        if (typeof p.result === "string") {
+          toolResults.push({ toolUseId: id, content: (p.result as string).slice(0, 2000) });
+        }
       }
     }
 
@@ -73,6 +79,7 @@ async function getMessagesViaSDK(
       timestamp: new Date(m.info.time.created).toISOString(),
       content: textParts.join("\n\n"),
       toolUse: toolUse.length > 0 ? toolUse : undefined,
+      toolResults: toolResults.length > 0 ? toolResults : undefined,
       model,
     };
   });
@@ -159,16 +166,30 @@ async function getMessagesViaSQLite(
       const role = (msgData?.role || "user") as "user" | "assistant";
 
       const textParts: string[] = [];
-      const toolUse: { name: string; id: string }[] = [];
+      const toolUse: { name: string; id: string; input?: string }[] = [];
+      const toolResults: { toolUseId: string; content: string }[] = [];
 
       for (const part of parts) {
-        const partData = safeJsonParse<{ type: string; text?: string; name?: string; toolCallId?: string }>(part.data);
+        const partData = safeJsonParse<{
+          type: string;
+          text?: string;
+          name?: string;
+          toolCallId?: string;
+          args?: Record<string, unknown>;
+          result?: string;
+          state?: string;
+        }>(part.data);
         if (!partData) continue;
 
         if (partData.type === "text" && partData.text) {
           textParts.push(partData.text);
         } else if (partData.type === "tool-invocation" && partData.name) {
-          toolUse.push({ name: partData.name, id: partData.toolCallId || part.id });
+          const id = partData.toolCallId || part.id;
+          const input = partData.args ? JSON.stringify(partData.args, null, 2).slice(0, 2000) : undefined;
+          toolUse.push({ name: partData.name, id, input });
+          if (typeof partData.result === "string") {
+            toolResults.push({ toolUseId: id, content: partData.result.slice(0, 2000) });
+          }
         }
       }
 
@@ -179,6 +200,7 @@ async function getMessagesViaSQLite(
         timestamp: new Date(row.time_created).toISOString(),
         content: textParts.join("\n\n"),
         toolUse: toolUse.length > 0 ? toolUse : undefined,
+        toolResults: toolResults.length > 0 ? toolResults : undefined,
         model: model?.startsWith("/") ? model.slice(1) : model,
       };
     });
