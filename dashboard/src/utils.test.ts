@@ -226,13 +226,17 @@ describe("API", () => {
     expect(API.NODES_TEST).toBe("/api/nodes/test");
   });
 
+  test("GIT_DIFF endpoint is correct", () => {
+    expect(API.GIT_DIFF).toBe("/api/git-diff");
+  });
+
   test("all endpoints start with /api/", () => {
     for (const value of Object.values(API)) {
       expect(value).toMatch(/^\/api\//);
     }
   });
 
-  test("contains exactly 12 endpoints", () => {
-    expect(Object.keys(API)).toHaveLength(12);
+  test("contains exactly 13 endpoints", () => {
+    expect(Object.keys(API)).toHaveLength(13);
   });
 });

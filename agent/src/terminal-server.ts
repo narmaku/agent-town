@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
 import type { Server, Subprocess } from "bun";
+import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { getAllProviders, getProvider } from "./providers/registry";
 import { getSessionMessages } from "./session-messages";
@@ -362,6 +363,28 @@ export function startTerminalServer(port: number, machineId: string): Server {
           const message = err instanceof Error ? err.message : "Unknown error";
           const status = message === "Session not found" ? 404 : 500;
           return Response.json({ error: message }, { status });
+        }
+      }
+
+      // HTTP endpoint: get git diff for a directory
+      if (url.pathname === "/api/git-diff" && req.method === "GET") {
+        const dir = url.searchParams.get("dir");
+
+        const dirErr = validateDiffDir(dir || "");
+        if (dirErr) {
+          return Response.json({ error: dirErr }, { status: 400 });
+        }
+
+        try {
+          const result = await fetchGitDiff(dir!);
+          return Response.json(result);
+        } catch (err) {
+          if (err instanceof GitDiffError) {
+            return Response.json({ error: err.message }, { status: err.statusCode });
+          }
+          const message = err instanceof Error ? err.message : "Unknown error";
+          log.error(`git-diff: failed for dir=${dir}: ${message}`);
+          return Response.json({ error: message }, { status: 500 });
         }
       }
 
