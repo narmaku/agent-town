@@ -106,6 +106,7 @@ interface Props {
   onResume: (sessionId: string, projectDir: string, agentType: AgentType) => void;
   onFullscreen: (session: SessionInfo) => void;
   autoDeleteOnClose?: boolean;
+  selectedSessionId?: string | null;
 }
 
 export function MachineGroup({
@@ -118,6 +119,7 @@ export function MachineGroup({
   onResume,
   onFullscreen,
   autoDeleteOnClose,
+  selectedSessionId,
 }: Props): React.JSX.Element {
   const needsAttention = machine.sessions.filter((s) => s.status === "awaiting_input").length;
   const working = machine.sessions.filter((s) => s.status === "working").length;
@@ -169,6 +171,7 @@ export function MachineGroup({
                   onResume={onResume}
                   onFullscreen={onFullscreen}
                   autoDeleteOnClose={autoDeleteOnClose}
+                  selected={selectedSessionId === session.sessionId}
                 />
               ))}
             </div>

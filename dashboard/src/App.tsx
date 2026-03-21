@@ -1,21 +1,25 @@
 import {
   type AgentType,
+  DEFAULT_KEYBOARD_SHORTCUTS,
   formatCost,
   type MachineInfo,
+  type SessionInfo,
   type Settings,
   type TerminalMultiplexer,
 } from "@agent-town/shared";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ActivityFeed } from "./components/ActivityFeed";
 import { ExplorerLayout } from "./components/ExplorerLayout";
+import { KeyboardHelp } from "./components/KeyboardHelp";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
-import { MachineGroup } from "./components/MachineGroup";
+import { buildGroups, filterSessionsByTime, MachineGroup, sortSessions } from "./components/MachineGroup";
 import { ResumeAgentModal } from "./components/ResumeAgentModal";
 import { SessionFullscreen } from "./components/SessionFullscreen";
 import { SettingsModal } from "./components/SettingsModal";
 import { TerminalOverlay } from "./components/TerminalOverlay";
+import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { createBrowserLogger } from "./logger";
 import { API } from "./utils";
@@ -36,6 +40,8 @@ const STORAGE_KEYS = {
   GROUP_MODE: "agentTown:groupMode",
   LAYOUT_MODE: "agentTown:layoutMode",
 } as const;
+
+const FOCUS_DELAY_MS = 50;
 
 interface TerminalTarget {
   machineId: string;
@@ -109,6 +115,12 @@ export function App(): React.JSX.Element {
   const [groupMode, setGroupMode] = useState<GroupMode>(() => loadLocalStorage(STORAGE_KEYS.GROUP_MODE, "directory"));
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLocalStorage(STORAGE_KEYS.LAYOUT_MODE, "cards"));
   const [searchQuery, setSearchQuery] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [enableKeyboardNav, setEnableKeyboardNav] = useState(true);
+  const [keyboardShortcuts, setKeyboardShortcuts] = useState<Record<string, string>>({
+    ...DEFAULT_KEYBOARD_SHORTCUTS,
+  });
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Persist layout and group preferences
@@ -132,6 +144,10 @@ export function App(): React.JSX.Element {
         setAutoDeleteOnClose(s.autoDeleteOnClose);
         setTheme(s.theme);
         setFontSize(s.fontSize);
+        setEnableKeyboardNav(s.enableKeyboardNavigation);
+        if (s.keyboardShortcuts) {
+          setKeyboardShortcuts(s.keyboardShortcuts);
+        }
       })
       .catch((err) => logger.warn("Failed to load settings:", err));
   }, []);
@@ -142,6 +158,101 @@ export function App(): React.JSX.Element {
 
   // Filter machines by search query
   const filteredMachines = useMemo(() => filterMachinesBySearch(machines, searchQuery), [machines, searchQuery]);
+
+  // Flatten visible sessions for keyboard navigation, applying the same
+  // filtering/sorting as MachineGroup so navigation order matches the UI.
+  const allSessions = useMemo(() => {
+    return filteredMachines.flatMap((machine) => {
+      const timeSessions = filterSessionsByTime(machine.sessions, timeFilter);
+      const groups = buildGroups(timeSessions, groupMode);
+      return groups.flatMap(([, sessions]) => {
+        const filtered = hideIdle ? sessions.filter((s) => s.status !== "idle" && s.status !== "done") : sessions;
+        return sortSessions(filtered, sortMode);
+      });
+    });
+  }, [filteredMachines, timeFilter, groupMode, hideIdle, sortMode]);
+
+  // Build a lookup: sessionId -> { machineId, session }
+  const sessionLookup = useMemo(() => {
+    const map = new Map<string, { machineId: string; session: SessionInfo }>();
+    for (const machine of filteredMachines) {
+      for (const session of machine.sessions) {
+        map.set(session.sessionId, { machineId: machine.machineId, session });
+      }
+    }
+    return map;
+  }, [filteredMachines]);
+
+  const toggleExpanded = useCallback((sessionId: string) => {
+    const card = document.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
+    if (card) {
+      card.click();
+    }
+  }, []);
+
+  const handleKeyboardFullscreen = useCallback(
+    (sessionId: string) => {
+      const entry = sessionLookup.get(sessionId);
+      if (entry) {
+        setFullscreen({ machineId: entry.machineId, sessionId });
+      }
+    },
+    [sessionLookup],
+  );
+
+  const handleKeyboardTerminal = useCallback(
+    (sessionId: string) => {
+      const entry = sessionLookup.get(sessionId);
+      if (entry?.session.multiplexer && entry.session.multiplexerSession) {
+        setTerminal({
+          machineId: entry.machineId,
+          sessionName: entry.session.multiplexerSession,
+          multiplexer: entry.session.multiplexer,
+        });
+      }
+    },
+    [sessionLookup],
+  );
+
+  const handleKeyboardSendMessage = useCallback((sessionId: string) => {
+    const card = document.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
+    if (!card) return;
+
+    // Expand the card first so the send message textarea is visible
+    const isExpanded = card.classList.contains("expanded");
+    if (!isExpanded) {
+      card.click();
+    }
+
+    // Focus the textarea after a short delay to allow DOM to update
+    setTimeout(() => {
+      const textarea = card.querySelector<HTMLTextAreaElement>(".send-textarea");
+      textarea?.focus();
+    }, FOCUS_DELAY_MS);
+  }, []);
+
+  const handleKeyboardClose = useCallback(() => {
+    if (fullscreen) {
+      setFullscreen(null);
+    } else if (terminal) {
+      setTerminal(null);
+    } else if (helpOpen) {
+      setHelpOpen(false);
+    }
+  }, [fullscreen, terminal, helpOpen]);
+
+  const { selectedSessionId } = useKeyboardNavigation({
+    sessions: allSessions,
+    enabled: enableKeyboardNav && layoutMode === "cards",
+    shortcuts: keyboardShortcuts,
+    onExpand: toggleExpanded,
+    onFullscreen: handleKeyboardFullscreen,
+    onOpenTerminal: handleKeyboardTerminal,
+    onFocusSearch: () => searchInputRef.current?.focus(),
+    onFocusSendMessage: handleKeyboardSendMessage,
+    onClose: handleKeyboardClose,
+    onShowHelp: () => setHelpOpen((prev) => !prev),
+  });
 
   // Derive live session for fullscreen from machines array (real-time updates)
   const fullscreenSession = fullscreen
@@ -213,11 +324,13 @@ export function App(): React.JSX.Element {
           </button>
           <div className={`header-actions ${showMobileFilters ? "show" : ""}`}>
             <input
+              ref={searchInputRef}
               className="search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search sessions..."
+              aria-label="Search sessions"
             />
             <select
               className="header-sort-select"
@@ -392,6 +505,7 @@ export function App(): React.JSX.Element {
               }
               onFullscreen={(session) => setFullscreen({ machineId: machine.machineId, sessionId: session.sessionId })}
               autoDeleteOnClose={autoDeleteOnClose}
+              selectedSessionId={selectedSessionId}
             />
           ))}
         </main>
@@ -458,6 +572,7 @@ export function App(): React.JSX.Element {
         projectDir={resumeTarget?.projectDir || ""}
         agentType={resumeTarget?.agentType || "claude-code"}
       />
+      <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }
