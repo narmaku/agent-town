@@ -458,6 +458,71 @@ describe("formatClaudeEntry", () => {
 
   // --- Mixed content tests ---
 
+  // --- Token usage extraction tests ---
+
+  test("extracts token usage from message.usage", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        model: "claude-opus-4-6",
+        content: [{ type: "text", text: "Hello" }],
+        usage: { input_tokens: 100, output_tokens: 50 },
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.tokenUsage).toBeDefined();
+    expect(result.tokenUsage?.inputTokens).toBe(100);
+    expect(result.tokenUsage?.outputTokens).toBe(50);
+  });
+
+  test("extracts token usage with only input_tokens", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: "Hi",
+        usage: { input_tokens: 200 },
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.tokenUsage).toBeDefined();
+    expect(result.tokenUsage?.inputTokens).toBe(200);
+    expect(result.tokenUsage?.outputTokens).toBeUndefined();
+  });
+
+  test("extracts token usage with only output_tokens", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: "Hi",
+        usage: { output_tokens: 300 },
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.tokenUsage).toBeDefined();
+    expect(result.tokenUsage?.inputTokens).toBeUndefined();
+    expect(result.tokenUsage?.outputTokens).toBe(300);
+  });
+
+  test("tokenUsage is undefined when usage is not present", () => {
+    const entry = makeEntry({
+      message: { role: "assistant", content: "Hello" },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.tokenUsage).toBeUndefined();
+  });
+
+  test("tokenUsage is undefined when usage has no numeric tokens", () => {
+    const entry = makeEntry({
+      message: {
+        role: "assistant",
+        content: "Hello",
+        usage: {},
+      },
+    });
+    const result = formatClaudeEntry(entry);
+    expect(result.tokenUsage).toBeUndefined();
+  });
+
   test("handles message with text, thinking, tool calls, and tool results", () => {
     const entry = makeEntry({
       message: {

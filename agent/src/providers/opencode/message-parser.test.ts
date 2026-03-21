@@ -887,6 +887,91 @@ describe("getOpenCodeSessionMessages", () => {
   });
 
   // =====================
+  // SDK token usage tests
+  // =====================
+
+  describe("SDK token usage extraction", () => {
+    test("extracts token usage from SDK message info.tokens", async () => {
+      const sdkMessages: SdkMessage[] = [
+        makeSdkMessage({
+          info: {
+            role: "assistant",
+            time: { created: "2026-03-19T10:00:00.000Z" },
+            modelID: "claude-opus-4-6",
+            providerID: "anthropic",
+            tokens: { input: 500, output: 200 },
+          } as SdkMessageInfo,
+          parts: [{ id: "p1", type: "text", text: "Response." }],
+        }),
+      ];
+
+      mockClient = {
+        session: {
+          messages: mock(() => Promise.resolve({ data: sdkMessages })),
+        },
+      };
+
+      const result = await getOpenCodeSessionMessages("ses_test123", 0, 10);
+      expect(result.messages[0].tokenUsage).toBeDefined();
+      expect(result.messages[0].tokenUsage?.inputTokens).toBe(500);
+      expect(result.messages[0].tokenUsage?.outputTokens).toBe(200);
+    });
+
+    test("tokenUsage is undefined when tokens field is missing from SDK", async () => {
+      const sdkMessages: SdkMessage[] = [
+        makeSdkMessage({
+          info: {
+            role: "assistant",
+            time: { created: "2026-03-19T10:00:00.000Z" },
+          },
+          parts: [{ id: "p1", type: "text", text: "No tokens." }],
+        }),
+      ];
+
+      mockClient = {
+        session: {
+          messages: mock(() => Promise.resolve({ data: sdkMessages })),
+        },
+      };
+
+      const result = await getOpenCodeSessionMessages("ses_test123", 0, 10);
+      expect(result.messages[0].tokenUsage).toBeUndefined();
+    });
+  });
+
+  // =====================
+  // SQLite token usage tests
+  // =====================
+
+  describe("SQLite token usage extraction", () => {
+    test("extracts token usage from SQLite message data.tokens", async () => {
+      const db = createTestDb();
+      insertMessage(db, "msg1", "ses_abc", Date.now(), {
+        role: "assistant",
+        modelID: "gpt-4o",
+        tokens: { input: 300, output: 100 },
+      });
+      insertPart(db, "part1", "msg1", { type: "text", text: "Response." });
+      db.close();
+
+      const result = await getOpenCodeSessionMessages("ses_abc", 0, 10);
+      expect(result.messages[0].tokenUsage).toBeDefined();
+      expect(result.messages[0].tokenUsage?.inputTokens).toBe(300);
+      expect(result.messages[0].tokenUsage?.outputTokens).toBe(100);
+    });
+
+    test("tokenUsage is undefined when tokens field is missing from SQLite data", async () => {
+      const db = createTestDb();
+      insertMessage(db, "msg1", "ses_abc", Date.now(), { role: "assistant" });
+      insertPart(db, "part1", "msg1", { type: "text", text: "No tokens." });
+      db.close();
+
+      const result = await getOpenCodeSessionMessages("ses_abc", 0, 10);
+      expect(result.messages[0].tokenUsage).toBeUndefined();
+    });
+  });
+
+  // =====================
   // SDK tool results tests
   // =====================
 
