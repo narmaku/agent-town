@@ -6,6 +6,7 @@ import {
   paginateFromEnd,
   type SessionMessage,
   type SessionMessagesResponse,
+  type TokenUsage,
   truncateId,
 } from "@agent-town/shared";
 
@@ -19,6 +20,10 @@ export interface ClaudeMessageEntry {
     role: string;
     model?: string;
     content?: unknown;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
   };
 }
 
@@ -66,6 +71,15 @@ export function formatClaudeEntry(entry: ClaudeMessageEntry): SessionMessage {
     if (results.length > 0) toolResults = results;
   }
 
+  // Extract token usage from message.usage if present
+  let tokenUsage: TokenUsage | undefined;
+  const usage = entry.message?.usage;
+  if (usage && (typeof usage.input_tokens === "number" || typeof usage.output_tokens === "number")) {
+    tokenUsage = {};
+    if (typeof usage.input_tokens === "number") tokenUsage.inputTokens = usage.input_tokens;
+    if (typeof usage.output_tokens === "number") tokenUsage.outputTokens = usage.output_tokens;
+  }
+
   return {
     role: entry.type as "user" | "assistant",
     timestamp: entry.timestamp,
@@ -75,6 +89,7 @@ export function formatClaudeEntry(entry: ClaudeMessageEntry): SessionMessage {
     toolResults,
     thinking,
     model: entry.message?.model,
+    tokenUsage,
   };
 }
 

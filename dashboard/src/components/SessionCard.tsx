@@ -1,4 +1,10 @@
-import type { AgentType, SessionInfo, TerminalMultiplexer } from "@agent-town/shared";
+import {
+  type AgentType,
+  formatCompactTokens,
+  formatCost,
+  type SessionInfo,
+  type TerminalMultiplexer,
+} from "@agent-town/shared";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
@@ -230,6 +236,20 @@ export function SessionCard({
               <span className="detail-value mono">v{session.version}</span>
             </div>
           )}
+          {session.totalInputTokens != null && session.totalInputTokens > 0 && (
+            <div className="detail-row">
+              <span className="detail-label">Tokens</span>
+              <span className="detail-value mono">
+                {session.totalInputTokens.toLocaleString()} in / {(session.totalOutputTokens ?? 0).toLocaleString()} out
+              </span>
+            </div>
+          )}
+          {session.estimatedCost != null && session.estimatedCost > 0 && (
+            <div className="detail-row">
+              <span className="detail-label">Est. Cost</span>
+              <span className="detail-value mono">~{formatCost(session.estimatedCost)}</span>
+            </div>
+          )}
           <div className="card-actions">
             <button
               type="button"
@@ -314,7 +334,20 @@ export function SessionCard({
           <span className="session-cwd" title={session.cwd}>
             {session.cwd}
           </span>
-          {session.model && <span className="session-model">{session.model}</span>}
+          <span className="session-footer-right">
+            {session.totalInputTokens != null && session.totalInputTokens > 0 && (
+              <span
+                className="session-tokens"
+                title={`${session.totalInputTokens?.toLocaleString() ?? 0} in / ${session.totalOutputTokens?.toLocaleString() ?? 0} out`}
+              >
+                ~{formatCompactTokens((session.totalInputTokens ?? 0) + (session.totalOutputTokens ?? 0))} tokens
+                {session.estimatedCost != null && session.estimatedCost > 0 && (
+                  <> &middot; ~{formatCost(session.estimatedCost)}</>
+                )}
+              </span>
+            )}
+            {session.model && <span className="session-model">{session.model}</span>}
+          </span>
         </div>
       )}
     </div>

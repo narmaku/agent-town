@@ -339,6 +339,95 @@ describe("parseClaudeSession", () => {
     expect(session?.lastMessage).toBe("");
   });
 
+  // -- Token usage aggregation --
+
+  test("aggregates token usage from all entries", async () => {
+    const entries = [
+      makeJsonlEntry({
+        message: {
+          role: "assistant",
+          model: "claude-opus-4-6",
+          content: [{ type: "text", text: "First response." }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+      }),
+      makeJsonlEntry({
+        type: "user",
+        message: {
+          role: "user",
+          content: "Follow-up question",
+        },
+      }),
+      makeJsonlEntry({
+        message: {
+          role: "assistant",
+          model: "claude-opus-4-6",
+          content: [{ type: "text", text: "Second response." }],
+          usage: { input_tokens: 200, output_tokens: 150 },
+        },
+      }),
+    ];
+    const filePath = await writeTempJsonl(tempDir, "tokens.jsonl", toJsonl(entries));
+
+    const session = await parseClaudeSession(filePath, Date.now());
+    expect(session).not.toBeNull();
+    expect(session?.totalInputTokens).toBe(300);
+    expect(session?.totalOutputTokens).toBe(200);
+  });
+
+  test("sets estimatedCost when tokens are present", async () => {
+    const entries = [
+      makeJsonlEntry({
+        message: {
+          role: "assistant",
+          model: "claude-opus-4-6",
+          content: [{ type: "text", text: "Response." }],
+          usage: { input_tokens: 1000, output_tokens: 500 },
+        },
+      }),
+    ];
+    const filePath = await writeTempJsonl(tempDir, "cost.jsonl", toJsonl(entries));
+
+    const session = await parseClaudeSession(filePath, Date.now());
+    expect(session).not.toBeNull();
+    expect(session?.estimatedCost).toBeDefined();
+    expect(session?.estimatedCost).toBeGreaterThan(0);
+  });
+
+  test("token totals are undefined when no usage data is present", async () => {
+    const entries = [
+      makeJsonlEntry({
+        message: { role: "assistant", content: "No usage data." },
+      }),
+    ];
+    const filePath = await writeTempJsonl(tempDir, "no-usage.jsonl", toJsonl(entries));
+
+    const session = await parseClaudeSession(filePath, Date.now());
+    expect(session).not.toBeNull();
+    expect(session?.totalInputTokens).toBeUndefined();
+    expect(session?.totalOutputTokens).toBeUndefined();
+    expect(session?.estimatedCost).toBeUndefined();
+  });
+
+  test("skips non-numeric usage values during aggregation", async () => {
+    const entries = [
+      makeJsonlEntry({
+        message: {
+          role: "assistant",
+          model: "claude-opus-4-6",
+          content: [{ type: "text", text: "Response." }],
+          usage: { input_tokens: 100, output_tokens: "not a number" as unknown as number },
+        },
+      }),
+    ];
+    const filePath = await writeTempJsonl(tempDir, "bad-usage.jsonl", toJsonl(entries));
+
+    const session = await parseClaudeSession(filePath, Date.now());
+    expect(session).not.toBeNull();
+    expect(session?.totalInputTokens).toBe(100);
+    expect(session?.totalOutputTokens).toBeUndefined();
+  });
+
   test("returns null for nonexistent file", async () => {
     const session = await parseClaudeSession("/tmp/nonexistent-file.jsonl", Date.now());
     expect(session).toBeNull();

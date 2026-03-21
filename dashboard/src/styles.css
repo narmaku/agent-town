@@ -425,6 +425,18 @@ body {
   max-width: 200px;
 }
 
+.session-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-tokens {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
 .session-model {
   background: var(--bg-elevated);
   padding: 1px 6px;
