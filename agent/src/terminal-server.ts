@@ -281,9 +281,9 @@ async function sendViaPTY(
 
   await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
-  if (agentType === "opencode") {
-    // Bracketed paste for Bubble Tea TUI — handles the entire paste
-    // as one event instead of individual keystrokes.
+  if (agentType === "opencode" || agentType === "gemini-cli") {
+    // Bracketed paste for TUI apps (OpenCode Bubble Tea, Gemini CLI) —
+    // handles the entire paste as one event instead of individual keystrokes.
     // \x1b[200~ = paste start, \x1b[201~ = paste end
     proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
     await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));

@@ -138,24 +138,29 @@ export function parseNumstat(numstatOutput: string): Map<string, { insertions: n
 
 /**
  * Fetch the complete git diff data for a directory.
+ * Resolves to the git repository root if `dir` is a subdirectory.
  */
 export async function fetchGitDiff(dir: string): Promise<GitDiffResponse> {
+  // Resolve to the git repo root — cwd may be a subdirectory
+  const repoRootOutput = await runGit(["rev-parse", "--show-toplevel"], dir);
+  const repoRoot = repoRootOutput.trim();
+
   // Get branch name
-  const branchOutput = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], dir);
+  const branchOutput = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], repoRoot);
   const branch = branchOutput.trim();
 
   // Get full unified diff (tracked changes)
-  const diffOutput = await runGit(["diff", "--no-color", "-U3"], dir);
+  const diffOutput = await runGit(["diff", "--no-color", "-U3"], repoRoot);
 
   // Truncate if diff is too large
   const safeDiff = diffOutput.length > MAX_DIFF_CHARS ? diffOutput.slice(0, MAX_DIFF_CHARS) : diffOutput;
 
   // Get staged changes too
-  const stagedOutput = await runGit(["diff", "--cached", "--no-color", "-U3"], dir);
+  const stagedOutput = await runGit(["diff", "--cached", "--no-color", "-U3"], repoRoot);
   const safeStagedDiff = stagedOutput.length > MAX_DIFF_CHARS ? stagedOutput.slice(0, MAX_DIFF_CHARS) : stagedOutput;
 
   // Get untracked files
-  const untrackedOutput = await runGit(["ls-files", "--others", "--exclude-standard"], dir);
+  const untrackedOutput = await runGit(["ls-files", "--others", "--exclude-standard"], repoRoot);
 
   // Parse diffs
   const unstaged = parseUnifiedDiff(safeDiff);

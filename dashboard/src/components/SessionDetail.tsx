@@ -459,7 +459,7 @@ export function SessionDetail({
             Resume
           </button>
         )}
-        {session.cwd && (
+        {(session.cwd || session.projectPath) && (
           <button
             type="button"
             className="action-btn diff-btn"
@@ -489,8 +489,8 @@ export function SessionDetail({
         </div>
       )}
 
-      {showDiff && session.cwd && (
-        <DiffModal machineId={machineId} dir={session.cwd} onClose={() => setShowDiff(false)} />
+      {showDiff && (session.cwd || session.projectPath) && (
+        <DiffModal machineId={machineId} dir={session.cwd || session.projectPath} onClose={() => setShowDiff(false)} />
       )}
     </>
   );
