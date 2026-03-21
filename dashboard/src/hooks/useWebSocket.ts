@@ -1,7 +1,9 @@
-import type { MachineInfo, SessionInfo, WebSocketMessage } from "@agent-town/shared";
+import type { MachineInfo, SessionInfo, SessionStatus, WebSocketMessage } from "@agent-town/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createBrowserLogger } from "../logger";
+import { loadNotificationSettings } from "../notification-settings";
+import { getNotificationBody, playNotificationSound } from "../notification-sound";
 
 const logger = createBrowserLogger("WebSocket");
 
@@ -10,13 +12,21 @@ interface UseWebSocketResult {
   connected: boolean;
 }
 
-function requestNotificationPermission() {
+const NOTIFICATION_TITLES: Partial<Record<SessionStatus, string>> = {
+  awaiting_input: "Agent awaiting input",
+  action_required: "Action required",
+  done: "Session finished",
+  error: "Session error",
+  exited: "Session exited",
+};
+
+function requestNotificationPermission(): void {
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
   }
 }
 
-function sendNotification(title: string, body: string) {
+function sendNotification(title: string, body: string): void {
   if ("Notification" in window && Notification.permission === "granted") {
     new Notification(title, {
       body,
@@ -47,30 +57,41 @@ export function useWebSocket(): UseWebSocketResult {
     const prevStatuses = prevSessionStatusRef.current;
     const newSessions = getAllSessions(newMachines);
 
-    // Check for sessions that just changed to awaiting_input or action_required
-    const newAttentionSessions: SessionInfo[] = [];
-    for (const session of newSessions) {
-      const prevStatus = prevStatuses.get(session.sessionId);
-      if (
-        (session.status === "awaiting_input" || session.status === "action_required") &&
-        prevStatus !== session.status
-      ) {
-        newAttentionSessions.push(session);
-      }
-    }
+    // Load notification settings from localStorage (fast, synchronous)
+    const notifSettings = loadNotificationSettings();
 
-    // Send browser notification
-    if (newAttentionSessions.length > 0) {
-      const actionSessions = newAttentionSessions.filter((s) => s.status === "action_required");
-      const awaitingSessions = newAttentionSessions.filter((s) => s.status === "awaiting_input");
+    // Detect sessions whose status just changed to a notifiable status
+    if (notifSettings.enableNotifications) {
+      const notifiableSessions: SessionInfo[] = [];
 
-      if (actionSessions.length > 0) {
-        const names = actionSessions.map((s) => s.customName || s.projectName).join(", ");
-        sendNotification("Action required", `${names} — agent is asking a question`);
+      for (const session of newSessions) {
+        const prevStatus = prevStatuses.get(session.sessionId);
+        if (prevStatus !== session.status && notifSettings.notifyOnStatuses.includes(session.status)) {
+          notifiableSessions.push(session);
+        }
       }
-      if (awaitingSessions.length > 0) {
-        const names = awaitingSessions.map((s) => s.customName || s.projectName).join(", ");
-        sendNotification("Agent awaiting input", `${names} — waiting for your input`);
+
+      // Send browser notifications grouped by status
+      if (notifiableSessions.length > 0) {
+        // Group by status for consolidated notifications
+        const byStatus = new Map<SessionStatus, SessionInfo[]>();
+        for (const session of notifiableSessions) {
+          const group = byStatus.get(session.status) ?? [];
+          group.push(session);
+          byStatus.set(session.status, group);
+        }
+
+        for (const [status, sessions] of byStatus) {
+          const names = sessions.map((s) => s.customName || s.projectName).join(", ");
+          const title = NOTIFICATION_TITLES[status] ?? "Agent Town";
+          const body = getNotificationBody(status, names);
+          sendNotification(title, body);
+        }
+
+        // Play sound for the first notifiable status (avoid multiple overlapping sounds)
+        if (notifSettings.enableSoundAlerts) {
+          playNotificationSound(notifiableSessions[0].status);
+        }
       }
     }
 

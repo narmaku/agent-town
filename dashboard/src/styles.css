@@ -2259,6 +2259,14 @@ body {
   font-size: 13px;
 }
 
+/* Notification status checkboxes */
+.notif-status-checkboxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-top: 6px;
+}
+
 /* =================== */
 /* Mobile Responsive   */
 /* =================== */

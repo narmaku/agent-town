@@ -88,6 +88,9 @@ export interface Settings {
   defaultProjectDir: string;
   fontSize: "small" | "medium" | "large";
   theme: "dark" | "light";
+  enableNotifications: boolean;
+  enableSoundAlerts: boolean;
+  notifyOnStatuses: SessionStatus[];
 }
 
 export interface LaunchAgentRequest {
