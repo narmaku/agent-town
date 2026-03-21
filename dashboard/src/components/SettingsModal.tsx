@@ -1,8 +1,14 @@
-import type { AgentType, RemoteNode, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import type { AgentType, RemoteNode, SessionStatus, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import { createBrowserLogger } from "../logger";
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  loadNotificationSettings,
+  type NotificationSettings,
+  saveNotificationSettings,
+} from "../notification-settings";
 import { API } from "../utils";
 
 const logger = createBrowserLogger("SettingsModal");
@@ -27,6 +33,21 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     theme: "dark",
   });
   const [saving, setSaving] = useState(false);
+
+  // Notification settings (stored in localStorage, not server)
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+
+  // All possible statuses for the multi-select checkboxes
+  const ALL_STATUSES: { value: SessionStatus; label: string }[] = [
+    { value: "awaiting_input", label: "Awaiting Input" },
+    { value: "action_required", label: "Action Required" },
+    { value: "error", label: "Error" },
+    { value: "done", label: "Done" },
+    { value: "exited", label: "Exited" },
+    { value: "working", label: "Working" },
+    { value: "idle", label: "Idle" },
+    { value: "starting", label: "Starting" },
+  ];
 
   // Nodes state
   const [nodes, setNodes] = useState<RemoteNode[]>([]);
@@ -70,6 +91,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
         .then((r) => r.json())
         .then((s: Settings) => setSettings(s))
         .catch((err) => logger.warn("Failed to load settings:", err));
+      setNotifSettings(loadNotificationSettings());
       loadNodes();
     }
   }, [open, loadNodes]);
@@ -87,6 +109,9 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
   async function handleSave() {
     setSaving(true);
     try {
+      // Save notification settings to localStorage (per-device preference)
+      saveNotificationSettings(notifSettings);
+
       const resp = await fetch(API.SETTINGS, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -244,6 +269,67 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                   <option value="medium">Medium</option>
                   <option value="large">Large</option>
                 </select>
+              </div>
+
+              {/* --- Notifications Section --- */}
+              <div className="settings-section">
+                <div className="settings-section-title">Notifications</div>
+                <div className="form-group">
+                  <label className="form-toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={notifSettings.enableNotifications}
+                      onChange={(e) => setNotifSettings({ ...notifSettings, enableNotifications: e.target.checked })}
+                    />
+                    <span className="form-toggle-label">Enable browser notifications</span>
+                  </label>
+                  <span className="form-hint">Show desktop notifications when session status changes</span>
+                </div>
+                <div className="form-group">
+                  <label className="form-toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={notifSettings.enableSoundAlerts}
+                      disabled={!notifSettings.enableNotifications}
+                      onChange={(e) => setNotifSettings({ ...notifSettings, enableSoundAlerts: e.target.checked })}
+                    />
+                    <span
+                      className="form-toggle-label"
+                      style={{ opacity: notifSettings.enableNotifications ? 1 : 0.5 }}
+                    >
+                      Enable sound alerts
+                    </span>
+                  </label>
+                  <span className="form-hint">Play a short tone when a notification fires</span>
+                </div>
+                <div className="form-group">
+                  <span className="form-label" style={{ opacity: notifSettings.enableNotifications ? 1 : 0.5 }}>
+                    Notify on status changes
+                  </span>
+                  <div className="notif-status-checkboxes">
+                    {ALL_STATUSES.map((s) => (
+                      <label key={s.value} className="form-toggle-row">
+                        <input
+                          type="checkbox"
+                          disabled={!notifSettings.enableNotifications}
+                          checked={notifSettings.notifyOnStatuses.includes(s.value)}
+                          onChange={(e) => {
+                            const updated = e.target.checked
+                              ? [...notifSettings.notifyOnStatuses, s.value]
+                              : notifSettings.notifyOnStatuses.filter((v) => v !== s.value);
+                            setNotifSettings({ ...notifSettings, notifyOnStatuses: updated });
+                          }}
+                        />
+                        <span
+                          className="form-toggle-label"
+                          style={{ opacity: notifSettings.enableNotifications ? 1 : 0.5 }}
+                        >
+                          {s.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}
