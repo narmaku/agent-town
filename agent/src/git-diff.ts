@@ -1,8 +1,8 @@
 import { resolve } from "node:path";
 import type { GitDiffFile, GitDiffFileStatus, GitDiffResponse } from "@agent-town/shared";
 
-/** Maximum diff output size in bytes (500 KB). */
-const MAX_DIFF_SIZE_BYTES = 500 * 1024;
+/** Maximum diff output size in characters (500 K characters). */
+const MAX_DIFF_CHARS = 500 * 1024;
 
 /**
  * Validate that `dir` is a canonical absolute path.
@@ -119,6 +119,7 @@ function parseDiffSection(section: string): GitDiffFile | null {
 
 /**
  * Parse git numstat output into a map of path -> { insertions, deletions }.
+ * Not currently used — kept for future enhanced diff stats (e.g., binary file detection).
  */
 export function parseNumstat(numstatOutput: string): Map<string, { insertions: number; deletions: number }> {
   const stats = new Map<string, { insertions: number; deletions: number }>();
@@ -146,15 +147,12 @@ export async function fetchGitDiff(dir: string): Promise<GitDiffResponse> {
   // Get full unified diff (tracked changes)
   const diffOutput = await runGit(["diff", "--no-color", "-U3"], dir);
 
-  // Check if diff is too large
-  const diffSize = new TextEncoder().encode(diffOutput).length;
-  const truncated = diffSize > MAX_DIFF_SIZE_BYTES;
-  const safeDiff = truncated ? diffOutput.slice(0, MAX_DIFF_SIZE_BYTES) : diffOutput;
+  // Truncate if diff is too large
+  const safeDiff = diffOutput.length > MAX_DIFF_CHARS ? diffOutput.slice(0, MAX_DIFF_CHARS) : diffOutput;
 
   // Get staged changes too
   const stagedOutput = await runGit(["diff", "--cached", "--no-color", "-U3"], dir);
-  const stagedSize = new TextEncoder().encode(stagedOutput).length;
-  const safeStagedDiff = stagedSize > MAX_DIFF_SIZE_BYTES ? stagedOutput.slice(0, MAX_DIFF_SIZE_BYTES) : stagedOutput;
+  const safeStagedDiff = stagedOutput.length > MAX_DIFF_CHARS ? stagedOutput.slice(0, MAX_DIFF_CHARS) : stagedOutput;
 
   // Get untracked files
   const untrackedOutput = await runGit(["ls-files", "--others", "--exclude-standard"], dir);

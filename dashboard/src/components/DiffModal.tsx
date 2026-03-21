@@ -29,19 +29,19 @@ const STATUS_CLASSES: Record<string, string> = {
 
 function DiffLine({ line }: { line: string }): React.JSX.Element {
   let className = "diff-line diff-context";
-  if (line.startsWith("+")) {
+  if (
+    line.startsWith("diff --git") ||
+    line.startsWith("index ") ||
+    line.startsWith("--- ") ||
+    line.startsWith("+++ ")
+  ) {
+    className = "diff-line diff-meta";
+  } else if (line.startsWith("@@")) {
+    className = "diff-line diff-hunk";
+  } else if (line.startsWith("+")) {
     className = "diff-line diff-add";
   } else if (line.startsWith("-")) {
     className = "diff-line diff-del";
-  } else if (line.startsWith("@@")) {
-    className = "diff-line diff-hunk";
-  } else if (
-    line.startsWith("diff --git") ||
-    line.startsWith("index ") ||
-    line.startsWith("---") ||
-    line.startsWith("+++")
-  ) {
-    className = "diff-line diff-meta";
   }
 
   return <div className={className}>{line || "\u00A0"}</div>;

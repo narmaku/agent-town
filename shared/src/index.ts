@@ -182,8 +182,14 @@ export interface GitDiffFile {
   diff: string;
 }
 
+export interface GitDiffSummary {
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
 export interface GitDiffResponse {
   branch: string;
   files: GitDiffFile[];
-  summary: { filesChanged: number; insertions: number; deletions: number };
+  summary: GitDiffSummary;
 }
