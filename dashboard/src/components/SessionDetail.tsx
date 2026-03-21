@@ -1,7 +1,6 @@
 import {
   type AgentType,
   formatCompactTokens,
-  formatCost,
   type SessionInfo,
   type SessionMessage,
   type TerminalMultiplexer,
@@ -340,12 +339,6 @@ export function SessionDetail({
               {session.totalInputTokens.toLocaleString()} in / {(session.totalOutputTokens ?? 0).toLocaleString()} out (
               {formatCompactTokens((session.totalInputTokens ?? 0) + (session.totalOutputTokens ?? 0))} total)
             </span>
-          </div>
-        )}
-        {session.estimatedCost != null && session.estimatedCost > 0 && (
-          <div className="detail-row">
-            <span className="detail-label">Est. Cost</span>
-            <span className="detail-value mono">~{formatCost(session.estimatedCost)}</span>
           </div>
         )}
       </div>

@@ -1,10 +1,4 @@
-import {
-  type AgentType,
-  formatCompactTokens,
-  formatCost,
-  type SessionInfo,
-  type TerminalMultiplexer,
-} from "@agent-town/shared";
+import { type AgentType, formatCompactTokens, type SessionInfo, type TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
@@ -249,12 +243,6 @@ export function SessionCard({
               </span>
             </div>
           )}
-          {session.estimatedCost != null && session.estimatedCost > 0 && (
-            <div className="detail-row">
-              <span className="detail-label">Est. Cost</span>
-              <span className="detail-value mono">~{formatCost(session.estimatedCost)}</span>
-            </div>
-          )}
           <div className="card-actions">
             <button
               type="button"
@@ -359,9 +347,6 @@ export function SessionCard({
                 title={`${session.totalInputTokens?.toLocaleString() ?? 0} in / ${session.totalOutputTokens?.toLocaleString() ?? 0} out`}
               >
                 ~{formatCompactTokens((session.totalInputTokens ?? 0) + (session.totalOutputTokens ?? 0))} tokens
-                {session.estimatedCost != null && session.estimatedCost > 0 && (
-                  <> &middot; ~{formatCost(session.estimatedCost)}</>
-                )}
               </span>
             )}
             {session.model && <span className="session-model">{session.model}</span>}

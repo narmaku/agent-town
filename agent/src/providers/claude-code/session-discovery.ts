@@ -1,13 +1,7 @@
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import {
-  calculateCost,
-  createLogger,
-  SESSION_RETENTION_MS,
-  type SessionInfo,
-  type SessionStatus,
-} from "@agent-town/shared";
+import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
 
 const log = createLogger("claude:sessions");
 
@@ -129,10 +123,6 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
     }
 
     const model = lastEntry.message?.model;
-    const estimatedCost =
-      totalInputTokens > 0 || totalOutputTokens > 0
-        ? calculateCost(totalInputTokens, totalOutputTokens, model)
-        : undefined;
 
     return {
       sessionId: lastEntry.sessionId,
@@ -149,7 +139,6 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
       version: lastEntry.version,
       totalInputTokens: totalInputTokens > 0 ? totalInputTokens : undefined,
       totalOutputTokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
-      estimatedCost,
     };
   } catch (err) {
     log.debug(`parseClaudeSession: ${err instanceof Error ? err.message : String(err)}`);

@@ -1,7 +1,6 @@
 import {
   type AgentType,
   DEFAULT_KEYBOARD_SHORTCUTS,
-  formatCost,
   type MachineInfo,
   type SessionInfo,
   type Settings,
@@ -266,11 +265,6 @@ export function App(): React.JSX.Element {
     (sum, m) => sum + m.sessions.filter((s) => s.status === "awaiting_input").length,
     0,
   );
-  const totalCost = useMemo(
-    () => machines.reduce((sum, m) => sum + m.sessions.reduce((s, session) => s + (session.estimatedCost ?? 0), 0), 0),
-    [machines],
-  );
-
   function handleOpenTerminal(machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) {
     setTerminal({ machineId, sessionName, multiplexer });
   }
@@ -293,11 +287,6 @@ export function App(): React.JSX.Element {
               {totalSessions} session{totalSessions !== 1 ? "s" : ""}
             </span>
             {totalAttention > 0 && <span className="header-stat attention">{totalAttention} need attention</span>}
-            {totalCost > 0 && (
-              <span className="header-stat" title="Estimated total cost across all sessions">
-                ~{formatCost(totalCost)}
-              </span>
-            )}
           </div>
           <button
             type="button"

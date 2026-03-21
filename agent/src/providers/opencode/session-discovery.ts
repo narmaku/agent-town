@@ -1,12 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import {
-  calculateCost,
-  createLogger,
-  SESSION_RETENTION_MS,
-  type SessionInfo,
-  type SessionStatus,
-} from "@agent-town/shared";
+import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
 import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
 
 const log = createLogger("opencode:sessions");
@@ -72,10 +66,6 @@ async function discoverViaSDK(
       if (typeof tokens.output === "number" && tokens.output > 0) totalOutputTokens = tokens.output;
     }
     const model = (sdkSession.modelID as string) || undefined;
-    const estimatedCost =
-      totalInputTokens || totalOutputTokens
-        ? calculateCost(totalInputTokens ?? 0, totalOutputTokens ?? 0, model)
-        : undefined;
 
     results.push({
       sessionId: s.id,
@@ -91,7 +81,6 @@ async function discoverViaSDK(
       model,
       totalInputTokens,
       totalOutputTokens,
-      estimatedCost,
     });
   }
 
@@ -161,7 +150,6 @@ async function discoverViaSQLite(): Promise<SessionInfo[]> {
       let totalInputTokens: number | undefined;
       let totalOutputTokens: number | undefined;
       let model: string | undefined;
-      let estimatedCost: number | undefined;
       try {
         const tokenRow = db
           .query<TokenAggregateRow, [string, string]>(
@@ -185,9 +173,6 @@ async function discoverViaSQLite(): Promise<SessionInfo[]> {
           if (tokenRow.total_input && tokenRow.total_input > 0) totalInputTokens = tokenRow.total_input;
           if (tokenRow.total_output && tokenRow.total_output > 0) totalOutputTokens = tokenRow.total_output;
           if (tokenRow.model_id) model = tokenRow.model_id;
-          if (totalInputTokens || totalOutputTokens) {
-            estimatedCost = calculateCost(totalInputTokens ?? 0, totalOutputTokens ?? 0, model);
-          }
         }
       } catch (_err) {
         // token aggregation is best-effort
@@ -207,7 +192,6 @@ async function discoverViaSQLite(): Promise<SessionInfo[]> {
         model,
         totalInputTokens,
         totalOutputTokens,
-        estimatedCost,
       });
     }
 

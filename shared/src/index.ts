@@ -1,8 +1,7 @@
 export { SESSION_ID_DISPLAY_LENGTH, SESSION_RETENTION_MS } from "./constants";
 export { createLogger, type Logger } from "./logger";
-export { calculateCost, formatCompactTokens, formatCost, lookupModelPricing, MODEL_PRICING } from "./model-pricing";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
-export { paginateFromEnd, safeJsonParse, truncateId } from "./utils";
+export { formatCompactTokens, paginateFromEnd, safeJsonParse, truncateId } from "./utils";
 
 export type AgentType = "claude-code" | "opencode" | "gemini-cli";
 
@@ -39,7 +38,6 @@ export interface SessionInfo {
   currentTool?: string; // tool currently being executed (from hooks)
   totalInputTokens?: number; // aggregated input tokens across all messages
   totalOutputTokens?: number; // aggregated output tokens across all messages
-  estimatedCost?: number; // estimated USD cost based on model pricing
 }
 
 export interface MultiplexerSessionInfo {

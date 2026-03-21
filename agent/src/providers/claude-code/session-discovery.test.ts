@@ -375,25 +375,6 @@ describe("parseClaudeSession", () => {
     expect(session?.totalOutputTokens).toBe(200);
   });
 
-  test("sets estimatedCost when tokens are present", async () => {
-    const entries = [
-      makeJsonlEntry({
-        message: {
-          role: "assistant",
-          model: "claude-opus-4-6",
-          content: [{ type: "text", text: "Response." }],
-          usage: { input_tokens: 1000, output_tokens: 500 },
-        },
-      }),
-    ];
-    const filePath = await writeTempJsonl(tempDir, "cost.jsonl", toJsonl(entries));
-
-    const session = await parseClaudeSession(filePath, Date.now());
-    expect(session).not.toBeNull();
-    expect(session?.estimatedCost).toBeDefined();
-    expect(session?.estimatedCost).toBeGreaterThan(0);
-  });
-
   test("token totals are undefined when no usage data is present", async () => {
     const entries = [
       makeJsonlEntry({
@@ -406,7 +387,6 @@ describe("parseClaudeSession", () => {
     expect(session).not.toBeNull();
     expect(session?.totalInputTokens).toBeUndefined();
     expect(session?.totalOutputTokens).toBeUndefined();
-    expect(session?.estimatedCost).toBeUndefined();
   });
 
   test("skips non-numeric usage values during aggregation", async () => {

@@ -32,3 +32,16 @@ export function safeJsonParse<T>(str: string): T | null {
     return null;
   }
 }
+
+/**
+ * Format a token count compactly (e.g., 12400 -> "12.4k", 1500000 -> "1.5M").
+ */
+export function formatCompactTokens(count: number): string {
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k`;
+  }
+  return String(count);
+}
