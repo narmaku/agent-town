@@ -1,4 +1,4 @@
-import type { MachineInfo, SessionInfo, SessionStatus, WebSocketMessage } from "@agent-town/shared";
+import type { AgentType, MachineInfo, SessionInfo, SessionStatus, WebSocketMessage } from "@agent-town/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createBrowserLogger } from "../logger";
@@ -7,9 +7,26 @@ import { getNotificationBody, playNotificationSound } from "../notification-soun
 
 const logger = createBrowserLogger("WebSocket");
 
+const MAX_ACTIVITY_EVENTS = 200;
+
+export interface ActivityEvent {
+  id: string;
+  timestamp: string;
+  sessionId: string;
+  sessionName: string;
+  machineId: string;
+  hostname: string;
+  agentType: AgentType;
+  fromStatus?: SessionStatus;
+  toStatus: SessionStatus;
+}
+
 interface UseWebSocketResult {
   machines: MachineInfo[];
   connected: boolean;
+  activityFeed: ActivityEvent[];
+  unreadActivityCount: number;
+  markActivityRead: () => void;
 }
 
 const NOTIFICATION_TITLES: Partial<Record<SessionStatus, string>> = {
@@ -41,12 +58,52 @@ function getAllSessions(machines: MachineInfo[]): SessionInfo[] {
   return machines.flatMap((m) => m.sessions);
 }
 
+/** Build ActivityEvent objects for sessions whose status changed. Pure function for testability. */
+export function buildActivityEvents(
+  newMachines: MachineInfo[],
+  prevStatuses: Map<string, SessionStatus>,
+  now: number,
+): ActivityEvent[] {
+  const events: ActivityEvent[] = [];
+  for (const machine of newMachines) {
+    for (const session of machine.sessions) {
+      const prevStatus = prevStatuses.get(session.sessionId);
+      if (prevStatus !== undefined && prevStatus !== session.status) {
+        events.push({
+          id: `${session.sessionId}-${now}-${events.length}`,
+          timestamp: new Date(now).toISOString(),
+          sessionId: session.sessionId,
+          sessionName: session.customName || session.slug,
+          machineId: machine.machineId,
+          hostname: machine.hostname,
+          agentType: session.agentType,
+          fromStatus: prevStatus,
+          toStatus: session.status,
+        });
+      }
+    }
+  }
+  return events;
+}
+
+/** Append new events to existing feed, newest first, capped at MAX_ACTIVITY_EVENTS. */
+export function appendActivityEvents(
+  existingFeed: ActivityEvent[],
+  newEvents: ActivityEvent[],
+  maxEvents: number = MAX_ACTIVITY_EVENTS,
+): ActivityEvent[] {
+  return [...[...newEvents].reverse(), ...existingFeed].slice(0, maxEvents);
+}
+
 export function useWebSocket(): UseWebSocketResult {
   const [machines, setMachines] = useState<MachineInfo[]>([]);
   const [connected, setConnected] = useState(false);
+  const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([]);
+  const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const prevSessionStatusRef = useRef<Map<string, string>>(new Map());
+  const prevSessionStatusRef = useRef<Map<string, SessionStatus>>(new Map());
+  const isInitialLoadRef = useRef(true);
 
   // Request notification permission on mount
   useEffect(() => {
@@ -59,6 +116,11 @@ export function useWebSocket(): UseWebSocketResult {
 
     // Load notification settings from localStorage (fast, synchronous)
     const notifSettings = loadNotificationSettings();
+
+    // Build activity events for status transitions (skip initial load)
+    const newActivityEvents = isInitialLoadRef.current
+      ? []
+      : buildActivityEvents(newMachines, prevStatuses, Date.now());
 
     // Detect sessions whose status just changed to a notifiable status
     if (notifSettings.enableNotifications) {
@@ -73,7 +135,6 @@ export function useWebSocket(): UseWebSocketResult {
 
       // Send browser notifications grouped by status
       if (notifiableSessions.length > 0) {
-        // Group by status for consolidated notifications
         const byStatus = new Map<SessionStatus, SessionInfo[]>();
         for (const session of notifiableSessions) {
           const group = byStatus.get(session.status) ?? [];
@@ -95,12 +156,23 @@ export function useWebSocket(): UseWebSocketResult {
       }
     }
 
+    // Append activity events (newest first, capped)
+    if (newActivityEvents.length > 0) {
+      setActivityFeed((prev) => appendActivityEvents(prev, newActivityEvents));
+      setUnreadActivityCount((prev) => prev + newActivityEvents.length);
+    }
+
     // Update the status map
-    const newMap = new Map<string, string>();
+    const newMap = new Map<string, SessionStatus>();
     for (const session of newSessions) {
       newMap.set(session.sessionId, session.status);
     }
     prevSessionStatusRef.current = newMap;
+
+    // Mark initial load as complete after first update
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+    }
 
     setMachines(newMachines);
   }, []);
@@ -146,5 +218,9 @@ export function useWebSocket(): UseWebSocketResult {
     };
   }, [connect]);
 
-  return { machines, connected };
+  const markActivityRead = useCallback(() => {
+    setUnreadActivityCount(0);
+  }, []);
+
+  return { machines, connected, activityFeed, unreadActivityCount, markActivityRead };
 }
