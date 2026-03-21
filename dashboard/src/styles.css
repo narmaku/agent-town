@@ -1364,19 +1364,61 @@ body {
   cursor: not-allowed;
 }
 
-.tool-toggle-btn {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  padding: 4px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.75rem;
+/* Detail view toggle switches */
+.detail-toggles {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
 }
 
-.tool-toggle-btn:hover {
-  color: var(--text);
-  border-color: #555;
+.detail-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.detail-switch input {
+  display: none;
+}
+
+.switch-slider {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.switch-slider::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.detail-switch input:checked + .switch-slider {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.detail-switch input:checked + .switch-slider::after {
+  transform: translateX(14px);
+  background: #fff;
+}
+
+.switch-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 
 .chat-controls .load-previous-btn {
@@ -2001,14 +2043,18 @@ body {
   background: #e2e8f0;
 }
 
-/* Tool toggle button */
-.app.theme-light .tool-toggle-btn {
-  border-color: var(--border);
+/* Detail toggle switches */
+.app.theme-light .switch-slider {
+  background: #e5e5e5;
+  border-color: #d1d5db;
 }
 
-.app.theme-light .tool-toggle-btn:hover {
-  background: #e5e5e5;
-  border-color: #ccc;
+.app.theme-light .switch-slider::after {
+  background: #9ca3af;
+}
+
+.app.theme-light .detail-switch input:checked + .switch-slider::after {
+  background: #fff;
 }
 
 /* Tool call blocks */

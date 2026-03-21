@@ -108,6 +108,7 @@ export function SessionDetail({
   const [flash, setFlash] = useState(false);
   const [, setTick] = useState(0);
   const [showToolDetails, setShowToolDetails] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
@@ -287,11 +288,23 @@ export function SessionDetail({
           <span className="fullscreen-name">{session.customName || session.slug}</span>
           <span className="session-time">Updated {timeAgo(session.lastActivity)}</span>
         </div>
-        {onClose && (
-          <button type="button" className="modal-close" onClick={onClose}>
-            &times;
-          </button>
-        )}
+        <div className="detail-toggles">
+          <label className="detail-switch" aria-label="Show thinking blocks">
+            <input type="checkbox" checked={showThinking} onChange={() => setShowThinking((prev) => !prev)} />
+            <span className="switch-slider" />
+            <span className="switch-label">Thinking</span>
+          </label>
+          <label className="detail-switch" aria-label="Show tool details">
+            <input type="checkbox" checked={showToolDetails} onChange={() => setShowToolDetails((prev) => !prev)} />
+            <span className="switch-slider" />
+            <span className="switch-label">Tools</span>
+          </label>
+          {onClose && (
+            <button type="button" className="modal-close" onClick={onClose}>
+              &times;
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="fullscreen-meta">
@@ -314,21 +327,13 @@ export function SessionDetail({
       </div>
 
       <div className={`fullscreen-messages ${flash ? "flash" : ""}`} ref={messageContainerRef}>
-        <div className="chat-controls">
-          {hasMore && (
+        {hasMore && (
+          <div className="chat-controls">
             <button type="button" className="load-previous-btn" onClick={loadPrevious} disabled={loadingHistory}>
               {loadingHistory ? "Loading..." : "Load previous messages"}
             </button>
-          )}
-          <button
-            type="button"
-            className="tool-toggle-btn"
-            onClick={() => setShowToolDetails((prev) => !prev)}
-            aria-label={showToolDetails ? "Hide tool details" : "Show tool details"}
-          >
-            {showToolDetails ? "Hide tool details" : "Show tool details"}
-          </button>
-        </div>
+          </div>
+        )}
 
         {history
           .filter((msg) => showToolDetails || !isToolResultMessage(msg))
@@ -343,8 +348,8 @@ export function SessionDetail({
                 {msg.model && <span className="chat-model">{msg.model}</span>}
               </div>
               <div className="chat-message-body">
-                {msg.thinking && (
-                  <details className="thinking-block">
+                {msg.thinking && showThinking && (
+                  <details className="thinking-block" open>
                     <summary>Thinking...</summary>
                     <div className="thinking-content">{msg.thinking}</div>
                   </details>
