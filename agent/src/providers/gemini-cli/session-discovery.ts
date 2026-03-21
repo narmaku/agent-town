@@ -274,7 +274,7 @@ export async function findGeminiSessionByDir(directory: string, claimedIds: Set<
 
     // Find the project hash for this directory
     let targetHash: string | undefined;
-    for (const [path, hash] of projectsMap) {
+    for (const [hash, path] of projectsMap) {
       if (path === directory) {
         targetHash = hash;
         break;
