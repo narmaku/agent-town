@@ -51,7 +51,7 @@ function getAllSessions(machines: MachineInfo[]): SessionInfo[] {
 /** Build ActivityEvent objects for sessions whose status changed. Pure function for testability. */
 export function buildActivityEvents(
   newMachines: MachineInfo[],
-  prevStatuses: Map<string, string>,
+  prevStatuses: Map<string, SessionStatus>,
   now: number,
 ): ActivityEvent[] {
   const events: ActivityEvent[] = [];
@@ -67,7 +67,7 @@ export function buildActivityEvents(
           machineId: machine.machineId,
           hostname: machine.hostname,
           agentType: session.agentType,
-          fromStatus: prevStatus as SessionStatus,
+          fromStatus: prevStatus,
           toStatus: session.status,
         });
       }
@@ -92,7 +92,7 @@ export function useWebSocket(): UseWebSocketResult {
   const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const prevSessionStatusRef = useRef<Map<string, string>>(new Map());
+  const prevSessionStatusRef = useRef<Map<string, SessionStatus>>(new Map());
   const isInitialLoadRef = useRef(true);
 
   // Request notification permission on mount
@@ -144,7 +144,7 @@ export function useWebSocket(): UseWebSocketResult {
     }
 
     // Update the status map
-    const newMap = new Map<string, string>();
+    const newMap = new Map<string, SessionStatus>();
     for (const session of newSessions) {
       newMap.set(session.sessionId, session.status);
     }

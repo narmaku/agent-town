@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { MachineInfo } from "@agent-town/shared";
+import type { MachineInfo, SessionStatus } from "@agent-town/shared";
 
 import { type ActivityEvent, appendActivityEvents, buildActivityEvents } from "./useWebSocket";
 
@@ -53,7 +53,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map<string, string>();
+    const prevStatuses = new Map<string, SessionStatus>();
 
     const events = buildActivityEvents(machines, prevStatuses, NOW);
 
@@ -79,7 +79,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map([["s1", "working"]]);
+    const prevStatuses = new Map<string, SessionStatus>([["s1", "working"]]);
 
     const events = buildActivityEvents(machines, prevStatuses, NOW);
 
@@ -105,7 +105,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map([["s1", "working"]]);
+    const prevStatuses = new Map<string, SessionStatus>([["s1", "working"]]);
 
     const events = buildActivityEvents(machines, prevStatuses, NOW);
 
@@ -139,7 +139,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map([["s1", "working"]]);
+    const prevStatuses = new Map<string, SessionStatus>([["s1", "working"]]);
 
     const events = buildActivityEvents(machines, prevStatuses, NOW);
 
@@ -197,7 +197,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map([
+    const prevStatuses = new Map<string, SessionStatus>([
       ["s1", "working"],
       ["s2", "working"],
       ["s3", "working"],
@@ -247,7 +247,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map([
+    const prevStatuses = new Map<string, SessionStatus>([
       ["s1", "working"],
       ["s2", "working"],
     ]);
@@ -276,7 +276,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map([["s1", "working"]]);
+    const prevStatuses = new Map<string, SessionStatus>([["s1", "working"]]);
 
     const events = buildActivityEvents(machines, prevStatuses, NOW);
 
@@ -302,7 +302,7 @@ describe("buildActivityEvents", () => {
         ],
       }),
     ];
-    const prevStatuses = new Map([["old-session", "working"]]);
+    const prevStatuses = new Map<string, SessionStatus>([["old-session", "working"]]);
 
     const events = buildActivityEvents(machines, prevStatuses, NOW);
 
