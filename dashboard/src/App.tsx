@@ -2,6 +2,7 @@ import {
   type AgentType,
   DEFAULT_KEYBOARD_SHORTCUTS,
   type MachineInfo,
+  type SessionInfo,
   type Settings,
   type TerminalMultiplexer,
 } from "@agent-town/shared";
@@ -11,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExplorerLayout } from "./components/ExplorerLayout";
 import { KeyboardHelp } from "./components/KeyboardHelp";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
-import { MachineGroup } from "./components/MachineGroup";
+import { buildGroups, filterSessionsByTime, MachineGroup, sortSessions } from "./components/MachineGroup";
 import { ResumeAgentModal } from "./components/ResumeAgentModal";
 import { SessionFullscreen } from "./components/SessionFullscreen";
 import { SettingsModal } from "./components/SettingsModal";
@@ -37,6 +38,8 @@ const STORAGE_KEYS = {
   GROUP_MODE: "agentTown:groupMode",
   LAYOUT_MODE: "agentTown:layoutMode",
 } as const;
+
+const FOCUS_DELAY_MS = 50;
 
 interface TerminalTarget {
   machineId: string;
@@ -152,12 +155,22 @@ export function App(): React.JSX.Element {
   // Filter machines by search query
   const filteredMachines = useMemo(() => filterMachinesBySearch(machines, searchQuery), [machines, searchQuery]);
 
-  // Flatten all visible sessions for keyboard navigation (ordered as rendered)
-  const allSessions = useMemo(() => filteredMachines.flatMap((m) => m.sessions), [filteredMachines]);
+  // Flatten visible sessions for keyboard navigation, applying the same
+  // filtering/sorting as MachineGroup so navigation order matches the UI.
+  const allSessions = useMemo(() => {
+    return filteredMachines.flatMap((machine) => {
+      const timeSessions = filterSessionsByTime(machine.sessions, timeFilter);
+      const groups = buildGroups(timeSessions, groupMode);
+      return groups.flatMap(([, sessions]) => {
+        const filtered = hideIdle ? sessions.filter((s) => s.status !== "idle" && s.status !== "done") : sessions;
+        return sortSessions(filtered, sortMode);
+      });
+    });
+  }, [filteredMachines, timeFilter, groupMode, hideIdle, sortMode]);
 
   // Build a lookup: sessionId -> { machineId, session }
   const sessionLookup = useMemo(() => {
-    const map = new Map<string, { machineId: string; session: (typeof allSessions)[number] }>();
+    const map = new Map<string, { machineId: string; session: SessionInfo }>();
     for (const machine of filteredMachines) {
       for (const session of machine.sessions) {
         map.set(session.sessionId, { machineId: machine.machineId, session });
@@ -211,7 +224,7 @@ export function App(): React.JSX.Element {
     setTimeout(() => {
       const textarea = card.querySelector<HTMLTextAreaElement>(".send-textarea");
       textarea?.focus();
-    }, 50);
+    }, FOCUS_DELAY_MS);
   }, []);
 
   const handleKeyboardClose = useCallback(() => {
