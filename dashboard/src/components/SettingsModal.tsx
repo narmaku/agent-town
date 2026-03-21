@@ -1,4 +1,10 @@
-import type { AgentType, RemoteNode, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import {
+  type AgentType,
+  DEFAULT_KEYBOARD_SHORTCUTS,
+  type RemoteNode,
+  type Settings,
+  type TerminalMultiplexer,
+} from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -7,7 +13,7 @@ import { API } from "../utils";
 
 const logger = createBrowserLogger("SettingsModal");
 
-type Tab = "appearance" | "agent" | "nodes";
+type Tab = "appearance" | "agent" | "keyboard" | "nodes";
 
 interface Props {
   open: boolean;
@@ -25,6 +31,8 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     defaultProjectDir: "",
     fontSize: "small",
     theme: "dark",
+    enableKeyboardNavigation: true,
+    keyboardShortcuts: { ...DEFAULT_KEYBOARD_SHORTCUTS },
   });
   const [saving, setSaving] = useState(false);
 
@@ -147,6 +155,29 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     }
   }
 
+  const SHORTCUT_ACTION_LABELS: Record<string, string> = {
+    navigateDown: "Navigate down",
+    navigateUp: "Navigate up",
+    expandCollapse: "Expand / collapse",
+    fullscreen: "Fullscreen view",
+    close: "Close / back",
+    focusSearch: "Focus search",
+    openTerminal: "Open terminal",
+    sendMessage: "Send message",
+    showHelp: "Show shortcuts",
+  };
+
+  function formatShortcutAction(action: string): string {
+    return SHORTCUT_ACTION_LABELS[action] || action;
+  }
+
+  function formatShortcutKey(key: string): string {
+    if (key === "Escape") return "Esc";
+    if (key === "Enter") return "Enter";
+    if (key === " ") return "Space";
+    return key;
+  }
+
   const NODE_STATUS_COLORS: Record<string, string> = {
     disconnected: "var(--gray)",
     connecting: "var(--yellow)",
@@ -197,6 +228,13 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
             onClick={() => setTab("agent")}
           >
             Agent Defaults
+          </button>
+          <button
+            type="button"
+            className={`settings-tab ${tab === "keyboard" ? "active" : ""}`}
+            onClick={() => setTab("keyboard")}
+          >
+            Keyboard
           </button>
           <button
             type="button"
@@ -346,6 +384,36 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                     Closing an agent will also delete its conversation history.
                   </span>
                 )}
+              </div>
+            </>
+          )}
+
+          {/* --- Keyboard Tab --- */}
+          {tab === "keyboard" && (
+            <>
+              <div className="form-group">
+                <label className="form-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={settings.enableKeyboardNavigation}
+                    onChange={(e) => setSettings({ ...settings, enableKeyboardNavigation: e.target.checked })}
+                  />
+                  <span className="form-toggle-label">Enable keyboard navigation</span>
+                </label>
+                <span className="form-hint">
+                  Use keyboard shortcuts to navigate sessions. Press ? to see all shortcuts.
+                </span>
+              </div>
+              <div className="settings-section">
+                <div className="settings-section-title">Shortcuts</div>
+                <div className="keyboard-shortcuts-list">
+                  {Object.entries(settings.keyboardShortcuts).map(([action, key]) => (
+                    <div key={action} className="shortcut-row">
+                      <span className="shortcut-action">{formatShortcutAction(action)}</span>
+                      <kbd className="shortcut-key">{formatShortcutKey(key)}</kbd>
+                    </div>
+                  ))}
+                </div>
               </div>
             </>
           )}
@@ -561,7 +629,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
           )}
         </div>
 
-        {tab !== "nodes" && (
+        {(tab === "appearance" || tab === "agent" || tab === "keyboard") && (
           <div className="modal-footer">
             <button type="button" className="action-btn" onClick={onClose}>
               Cancel

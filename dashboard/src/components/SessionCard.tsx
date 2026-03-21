@@ -12,6 +12,7 @@ interface Props {
   onResume: (sessionId: string, projectDir: string, agentType: AgentType) => void;
   onFullscreen: (session: SessionInfo) => void;
   autoDeleteOnClose?: boolean;
+  selected?: boolean;
 }
 
 export function SessionCard({
@@ -21,6 +22,7 @@ export function SessionCard({
   onResume,
   onFullscreen,
   autoDeleteOnClose,
+  selected,
 }: Props): React.JSX.Element {
   const config = STATUS_CONFIG[session.status];
   const [expanded, setExpanded] = useState(false);
@@ -124,7 +126,7 @@ export function SessionCard({
   return (
     // biome-ignore lint/a11y/useSemanticElements: card component with complex content, not a simple button
     <div
-      className={`session-card ${expanded ? "expanded" : ""}`}
+      className={`session-card ${expanded ? "expanded" : ""}${selected ? " session-card--selected" : ""}`}
       style={{ borderLeftColor: config.color, background: config.bg }}
       onClick={handleCardClick}
       onKeyDown={(e) => {
@@ -135,6 +137,7 @@ export function SessionCard({
       }}
       role="button"
       tabIndex={0}
+      data-session-id={session.sessionId}
     >
       <div className="session-header">
         <div className="session-status">

@@ -203,6 +203,11 @@ body {
   filter: brightness(1.1);
 }
 
+.session-card--selected {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
 .session-card.expanded {
   border-color: #555;
 }
@@ -1811,6 +1816,110 @@ body {
 }
 
 /* =================== */
+/* Keyboard Help        */
+/* =================== */
+.keyboard-help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.keyboard-help-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 360px;
+  overflow: hidden;
+}
+
+.keyboard-help-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.keyboard-help-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.keyboard-help-body {
+  padding: 16px 20px;
+}
+
+.keyboard-help-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.keyboard-help-key {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--text);
+  min-width: 60px;
+  text-align: center;
+}
+
+.keyboard-help-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  margin-left: 16px;
+}
+
+.keyboard-help-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Keyboard shortcuts list (settings) */
+.keyboard-shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shortcut-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+}
+
+.shortcut-action {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.shortcut-key {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--text);
+  min-width: 40px;
+  text-align: center;
+}
+
+/* =================== */
 /* Light Theme          */
 /* =================== */
 .app.theme-light {
@@ -2085,6 +2194,21 @@ body {
 /* Explorer machine header hover */
 .app.theme-light .explorer-machine-header:hover {
   background: var(--bg-elevated);
+}
+
+/* Keyboard help overlay */
+.app.theme-light .keyboard-help-overlay {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.app.theme-light .keyboard-help-panel {
+  background: var(--bg);
+}
+
+.app.theme-light .keyboard-help-key,
+.app.theme-light .shortcut-key {
+  background: var(--bg-elevated);
+  border-color: var(--border);
 }
 
 /* Modal overlay */

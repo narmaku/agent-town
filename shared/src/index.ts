@@ -88,7 +88,21 @@ export interface Settings {
   defaultProjectDir: string;
   fontSize: "small" | "medium" | "large";
   theme: "dark" | "light";
+  enableKeyboardNavigation: boolean;
+  keyboardShortcuts: Record<string, string>;
 }
+
+export const DEFAULT_KEYBOARD_SHORTCUTS: Record<string, string> = {
+  navigateDown: "j",
+  navigateUp: "k",
+  expandCollapse: "Enter",
+  fullscreen: "f",
+  close: "Escape",
+  focusSearch: "/",
+  openTerminal: "t",
+  sendMessage: "s",
+  showHelp: "?",
+};
 
 export interface LaunchAgentRequest {
   machineId: string;

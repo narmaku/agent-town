@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import {
   type CreateNodeRequest,
   createLogger,
+  DEFAULT_KEYBOARD_SHORTCUTS,
   type Heartbeat,
   type MachineInfo,
   type NodeStatus,
@@ -268,6 +269,8 @@ let settings: Settings = {
   defaultProjectDir: "",
   fontSize: "small",
   theme: "dark",
+  enableKeyboardNavigation: true,
+  keyboardShortcuts: { ...DEFAULT_KEYBOARD_SHORTCUTS },
 };
 
 function loadSettings(): void {
