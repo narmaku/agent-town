@@ -11,6 +11,7 @@ interface ModelPricing {
 export const MODEL_PRICING: Record<string, ModelPricing> = {
   // Anthropic Claude models
   "claude-opus-4": { inputPer1M: 15, outputPer1M: 75 },
+  "claude-sonnet-4-5": { inputPer1M: 8, outputPer1M: 40 },
   "claude-sonnet-4": { inputPer1M: 3, outputPer1M: 15 },
   "claude-haiku-4": { inputPer1M: 0.8, outputPer1M: 4 },
   // OpenAI models

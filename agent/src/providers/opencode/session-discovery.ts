@@ -164,19 +164,23 @@ async function discoverViaSQLite(): Promise<SessionInfo[]> {
       let estimatedCost: number | undefined;
       try {
         const tokenRow = db
-          .query<TokenAggregateRow, [string]>(
+          .query<TokenAggregateRow, [string, string]>(
             `SELECT
                SUM(CAST(json_extract(data, '$.tokens.input') AS INTEGER)) as total_input,
                SUM(CAST(json_extract(data, '$.tokens.output') AS INTEGER)) as total_output,
-               json_extract(data, '$.modelID') as model_id
+               (SELECT json_extract(data, '$.modelID')
+                FROM message
+                WHERE session_id = ?
+                  AND json_extract(data, '$.role') = 'assistant'
+                  AND json_extract(data, '$.modelID') IS NOT NULL
+                ORDER BY time_created DESC
+                LIMIT 1) as model_id
              FROM message
              WHERE session_id = ?
                AND json_extract(data, '$.role') = 'assistant'
-               AND json_extract(data, '$.tokens') IS NOT NULL
-             ORDER BY time_created DESC
-             LIMIT 1`,
+               AND json_extract(data, '$.tokens') IS NOT NULL`,
           )
-          .get(row.id);
+          .get(row.id, row.id);
         if (tokenRow) {
           if (tokenRow.total_input && tokenRow.total_input > 0) totalInputTokens = tokenRow.total_input;
           if (tokenRow.total_output && tokenRow.total_output > 0) totalOutputTokens = tokenRow.total_output;

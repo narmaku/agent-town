@@ -70,10 +70,11 @@ describe("lookupModelPricing", () => {
     expect(pricing).toBeUndefined();
   });
 
-  test("matches claude-sonnet-4-5 to claude-sonnet-4", () => {
+  test("matches claude-sonnet-4-5 to its own pricing entry", () => {
     const pricing = lookupModelPricing("claude-sonnet-4-5-20250514");
     expect(pricing).toBeDefined();
-    expect(pricing?.inputPer1M).toBe(3);
+    expect(pricing?.inputPer1M).toBe(8);
+    expect(pricing?.outputPer1M).toBe(40);
   });
 });
 
