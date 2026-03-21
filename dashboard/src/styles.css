@@ -2087,6 +2087,19 @@ body {
   background: var(--bg-elevated);
 }
 
+/* Filter toggle */
+.app.theme-light .filter-toggle {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.app.theme-light .filter-toggle:hover {
+  background: #e5e5e5;
+  border-color: #ccc;
+  color: var(--text);
+}
+
 /* Modal overlay */
 .app.theme-light .modal-overlay {
   background: rgba(0, 0, 0, 0.3);
@@ -2259,10 +2272,57 @@ body {
   font-size: 13px;
 }
 
-/* =================== */
-/* Mobile Responsive   */
-/* =================== */
-@media (max-width: 768px) {
+/* ============================== */
+/* Filter Toggle (mobile only)    */
+/* ============================== */
+.filter-toggle {
+  display: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.filter-toggle:hover {
+  color: var(--text);
+  border-color: #555;
+  background: #252525;
+}
+
+/* ============================== */
+/* Tablet Breakpoint (768-1023px) */
+/* ============================== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .sessions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .app {
+    padding: 0 16px;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    width: 140px;
+  }
+
+  .search-input:focus {
+    width: 180px;
+  }
+}
+
+/* ============================== */
+/* Mobile Breakpoint (< 768px)    */
+/* ============================== */
+@media (max-width: 767px) {
   .app {
     padding: 0 12px;
   }
@@ -2281,56 +2341,99 @@ body {
   }
 
   .header-right {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
   }
 
-  /* Stats: compact row */
+  /* Stats: compact row, take available space */
   .header-stats {
     gap: 10px;
     font-size: 12px;
+    flex: 1;
   }
 
-  /* Actions: wrap into rows */
+  /* Show filter toggle on mobile */
+  .filter-toggle {
+    display: flex;
+    min-height: 44px;
+    min-width: 44px;
+    flex-shrink: 0;
+  }
+
+  /* Header actions: hidden by default on mobile */
   .header-actions {
+    display: none;
     flex-wrap: wrap;
     gap: 6px;
+    flex-basis: 100%;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .header-actions.show {
+    display: flex;
   }
 
   /* Search: full width on mobile */
   .search-input {
     width: 100%;
-    flex: 1;
+    flex: 1 1 100%;
     min-width: 0;
+    min-height: 44px;
+    font-size: 14px;
+    padding: 8px 12px;
   }
 
   .search-input:focus {
     width: 100%;
   }
 
-  /* Selects: shrink to fit */
+  /* Selects: fill available space, touch-friendly */
   .header-sort-select {
     flex: 1;
     min-width: 0;
-    font-size: 11px;
-    padding: 5px 24px 5px 6px;
+    font-size: 12px;
+    padding: 8px 28px 8px 8px;
+    min-height: 44px;
   }
 
-  /* Hide text on "Hide Idle" button, show only on larger screens */
+  /* Buttons: touch-friendly sizing */
   .header-btn {
-    font-size: 11px;
-    padding: 5px 8px;
+    font-size: 12px;
+    padding: 8px 12px;
     white-space: nowrap;
+    min-height: 44px;
+  }
+
+  /* Hide explorer layout toggle on mobile */
+  .layout-toggle {
+    display: none;
   }
 
   /* Sessions grid: single column */
   .sessions-grid {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   /* Session card: tighter padding */
   .session-card {
-    padding: 10px 12px;
+    padding: 12px;
+  }
+
+  /* Touch-friendly action buttons */
+  .action-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  /* Card actions: wrap for small screens */
+  .card-actions {
+    flex-wrap: wrap;
   }
 
   /* Fullscreen modal: take full screen on mobile */
@@ -2351,6 +2454,8 @@ body {
 
   .fullscreen-header {
     padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .fullscreen-title-row {
@@ -2392,21 +2497,68 @@ body {
     padding: 10px 12px;
   }
 
-  /* Modal: full width on mobile */
+  /* Modal: full width/height on mobile */
   .modal-overlay {
     padding: 0;
-    align-items: flex-end;
+    align-items: stretch;
+    justify-content: stretch;
   }
 
   .modal-panel {
     max-width: none;
-    max-height: 90vh;
-    max-height: 90dvh;
-    border-radius: 12px 12px 0 0;
-    border-bottom: none;
+    max-height: none;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
   }
 
-  /* Explorer layout: stack vertically */
+  .modal-close {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+  }
+
+  /* Settings tabs: scroll if needed */
+  .settings-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 14px;
+  }
+
+  .settings-tab {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  /* Form inputs: touch-friendly */
+  .form-input,
+  .form-select {
+    min-height: 44px;
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+
+  .form-select {
+    padding-right: 32px;
+  }
+
+  /* Send button: touch-friendly */
+  .send-btn {
+    min-height: 44px;
+    padding: 8px 20px;
+    font-size: 14px;
+  }
+
+  .send-textarea {
+    min-height: 60px;
+    font-size: 14px;
+  }
+
+  /* Explorer layout: force cards mode on mobile (hide sidebar layout) */
   .explorer-layout {
     flex-direction: column;
     height: auto;
@@ -2453,6 +2605,47 @@ body {
     flex-wrap: wrap;
     gap: 8px;
     font-size: 12px;
+  }
+
+  /* Detail toggles: touch-friendly */
+  .detail-toggles {
+    gap: 10px;
+  }
+
+  .detail-switch {
+    min-height: 44px;
+  }
+
+  /* Load previous button: touch-friendly */
+  .load-previous-btn {
+    min-height: 44px;
+    padding: 8px 20px;
+  }
+
+  /* Session name: allow more room on mobile */
+  .session-name-primary {
+    max-width: none;
+  }
+
+  /* Session cwd: allow more room */
+  .session-cwd {
+    max-width: none;
+  }
+
+  /* District header: wrap on mobile */
+  .district-header {
+    flex-wrap: wrap;
+  }
+
+  /* Empty state: tighter padding */
+  .empty-state {
+    padding: 40px 16px;
+  }
+
+  .empty-state pre {
+    font-size: 11px;
+    word-break: break-all;
+    white-space: pre-wrap;
   }
 }
 

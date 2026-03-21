@@ -101,6 +101,7 @@ export function App(): React.JSX.Element {
   const [groupMode, setGroupMode] = useState<GroupMode>(() => loadLocalStorage(STORAGE_KEYS.GROUP_MODE, "directory"));
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLocalStorage(STORAGE_KEYS.LAYOUT_MODE, "cards"));
   const [searchQuery, setSearchQuery] = useState("");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Persist layout and group preferences
   useEffect(() => {
@@ -170,7 +171,30 @@ export function App(): React.JSX.Element {
             </span>
             {totalAttention > 0 && <span className="header-stat attention">{totalAttention} need attention</span>}
           </div>
-          <div className="header-actions">
+          <button
+            type="button"
+            className="filter-toggle"
+            onClick={() => setShowMobileFilters((v) => !v)}
+            aria-label={showMobileFilters ? "Hide filters" : "Show filters"}
+            title="Toggle filters"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <div className={`header-actions ${showMobileFilters ? "show" : ""}`}>
             <input
               className="search-input"
               type="text"
