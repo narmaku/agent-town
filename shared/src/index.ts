@@ -193,3 +193,27 @@ export interface UpdateNodeRequest {
   autoConnect?: boolean;
   enableHooks?: boolean;
 }
+
+// --- Git diff types ---
+
+export type GitDiffFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
+
+export interface GitDiffFile {
+  path: string;
+  status: GitDiffFileStatus;
+  insertions: number;
+  deletions: number;
+  diff: string;
+}
+
+export interface GitDiffSummary {
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
+export interface GitDiffResponse {
+  branch: string;
+  files: GitDiffFile[];
+  summary: GitDiffSummary;
+}

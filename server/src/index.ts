@@ -207,6 +207,32 @@ async function routeRequest(
     }
   }
 
+  // API: get git diff for a session's working directory (proxy to agent)
+  if (url.pathname === "/api/git-diff" && req.method === "GET") {
+    const machineId = url.searchParams.get("machineId");
+    const dir = url.searchParams.get("dir");
+
+    if (!machineId || !dir) {
+      return Response.json({ error: "Missing machineId or dir" }, { status: 400 });
+    }
+
+    const machine = getMachine(machineId);
+    if (!machine || !machine.terminalPort) {
+      return Response.json({ error: "Machine not found" }, { status: 404 });
+    }
+
+    const agentUrl = `${getAgentUrl(machine, "/api/git-diff")}?dir=${encodeURIComponent(dir)}`;
+
+    try {
+      const agentResp = await fetch(agentUrl);
+      const data = await agentResp.json();
+      return Response.json(data, { status: agentResp.status });
+    } catch (err) {
+      log.error(`git-diff: failed to fetch from agent: ${err instanceof Error ? err.message : String(err)}`);
+      return Response.json({ error: "Failed to fetch git diff from agent" }, { status: 502 });
+    }
+  }
+
   // API: rename a session (also renames multiplexer session if active)
   if (url.pathname === "/api/sessions/rename" && req.method === "POST") {
     try {

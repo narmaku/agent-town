@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
+import { DiffModal } from "./DiffModal";
 import { SendMessage } from "./SendMessage";
 
 const BATCH_SIZE = 10;
@@ -116,6 +117,7 @@ export function SessionDetail({
   const [, setTick] = useState(0);
   const [showToolDetails, setShowToolDetails] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
@@ -457,6 +459,16 @@ export function SessionDetail({
             Resume
           </button>
         )}
+        {session.cwd && (
+          <button
+            type="button"
+            className="action-btn diff-btn"
+            onClick={() => setShowDiff(true)}
+            aria-label="View git changes"
+          >
+            View Changes
+          </button>
+        )}
         {hasTerminal && (
           <button type="button" className="action-btn kill-btn" onClick={handleKillSession}>
             Close Agent
@@ -475,6 +487,10 @@ export function SessionDetail({
             onSent={handleSent}
           />
         </div>
+      )}
+
+      {showDiff && session.cwd && (
+        <DiffModal machineId={machineId} dir={session.cwd} onClose={() => setShowDiff(false)} />
       )}
     </>
   );

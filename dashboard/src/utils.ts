@@ -53,6 +53,7 @@ export const API = {
   AGENTS_LAUNCH: "/api/agents/launch",
   AGENTS_RESUME: "/api/agents/resume",
   SESSIONS_RECONNECT: "/api/sessions/reconnect",
+  GIT_DIFF: "/api/git-diff",
   NODES: "/api/nodes",
   NODES_TEST: "/api/nodes/test",
 } as const;

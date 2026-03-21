@@ -3121,3 +3121,353 @@ body {
   color: var(--text-muted);
   font-size: 12px;
 }
+
+/* =================== */
+/* Git Diff Viewer     */
+/* =================== */
+
+.diff-btn {
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+.diff-btn:hover {
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.diff-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.diff-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1000px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diff-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.diff-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.diff-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.diff-header-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.diff-branch-badge {
+  font-size: 11px;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+.diff-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.diff-summary-add {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.diff-summary-del {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.diff-dir-bar {
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.diff-dir-path {
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  color: var(--text-muted);
+}
+
+.diff-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.diff-loading,
+.diff-empty,
+.diff-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 14px;
+  gap: 12px;
+}
+
+.diff-error-message {
+  color: var(--red);
+  text-align: center;
+}
+
+/* File list sidebar */
+.diff-file-list {
+  width: 220px;
+  min-width: 180px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 4px 0;
+}
+
+.diff-file-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.diff-file-entry:hover {
+  background: var(--bg-elevated);
+}
+
+.diff-file-entry.selected {
+  background: var(--bg-elevated);
+  border-left: 2px solid var(--blue);
+  padding-left: 10px;
+}
+
+.diff-file-icon {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-weight: 700;
+  font-size: 11px;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.diff-file-added .diff-file-icon { color: var(--green); }
+.diff-file-modified .diff-file-icon { color: var(--yellow); }
+.diff-file-deleted .diff-file-icon { color: var(--red); }
+.diff-file-renamed .diff-file-icon { color: var(--blue); }
+.diff-file-untracked .diff-file-icon { color: var(--text-muted); }
+
+.diff-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.diff-file-stats {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+.diff-stat-add { color: var(--green); }
+.diff-stat-del { color: var(--red); }
+
+/* Diff content area */
+.diff-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.diff-content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.diff-content-path {
+  font-size: 12px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-content-status {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.diff-content-status.diff-file-added { color: var(--green); background: rgba(34, 197, 94, 0.1); }
+.diff-content-status.diff-file-modified { color: var(--yellow); background: rgba(234, 179, 8, 0.1); }
+.diff-content-status.diff-file-deleted { color: var(--red); background: rgba(239, 68, 68, 0.1); }
+.diff-content-status.diff-file-renamed { color: var(--blue); background: rgba(59, 130, 246, 0.1); }
+.diff-content-status.diff-file-untracked { color: var(--text-muted); background: var(--bg-elevated); }
+
+.diff-content-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.diff-line {
+  padding: 0 16px;
+  white-space: pre;
+  min-height: 18px;
+}
+
+.diff-context {
+  color: var(--text-secondary);
+}
+
+.diff-add {
+  background: rgba(34, 197, 94, 0.08);
+  color: var(--green);
+}
+
+.diff-del {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--red);
+}
+
+.diff-hunk {
+  color: var(--blue);
+  background: rgba(59, 130, 246, 0.05);
+  font-style: italic;
+}
+
+.diff-meta {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.diff-untracked-notice {
+  padding: 24px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+}
+
+/* Light theme overrides for diff viewer */
+.app.theme-light .diff-add {
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--green);
+}
+
+.app.theme-light .diff-del {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--red);
+}
+
+.app.theme-light .diff-hunk {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.app.theme-light .diff-branch-badge {
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.08);
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+.app.theme-light .diff-btn {
+  color: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+.app.theme-light .diff-btn:hover {
+  color: #6d28d9;
+  border-color: rgba(124, 58, 237, 0.5);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+/* Mobile responsive for diff viewer */
+@media (max-width: 768px) {
+  .diff-overlay {
+    padding: 0;
+  }
+
+  .diff-panel {
+    max-width: none;
+    max-height: none;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .diff-body {
+    flex-direction: column;
+  }
+
+  .diff-file-list {
+    width: 100%;
+    min-width: 0;
+    max-height: 30vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}

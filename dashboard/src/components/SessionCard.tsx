@@ -8,6 +8,7 @@ import {
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
+import { DiffModal } from "./DiffModal";
 import { MessageView } from "./MessageView";
 import { SendMessage } from "./SendMessage";
 
@@ -34,6 +35,7 @@ export function SessionCard({
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(session.customName || "");
+  const [showDiff, setShowDiff] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -313,6 +315,19 @@ export function SessionCard({
                 Delete
               </button>
             )}
+            {session.cwd && (
+              <button
+                type="button"
+                className="action-btn diff-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDiff(true);
+                }}
+                aria-label="View git changes"
+              >
+                View Changes
+              </button>
+            )}
             {hasTerminal && (
               <button type="button" className="action-btn kill-btn" onClick={handleKillSession}>
                 Close Agent
@@ -352,6 +367,10 @@ export function SessionCard({
             {session.model && <span className="session-model">{session.model}</span>}
           </span>
         </div>
+      )}
+
+      {showDiff && session.cwd && (
+        <DiffModal machineId={machineId} dir={session.cwd} onClose={() => setShowDiff(false)} />
       )}
     </div>
   );
