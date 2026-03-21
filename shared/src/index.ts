@@ -3,7 +3,7 @@ export { createLogger, type Logger } from "./logger";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
 export { paginateFromEnd, safeJsonParse, truncateId } from "./utils";
 
-export type AgentType = "claude-code" | "opencode";
+export type AgentType = "claude-code" | "opencode" | "gemini-cli";
 
 export type SessionStatus =
   | "starting"

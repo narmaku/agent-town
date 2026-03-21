@@ -145,7 +145,7 @@ export function SessionCard({
           {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
           {session.agentType && session.agentType !== "claude-code" && (
             <span className="agent-type-badge" title={`Agent: ${session.agentType}`}>
-              {session.agentType === "opencode" ? "OC" : session.agentType}
+              {session.agentType === "opencode" ? "OC" : session.agentType === "gemini-cli" ? "GE" : session.agentType}
             </span>
           )}
           {session.status !== "starting" && (

@@ -263,6 +263,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                 >
                   <option value="claude-code">Claude Code</option>
                   <option value="opencode">OpenCode</option>
+                  <option value="gemini-cli">Gemini CLI</option>
                 </select>
               </div>
               <div className="form-group">
