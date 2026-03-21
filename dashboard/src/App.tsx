@@ -1,6 +1,7 @@
 import {
   type AgentType,
   DEFAULT_KEYBOARD_SHORTCUTS,
+  formatCost,
   type MachineInfo,
   type SessionInfo,
   type Settings,
@@ -9,6 +10,7 @@ import {
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ActivityFeed } from "./components/ActivityFeed";
 import { ExplorerLayout } from "./components/ExplorerLayout";
 import { KeyboardHelp } from "./components/KeyboardHelp";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
@@ -95,7 +97,8 @@ function filterMachinesBySearch(machines: MachineInfo[], query: string): Machine
 }
 
 export function App(): React.JSX.Element {
-  const { machines, connected } = useWebSocket();
+  const { machines, connected, activityFeed, unreadActivityCount, markActivityRead } = useWebSocket();
+  const [activityOpen, setActivityOpen] = useState(false);
   const [terminal, setTerminal] = useState<TerminalTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false);
@@ -118,6 +121,7 @@ export function App(): React.JSX.Element {
     ...DEFAULT_KEYBOARD_SHORTCUTS,
   });
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Persist layout and group preferences
   useEffect(() => {
@@ -262,6 +266,10 @@ export function App(): React.JSX.Element {
     (sum, m) => sum + m.sessions.filter((s) => s.status === "awaiting_input").length,
     0,
   );
+  const totalCost = useMemo(
+    () => machines.reduce((sum, m) => sum + m.sessions.reduce((s, session) => s + (session.estimatedCost ?? 0), 0), 0),
+    [machines],
+  );
 
   function handleOpenTerminal(machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) {
     setTerminal({ machineId, sessionName, multiplexer });
@@ -285,8 +293,36 @@ export function App(): React.JSX.Element {
               {totalSessions} session{totalSessions !== 1 ? "s" : ""}
             </span>
             {totalAttention > 0 && <span className="header-stat attention">{totalAttention} need attention</span>}
+            {totalCost > 0 && (
+              <span className="header-stat" title="Estimated total cost across all sessions">
+                ~{formatCost(totalCost)}
+              </span>
+            )}
           </div>
-          <div className="header-actions">
+          <button
+            type="button"
+            className="filter-toggle"
+            onClick={() => setShowMobileFilters((v) => !v)}
+            aria-label={showMobileFilters ? "Hide filters" : "Show filters"}
+            title="Toggle filters"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+          <div className={`header-actions ${showMobileFilters ? "show" : ""}`}>
             <input
               ref={searchInputRef}
               className="search-input"
@@ -355,6 +391,50 @@ export function App(): React.JSX.Element {
                   <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5v-13zM4 3h12v2H4V3zm0 4h12v2H4V7zm0 4h12v2H4v-2z" />
                 </svg>
               </button>
+            </div>
+            <div className="activity-feed-wrapper">
+              <button
+                type="button"
+                className={`header-btn header-btn-icon activity-toggle-btn ${activityOpen ? "active" : ""}`}
+                onClick={() => {
+                  setActivityOpen((prev) => {
+                    if (!prev) markActivityRead();
+                    return !prev;
+                  });
+                }}
+                title="Activity feed"
+                aria-label="Activity feed"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                {unreadActivityCount > 0 && (
+                  <span className="activity-badge">{unreadActivityCount > 99 ? "99+" : unreadActivityCount}</span>
+                )}
+              </button>
+              <ActivityFeed
+                events={activityFeed}
+                isOpen={activityOpen}
+                onClose={() => setActivityOpen(false)}
+                onNavigateToSession={(machineId, sessionId) => {
+                  if (layoutMode === "cards") {
+                    setFullscreen({ machineId, sessionId });
+                  } else {
+                    // In explorer mode, we cannot programmatically select — open fullscreen
+                    setFullscreen({ machineId, sessionId });
+                  }
+                }}
+              />
             </div>
             <button type="button" className="header-btn" onClick={() => setLaunchOpen(true)} title="Launch new agent">
               + New Agent

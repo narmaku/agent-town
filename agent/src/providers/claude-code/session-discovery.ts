@@ -1,7 +1,13 @@
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+import {
+  calculateCost,
+  createLogger,
+  SESSION_RETENTION_MS,
+  type SessionInfo,
+  type SessionStatus,
+} from "@agent-town/shared";
 
 const log = createLogger("claude:sessions");
 
@@ -21,6 +27,10 @@ export interface ClaudeJsonlEntry {
     role: string;
     model?: string;
     content?: unknown;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
   };
   toolUseResult?: string;
 }
@@ -86,21 +96,43 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
     }
     if (!lastEntry) return null;
 
-    // Find first entry with cwd (project root)
+    // Find first entry with cwd (project root) and aggregate token usage
     let projectRoot = lastEntry.cwd;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
     const limit = Math.min(lines.length, 20);
     for (let i = 0; i < limit; i++) {
       if (!lines[i].trim()) continue;
       try {
         const entry: ClaudeJsonlEntry = JSON.parse(lines[i]);
-        if (entry.cwd) {
+        if (entry.cwd && projectRoot === lastEntry.cwd) {
           projectRoot = entry.cwd;
-          break;
         }
       } catch (_err) {
         // skip malformed JSONL line
       }
     }
+
+    // Aggregate token usage from all lines
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as { message?: { usage?: { input_tokens?: number; output_tokens?: number } } };
+        const usage = entry.message?.usage;
+        if (usage) {
+          if (typeof usage.input_tokens === "number") totalInputTokens += usage.input_tokens;
+          if (typeof usage.output_tokens === "number") totalOutputTokens += usage.output_tokens;
+        }
+      } catch (_err) {
+        // skip malformed JSONL line
+      }
+    }
+
+    const model = lastEntry.message?.model;
+    const estimatedCost =
+      totalInputTokens > 0 || totalOutputTokens > 0
+        ? calculateCost(totalInputTokens, totalOutputTokens, model)
+        : undefined;
 
     return {
       sessionId: lastEntry.sessionId,
@@ -113,8 +145,11 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
       lastActivity: lastEntry.timestamp || new Date(mtimeMs).toISOString(),
       lastMessage: summarizeLastMessage(lastEntry),
       cwd: lastEntry.cwd,
-      model: lastEntry.message?.model,
+      model,
       version: lastEntry.version,
+      totalInputTokens: totalInputTokens > 0 ? totalInputTokens : undefined,
+      totalOutputTokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
+      estimatedCost,
     };
   } catch (err) {
     log.debug(`parseClaudeSession: ${err instanceof Error ? err.message : String(err)}`);

@@ -55,7 +55,7 @@ export function validateModel(model: string): string | null {
 
 export function validateSessionId(id: string): string | null {
   if (!id) return "Session ID is required";
-  // Claude Code: UUIDs (hex + hyphens). OpenCode: ses_<alphanumeric>.
+  // Claude Code: UUIDs (hex + hyphens). OpenCode: ses_<alphanumeric>. Gemini CLI: UUIDs.
   if (!/^[a-zA-Z0-9_-]+$/i.test(id)) return "Session ID contains invalid characters";
   return null;
 }
@@ -438,10 +438,10 @@ export function startTerminalServer(port: number, machineId: string): Server {
             });
             await sendKeys.exited;
 
-            // Claude Code-specific post-launch: auto-accept trust prompt,
-            // autonomous disclaimer, and send initial "hi" to trigger JSONL.
-            // Other agents (OpenCode) have their own TUI and don't need this.
-            if (agentType === "claude-code") {
+            // CLI agent post-launch: auto-accept trust prompt,
+            // autonomous disclaimer, and send initial "hi" to trigger session file.
+            // TUI agents (OpenCode) have their own interface and don't need this.
+            if (agentType === "claude-code" || agentType === "gemini-cli") {
               await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
               Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                 env: cleanEnv,
@@ -523,9 +523,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
           });
           await writeChars.exited;
 
-          // Claude Code-specific post-launch: auto-accept trust prompt,
-          // autonomous disclaimer, and send initial "hi" to trigger JSONL.
-          if (agentType === "claude-code") {
+          // CLI agent post-launch: auto-accept trust prompt,
+          // autonomous disclaimer, and send initial "hi" to trigger session file.
+          if (agentType === "claude-code" || agentType === "gemini-cli") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
               env: cleanEnv,
@@ -634,7 +634,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
               stderr: "pipe",
             });
 
-            if (agentType === "claude-code") {
+            if (agentType === "claude-code" || agentType === "gemini-cli") {
               await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
               Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                 env: cleanEnv,
@@ -705,7 +705,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
             stderr: "pipe",
           });
 
-          if (agentType === "claude-code") {
+          if (agentType === "claude-code" || agentType === "gemini-cli") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
               env: cleanEnv,
@@ -796,8 +796,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
             }
           }
 
-          // Claude Code-specific: auto-accept workspace trust prompt
-          if (agentType === "claude-code") {
+          // CLI agent: auto-accept workspace trust prompt
+          if (agentType === "claude-code" || agentType === "gemini-cli") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             if (body.multiplexer === "tmux") {
               Bun.spawn(["tmux", "send-keys", "-t", body.session, "Enter"], {

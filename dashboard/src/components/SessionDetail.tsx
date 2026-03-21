@@ -1,4 +1,11 @@
-import type { AgentType, SessionInfo, SessionMessage, TerminalMultiplexer } from "@agent-town/shared";
+import {
+  type AgentType,
+  formatCompactTokens,
+  formatCost,
+  type SessionInfo,
+  type SessionMessage,
+  type TerminalMultiplexer,
+} from "@agent-town/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -322,6 +329,21 @@ export function SessionDetail({
           <div className="detail-row">
             <span className="detail-label">Model</span>
             <span className="detail-value mono">{session.model}</span>
+          </div>
+        )}
+        {session.totalInputTokens != null && session.totalInputTokens > 0 && (
+          <div className="detail-row">
+            <span className="detail-label">Tokens</span>
+            <span className="detail-value mono">
+              {session.totalInputTokens.toLocaleString()} in / {(session.totalOutputTokens ?? 0).toLocaleString()} out (
+              {formatCompactTokens((session.totalInputTokens ?? 0) + (session.totalOutputTokens ?? 0))} total)
+            </span>
+          </div>
+        )}
+        {session.estimatedCost != null && session.estimatedCost > 0 && (
+          <div className="detail-row">
+            <span className="detail-label">Est. Cost</span>
+            <span className="detail-value mono">~{formatCost(session.estimatedCost)}</span>
           </div>
         )}
       </div>

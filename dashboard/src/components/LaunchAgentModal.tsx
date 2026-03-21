@@ -6,6 +6,7 @@ import { API } from "../utils";
 const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   "claude-code": "Claude Code",
   opencode: "OpenCode",
+  "gemini-cli": "Gemini CLI",
 };
 
 interface Props {
@@ -260,7 +261,9 @@ export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props)
               <span className="form-hint" style={{ color: "var(--yellow)" }}>
                 {agentType === "claude-code"
                   ? "Skips all permission checks (--dangerously-skip-permissions)."
-                  : 'OpenCode uses config-based permissions — ensure opencode.json has permission: "allow".'}
+                  : agentType === "gemini-cli"
+                    ? "Auto-approves all actions (--yolo mode)."
+                    : 'OpenCode uses config-based permissions — ensure opencode.json has permission: "allow".'}
               </span>
             )}
           </div>

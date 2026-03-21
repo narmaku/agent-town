@@ -24,8 +24,9 @@ export async function initializeProviders(): Promise<void> {
   // Lazy imports to avoid circular deps
   const { ClaudeCodeProvider } = await import("./claude-code/index");
   const { OpenCodeProvider } = await import("./opencode/index");
+  const { GeminiCliProvider } = await import("./gemini-cli/index");
 
-  const candidates: AgentProvider[] = [new ClaudeCodeProvider(), new OpenCodeProvider()];
+  const candidates: AgentProvider[] = [new ClaudeCodeProvider(), new OpenCodeProvider(), new GeminiCliProvider()];
 
   for (const provider of candidates) {
     const available = await provider.isAvailable();

@@ -1,9 +1,10 @@
 export { SESSION_ID_DISPLAY_LENGTH, SESSION_RETENTION_MS } from "./constants";
 export { createLogger, type Logger } from "./logger";
+export { calculateCost, formatCompactTokens, formatCost, lookupModelPricing, MODEL_PRICING } from "./model-pricing";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
 export { paginateFromEnd, safeJsonParse, truncateId } from "./utils";
 
-export type AgentType = "claude-code" | "opencode";
+export type AgentType = "claude-code" | "opencode" | "gemini-cli";
 
 export type SessionStatus =
   | "starting"
@@ -36,6 +37,9 @@ export interface SessionInfo {
   multiplexer?: TerminalMultiplexer;
   hookEnabled?: boolean; // true if session is sending hook events (accurate status)
   currentTool?: string; // tool currently being executed (from hooks)
+  totalInputTokens?: number; // aggregated input tokens across all messages
+  totalOutputTokens?: number; // aggregated output tokens across all messages
+  estimatedCost?: number; // estimated USD cost based on model pricing
 }
 
 export interface MultiplexerSessionInfo {
@@ -121,6 +125,11 @@ export interface ResumeAgentRequest {
   autonomous?: boolean;
 }
 
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
 export interface SessionMessage {
   role: "user" | "assistant";
   timestamp: string;
@@ -130,6 +139,7 @@ export interface SessionMessage {
   toolResults?: { toolUseId: string; content: string }[];
   thinking?: string;
   model?: string;
+  tokenUsage?: TokenUsage;
 }
 
 export interface SessionMessagesResponse {

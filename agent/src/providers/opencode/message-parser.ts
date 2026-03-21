@@ -4,6 +4,7 @@ import {
   type SessionMessage,
   type SessionMessagesResponse,
   safeJsonParse,
+  type TokenUsage,
   truncateId,
 } from "@agent-town/shared";
 import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
@@ -74,6 +75,15 @@ async function getMessagesViaSDK(
     const providerID = (assistantInfo.providerID || "") as string;
     const model = modelID ? (providerID ? `${providerID}/${modelID}` : modelID) : undefined;
 
+    // Extract token usage if available in SDK message metadata
+    let tokenUsage: TokenUsage | undefined;
+    const tokens = assistantInfo.tokens as Record<string, number> | undefined;
+    if (tokens && (typeof tokens.input === "number" || typeof tokens.output === "number")) {
+      tokenUsage = {};
+      if (typeof tokens.input === "number") tokenUsage.inputTokens = tokens.input;
+      if (typeof tokens.output === "number") tokenUsage.outputTokens = tokens.output;
+    }
+
     return {
       role: m.info.role as "user" | "assistant",
       timestamp: new Date(m.info.time.created).toISOString(),
@@ -81,6 +91,7 @@ async function getMessagesViaSDK(
       toolUse: toolUse.length > 0 ? toolUse : undefined,
       toolResults: toolResults.length > 0 ? toolResults : undefined,
       model,
+      tokenUsage,
     };
   });
 
@@ -161,7 +172,12 @@ async function getMessagesViaSQLite(
     }
 
     const messages: SessionMessage[] = messageRows.map((row) => {
-      const msgData = safeJsonParse<{ role: string; modelID?: string; providerID?: string }>(row.data);
+      const msgData = safeJsonParse<{
+        role: string;
+        modelID?: string;
+        providerID?: string;
+        tokens?: { input?: number; output?: number };
+      }>(row.data);
       const parts = partsByMessage.get(row.id) || [];
       const role = (msgData?.role || "user") as "user" | "assistant";
 
@@ -195,6 +211,15 @@ async function getMessagesViaSQLite(
 
       const model = msgData?.modelID ? `${msgData.providerID || ""}/${msgData.modelID}` : undefined;
 
+      // Extract token usage if available
+      let tokenUsage: TokenUsage | undefined;
+      const tokens = msgData?.tokens;
+      if (tokens && (typeof tokens.input === "number" || typeof tokens.output === "number")) {
+        tokenUsage = {};
+        if (typeof tokens.input === "number") tokenUsage.inputTokens = tokens.input;
+        if (typeof tokens.output === "number") tokenUsage.outputTokens = tokens.output;
+      }
+
       return {
         role,
         timestamp: new Date(row.time_created).toISOString(),
@@ -202,6 +227,7 @@ async function getMessagesViaSQLite(
         toolUse: toolUse.length > 0 ? toolUse : undefined,
         toolResults: toolResults.length > 0 ? toolResults : undefined,
         model: model?.startsWith("/") ? model.slice(1) : model,
+        tokenUsage,
       };
     });
 
