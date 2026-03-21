@@ -37,6 +37,9 @@ export function playNotificationSound(status: SessionStatus): void {
     osc.frequency.value = getFrequency(status);
     gain.gain.value = 0.15;
 
+    // Close the AudioContext after the tone finishes to free system resources
+    osc.onended = () => ctx.close();
+
     osc.start();
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
     osc.stop(ctx.currentTime + 0.3);

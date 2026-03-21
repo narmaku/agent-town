@@ -268,9 +268,6 @@ let settings: Settings = {
   defaultProjectDir: "",
   fontSize: "small",
   theme: "dark",
-  enableNotifications: true,
-  enableSoundAlerts: true,
-  notifyOnStatuses: ["awaiting_input", "action_required", "error", "done", "exited"],
 };
 
 function loadSettings(): void {

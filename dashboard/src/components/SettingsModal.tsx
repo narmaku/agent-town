@@ -31,9 +31,6 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     defaultProjectDir: "",
     fontSize: "small",
     theme: "dark",
-    enableNotifications: true,
-    enableSoundAlerts: true,
-    notifyOnStatuses: ["awaiting_input", "action_required", "error", "done", "exited"],
   });
   const [saving, setSaving] = useState(false);
 
