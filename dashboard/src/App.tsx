@@ -274,6 +274,29 @@ export function App(): React.JSX.Element {
     <div className={`app theme-${theme} font-${fontSize} ${layoutMode === "explorer" ? "app-explorer" : ""}`}>
       <header className="app-header">
         <div className="header-left">
+          {layoutMode === "explorer" && (
+            <button
+              type="button"
+              className="sidebar-toggle-header"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              aria-label={sidebarOpen ? "Close session navigator" : "Open session navigator"}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+            </button>
+          )}
           <h1 className="app-title">Agent Town</h1>
           <span className={`connection-status ${connected ? "online" : "offline"}`}>
             {connected ? "Connected" : "Reconnecting..."}
@@ -516,27 +539,6 @@ export function App(): React.JSX.Element {
               setResumeTarget({ machineId, sessionId, projectDir, agentType })
             }
           />
-          <button
-            type="button"
-            className="sidebar-toggle-fab"
-            onClick={() => setSidebarOpen((prev) => !prev)}
-            aria-label={sidebarOpen ? "Close session navigator" : "Open session navigator"}
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <line x1="9" y1="3" x2="9" y2="21" />
-            </svg>
-          </button>
         </>
       )}
 

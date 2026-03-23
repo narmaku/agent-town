@@ -1815,33 +1815,23 @@ body {
   font-style: italic;
 }
 
-/* Sidebar toggle FAB — visible only on mobile (in explorer mode) */
-.sidebar-toggle-fab {
+/* Sidebar toggle button — visible only on mobile (in explorer mode) */
+.sidebar-toggle-header {
   display: none;
-  position: fixed;
-  bottom: 16px;
-  left: 16px;
-  z-index: 800;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--blue);
-  color: white;
-  border: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 6px;
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition: color 0.15s, border-color 0.15s;
 }
 
-.sidebar-toggle-fab:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-}
-
-.sidebar-toggle-fab:active {
-  transform: scale(0.95);
+.sidebar-toggle-header:hover {
+  color: var(--text);
+  border-color: #555;
 }
 
 /* Sidebar backdrop — hidden on desktop */
@@ -2245,13 +2235,15 @@ body {
   background: var(--bg-elevated);
 }
 
-/* Sidebar FAB in light theme */
-.app.theme-light .sidebar-toggle-fab {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+/* Sidebar toggle in light theme */
+.app.theme-light .sidebar-toggle-header {
+  background: var(--bg-elevated);
+  border-color: var(--border);
 }
 
-.app.theme-light .sidebar-toggle-fab:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+.app.theme-light .sidebar-toggle-header:hover {
+  background: #e5e5e5;
+  border-color: #ccc;
 }
 
 /* Explorer machine header hover */
@@ -2797,8 +2789,10 @@ body {
     min-height: 0;
   }
 
-  .sidebar-toggle-fab {
+  .sidebar-toggle-header {
     display: flex;
+    min-height: 44px;
+    min-width: 44px;
   }
 
   .explorer-dashboard {
