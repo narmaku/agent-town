@@ -929,6 +929,12 @@ body {
   gap: 8px;
 }
 
+.header-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .header-btn {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -2655,42 +2661,30 @@ body {
     min-height: 44px;
   }
 
-  /* Buttons: full width on mobile */
-  .header-btn {
-    font-size: 13px;
-    padding: 8px 12px;
-    white-space: nowrap;
-    min-height: 44px;
+  /* Header toolbar: horizontal row for Hide Idle, layout, activity, new agent, settings */
+  .header-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
     width: 100%;
-    text-align: center;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
   }
 
-  /* Bottom action row: layout toggle, activity, new agent, settings */
-  .header-actions .layout-toggle,
-  .header-actions .activity-feed-wrapper,
-  .header-actions > .header-btn,
-  .header-actions > .header-btn-icon {
+  .header-toolbar .header-btn {
     width: auto;
+    flex: none;
+    font-size: 13px;
+    padding: 8px 12px;
+    min-height: 44px;
   }
 
   /* Hide explorer layout toggle on mobile */
-  .layout-toggle {
+  .header-toolbar .layout-toggle {
     display: none;
-  }
-
-  /* Mobile bottom actions: horizontal row */
-  .mobile-bottom-actions {
-    display: flex;
-    flex-direction: row;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-    width: 100%;
-  }
-
-  .mobile-bottom-actions .header-btn {
-    width: auto;
-    flex: none;
   }
 
   /* Sessions grid: single column */

@@ -472,48 +472,90 @@ export function App(): React.JSX.Element {
                 <option value="status">By status</option>
               </select>
             </div>
-            <button
-              type="button"
-              className={`header-btn ${hideIdle ? "active" : ""}`}
-              onClick={() => setHideIdle((h) => !h)}
-              aria-label={hideIdle ? "Show idle sessions" : "Hide idle sessions"}
-            >
-              Hide Idle
-            </button>
-            <div className="layout-toggle">
+            <div className="header-toolbar">
               <button
                 type="button"
-                className={`layout-toggle-btn ${layoutMode === "cards" ? "active" : ""}`}
-                onClick={() => setLayoutMode("cards")}
-                title="Cards layout"
+                className={`header-btn ${hideIdle ? "active" : ""}`}
+                onClick={() => setHideIdle((h) => !h)}
+                aria-label={hideIdle ? "Show idle sessions" : "Hide idle sessions"}
               >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z" />
-                </svg>
+                Hide Idle
+              </button>
+              <div className="layout-toggle">
+                <button
+                  type="button"
+                  className={`layout-toggle-btn ${layoutMode === "cards" ? "active" : ""}`}
+                  onClick={() => setLayoutMode("cards")}
+                  title="Cards layout"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className={`layout-toggle-btn ${layoutMode === "explorer" ? "active" : ""}`}
+                  onClick={() => setLayoutMode("explorer")}
+                  title="Explorer layout"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5v-13zM4 3h12v2H4V3zm0 4h12v2H4V7zm0 4h12v2H4v-2z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="activity-feed-wrapper">
+                <button
+                  type="button"
+                  className={`header-btn header-btn-icon activity-toggle-btn ${activityOpen ? "active" : ""}`}
+                  onClick={() => {
+                    setActivityOpen((prev) => {
+                      if (!prev) markActivityRead();
+                      return !prev;
+                    });
+                  }}
+                  title="Activity feed"
+                  aria-label="Activity feed"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                  {unreadActivityCount > 0 && (
+                    <span className="activity-badge">{unreadActivityCount > 99 ? "99+" : unreadActivityCount}</span>
+                  )}
+                </button>
+                <ActivityFeed
+                  events={activityFeed}
+                  isOpen={activityOpen}
+                  onClose={() => setActivityOpen(false)}
+                  onNavigateToSession={(machineId, sessionId) => {
+                    if (layoutMode === "cards") {
+                      setFullscreen({ machineId, sessionId });
+                    } else {
+                      // In explorer mode, we cannot programmatically select — open fullscreen
+                      setFullscreen({ machineId, sessionId });
+                    }
+                  }}
+                />
+              </div>
+              <button type="button" className="header-btn" onClick={() => setLaunchOpen(true)} title="Launch new agent">
+                + New Agent
               </button>
               <button
                 type="button"
-                className={`layout-toggle-btn ${layoutMode === "explorer" ? "active" : ""}`}
-                onClick={() => setLayoutMode("explorer")}
-                title="Explorer layout"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5v-13zM4 3h12v2H4V3zm0 4h12v2H4V7zm0 4h12v2H4v-2z" />
-                </svg>
-              </button>
-            </div>
-            <div className="activity-feed-wrapper">
-              <button
-                type="button"
-                className={`header-btn header-btn-icon activity-toggle-btn ${activityOpen ? "active" : ""}`}
-                onClick={() => {
-                  setActivityOpen((prev) => {
-                    if (!prev) markActivityRead();
-                    return !prev;
-                  });
-                }}
-                title="Activity feed"
-                aria-label="Activity feed"
+                className="header-btn header-btn-icon"
+                onClick={() => setSettingsOpen(true)}
+                title="Settings"
+                aria-label="Settings"
               >
                 <svg
                   width="16"
@@ -526,58 +568,18 @@ export function App(): React.JSX.Element {
                   strokeLinejoin="round"
                   aria-hidden="true"
                 >
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
                 </svg>
-                {unreadActivityCount > 0 && (
-                  <span className="activity-badge">{unreadActivityCount > 99 ? "99+" : unreadActivityCount}</span>
-                )}
               </button>
-              <ActivityFeed
-                events={activityFeed}
-                isOpen={activityOpen}
-                onClose={() => setActivityOpen(false)}
-                onNavigateToSession={(machineId, sessionId) => {
-                  if (layoutMode === "cards") {
-                    setFullscreen({ machineId, sessionId });
-                  } else {
-                    // In explorer mode, we cannot programmatically select — open fullscreen
-                    setFullscreen({ machineId, sessionId });
-                  }
-                }}
-              />
             </div>
-            <button type="button" className="header-btn" onClick={() => setLaunchOpen(true)} title="Launch new agent">
-              + New Agent
-            </button>
-            <button
-              type="button"
-              className="header-btn header-btn-icon"
-              onClick={() => setSettingsOpen(true)}
-              title="Settings"
-              aria-label="Settings"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <line x1="4" y1="21" x2="4" y2="14" />
-                <line x1="4" y1="10" x2="4" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12" y2="3" />
-                <line x1="20" y1="21" x2="20" y2="16" />
-                <line x1="20" y1="12" x2="20" y2="3" />
-                <line x1="1" y1="14" x2="7" y2="14" />
-                <line x1="9" y1="8" x2="15" y2="8" />
-                <line x1="17" y1="16" x2="23" y2="16" />
-              </svg>
-            </button>
           </div>
         </div>
       </header>
