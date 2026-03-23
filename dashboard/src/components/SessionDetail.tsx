@@ -297,6 +297,7 @@ export function SessionDetail({
           <span className="session-time">Updated {timeAgo(session.lastActivity)}</span>
         </div>
         <div className="detail-toggles">
+          <span className="detail-toggles-label">Display:</span>
           <label className="detail-switch" aria-label="Show thinking blocks">
             <input type="checkbox" checked={showThinking} onChange={() => setShowThinking((prev) => !prev)} />
             <span className="switch-slider" />

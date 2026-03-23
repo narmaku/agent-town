@@ -1381,6 +1381,11 @@ body {
   flex-shrink: 0;
 }
 
+.detail-toggles-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .detail-switch {
   display: flex;
   align-items: center;
