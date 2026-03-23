@@ -39,20 +39,8 @@ export function SessionFullscreen({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  function handleOverlayClick(e: React.MouseEvent) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop dismissal
-    <div
-      className="fullscreen-overlay"
-      onClick={handleOverlayClick}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
-      role="presentation"
-    >
+    <div className="fullscreen-overlay">
       <div className="fullscreen-panel">
         <SessionDetail
           session={session}

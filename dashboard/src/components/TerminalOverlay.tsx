@@ -18,12 +18,14 @@ export function TerminalOverlay({ machineId, sessionName, multiplexer, onClose }
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const handleClose = useCallback(() => {
     wsRef.current?.close();
     terminalRef.current?.dispose();
-    onClose();
-  }, [onClose]);
+    onCloseRef.current();
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;

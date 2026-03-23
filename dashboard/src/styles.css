@@ -28,7 +28,6 @@ body {
 }
 
 .app {
-  max-width: 1400px;
   margin: 0 auto;
   padding: 0 24px;
   --font-offset: 0px;
@@ -1142,21 +1141,14 @@ body {
   position: fixed;
   inset: 0;
   z-index: 850;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+  background: var(--bg);
   overflow: hidden;
 }
 
 .fullscreen-panel {
   background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
   width: 100%;
-  max-width: 800px;
-  max-height: 90vh;
+  height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1623,12 +1615,23 @@ body {
 
 /* Explorer Layout */
 .app-explorer {
-  max-width: none;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-explorer .app-header {
+  margin-bottom: 0;
+  padding: 20px 24px;
+  flex-shrink: 0;
 }
 
 .explorer-layout {
   display: flex;
-  height: calc(100vh - 80px);
+  flex: 1;
+  min-height: 0;
   border-top: 1px solid var(--border);
 }
 
@@ -2243,7 +2246,7 @@ body {
 
 /* Fullscreen overlay */
 .app.theme-light .fullscreen-overlay {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg);
 }
 
 /* Header sort select option */
@@ -2593,22 +2596,7 @@ body {
     flex-wrap: wrap;
   }
 
-  /* Fullscreen modal: take full screen on mobile */
-  .fullscreen-overlay {
-    padding: 0;
-    align-items: stretch;
-    justify-content: stretch;
-  }
-
-  .fullscreen-panel {
-    max-width: none;
-    max-height: none;
-    height: 100vh;
-    height: 100dvh;
-    border-radius: 0;
-    border: none;
-  }
-
+  /* Fullscreen: tighter padding on mobile */
   .fullscreen-header {
     padding: 12px 14px;
     flex-wrap: wrap;
@@ -2715,11 +2703,9 @@ body {
     font-size: 14px;
   }
 
-  /* Explorer layout: force cards mode on mobile (hide sidebar layout) */
+  /* Explorer layout: stack on mobile */
   .explorer-layout {
     flex-direction: column;
-    height: auto;
-    min-height: calc(100vh - 120px);
   }
 
   .explorer-sidebar {
