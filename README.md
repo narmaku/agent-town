@@ -1,10 +1,18 @@
 # Agent Town
 
-A lightweight dashboard to monitor and connect to AI coding agent sessions across machines on your home network. Supports **Claude Code** and **OpenCode** via a provider abstraction, with more agents easily added.
+A lightweight dashboard to monitor and connect to AI coding agent sessions across machines on your home network. Supports **Claude Code**, **OpenCode**, and **Gemini CLI** via a provider abstraction, with more agents easily added.
 
 ## Features
 
-- **Multi-agent support**: Claude Code and OpenCode (extensible via provider plugins)
+- **Multi-agent support**: Claude Code, OpenCode, and Gemini CLI (extensible via provider plugins)
+- **Explorer and Cards layout modes**: switch between compact list and card-based views
+- **Configurable keyboard navigation**: navigate sessions with j/k, Enter to expand, f for fullscreen, t for terminal, s to send, / to search, ? for help (all shortcuts customizable)
+- **Activity feed**: cross-session status change notifications with click-to-navigate
+- **Git diff viewer**: view uncommitted changes per session with file navigation and syntax-highlighted diffs
+- **Browser notifications and sound alerts**: configurable alerts for session status changes (awaiting input, errors, etc.)
+- **Token usage tracking**: input/output token counts displayed per session
+- **SSH/remote nodes**: multi-machine support via SSH tunnels with automatic deployment
+- **Full-width cards and true fullscreen session view**: distraction-free session monitoring
 - Real-time session monitoring via WebSocket
 - Status detection: `working`, `awaiting_input`, `action_required`, `idle`, `done`, `error` (display names: Working, Awaiting Input, Action Required, Idle, Done, Error — see `SessionStatus` type in `shared/src/index.ts` for all values)
 - Multi-machine support over LAN (no VPN needed)
@@ -22,7 +30,7 @@ Server (:4680) --- receives heartbeats, serves dashboard, proxies terminals
   |
 Agent (per machine) --- discovers sessions via providers, reports status, relays terminals
   |
-zellij/tmux sessions --- where AI coding agents (Claude Code, OpenCode) run
+zellij/tmux sessions --- where AI coding agents (Claude Code, OpenCode, Gemini CLI) run
 ```
 
 ## Quick Start (local dev)
@@ -152,7 +160,7 @@ tmux new-session -d -s agent-town -c ~/development/agent-town './dev.sh'
 ```
 agent-town/
   agent/        # Runs on each machine, discovers sessions via provider plugins
-    providers/  # Agent type plugins (claude-code, opencode)
+    providers/  # Agent type plugins (claude-code, opencode, gemini-cli)
   server/       # Central hub, receives heartbeats, serves dashboard
   dashboard/    # React SPA with real-time status cards
   shared/       # TypeScript types and logger shared across packages

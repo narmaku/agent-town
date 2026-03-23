@@ -3,7 +3,7 @@
 ## Project Overview
 
 Dashboard for monitoring and controlling AI coding agent sessions across machines.
-Supports multiple agent types (Claude Code, OpenCode, and future agents) via a provider abstraction.
+Supports multiple agent types (Claude Code, OpenCode, and Gemini CLI) via a provider abstraction.
 Monorepo: `shared/`, `agent/`, `server/`, `dashboard/`.
 
 ## Development Mode
@@ -60,11 +60,11 @@ Multiplexer Sessions (zellij / tmux)
 
 - **shared/** — Types, logger. No runtime dependencies.
 - **agent/** — Runs on each machine. Uses provider plugins to discover sessions from
-  multiple AI coding agents (Claude Code, OpenCode, etc.), maps them to multiplexer
+  multiple AI coding agents (Claude Code, OpenCode, Gemini CLI), maps them to multiplexer
   sessions via process inspection, sends heartbeats to server.
-  - **agent/src/providers/** — Agent provider abstraction. Each provider implements
-    session discovery, process detection, CLI commands, and hook/event handling for
-    a specific AI coding agent.
+  - **agent/src/providers/** — Agent provider abstraction (Claude Code, OpenCode, Gemini CLI).
+    Each provider implements session discovery, process detection, CLI commands, and
+    hook/event handling for a specific AI coding agent.
 - **server/** — Central hub. Receives heartbeats, stores machine state, proxies commands
   to agents, serves the dashboard SPA.
 - **dashboard/** — React SPA. Connects via WebSocket for real-time updates.

@@ -31,8 +31,8 @@ This document describes the internal architecture, data flows, and key subsystem
                  zellij      tmux      processes                  zellij      tmux      processes
                  sessions    sessions   (ps)                      sessions    sessions   (ps)
                     |           |           |                         |           |           |
-                 claude      opencode   process                   claude      opencode   process
-                 code                   mapper                    code                   mapper
+                 claude      opencode   gemini     process        claude      opencode   gemini     process
+                 code                   cli        mapper        code                   cli        mapper
 ```
 
 ### Components
@@ -41,7 +41,7 @@ This document describes the internal architecture, data flows, and key subsystem
 
 **Server** (`server/`): Central hub running on port 4680. Receives heartbeats from agents, stores machine/session state in memory, broadcasts updates to dashboard clients, proxies API calls and terminal connections to agents. Manages SSH tunnels for remote nodes.
 
-**Agent** (`agent/`): Runs on each machine (local or remote) on port 4681. Discovers AI coding agent sessions through the provider plugin system, maps running processes to multiplexer sessions, sends heartbeats to the server, and provides terminal relay and session management APIs.
+**Agent** (`agent/`): Runs on each machine (local or remote) on port 4681. Discovers AI coding agent sessions (Claude Code, OpenCode, Gemini CLI) through the provider plugin system, maps running processes to multiplexer sessions, sends heartbeats to the server, and provides terminal relay and session management APIs.
 
 **Shared** (`shared/`): TypeScript type definitions and the logger utility. No runtime dependencies. Used by both server and agent.
 
@@ -65,6 +65,7 @@ Calls `discoverSessions()` on all registered providers in parallel. Each provide
 
 - **Claude Code:** Scans `~/.claude/projects/*/` for JSONL files. Parses the first and last few lines of each file to extract session metadata (ID, project path, status, last message, model).
 - **OpenCode:** Calls `session.list()` via the SDK (or reads SQLite at `~/.opencode/data.db` as fallback).
+- **Gemini CLI:** Scans `~/.gemini/tmp/<project_hash>/chats/` for JSON session files. Resolves project paths via `~/.gemini/projects.json` or `.project_root` files. Status is inferred from file modification times.
 
 Returns a flat array of `SessionInfo[]` -- at this point, no multiplexer mapping exists.
 

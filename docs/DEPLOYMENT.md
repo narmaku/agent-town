@@ -8,7 +8,7 @@ This document covers how to set up and run Agent Town in different configuration
 
 - **Bun** (runtime): Install from https://bun.sh
 - **Terminal multiplexer**: At least one of [zellij](https://zellij.dev) or [tmux](https://github.com/tmux/tmux)
-- **AI coding agent**: At least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [OpenCode](https://github.com/opencode-ai/opencode)
+- **AI coding agent**: At least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencode-ai/opencode), or [Gemini CLI](https://github.com/google-gemini/gemini-cli)
 - **Python 3**: Required for the PTY helper (terminal relay)
 - **Linux**: Full feature set. macOS works but lacks `/proc` filesystem (process mapping is limited) and `systemd-run` (cgroup isolation unavailable)
 

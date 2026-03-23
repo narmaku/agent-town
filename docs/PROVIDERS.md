@@ -31,7 +31,7 @@ interface AgentProvider {
 
 | Property      | Type        | Description                                              |
 |---------------|-------------|----------------------------------------------------------|
-| `type`        | `AgentType` | Unique identifier (`"claude-code"` or `"opencode"`)      |
+| `type`        | `AgentType` | Unique identifier (`"claude-code"`, `"opencode"`, or `"gemini-cli"`) |
 | `displayName` | `string`    | Human-readable name (e.g., `"Claude Code"`)              |
 | `binaryName`  | `string`    | CLI binary name (e.g., `"claude"` or `"opencode"`)       |
 
@@ -186,7 +186,7 @@ function getAllProviders(): AgentProvider[];
 
 At agent startup, `initializeProviders()` is called. It:
 
-1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`).
+1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`, `GeminiCliProvider`).
 2. Calls `isAvailable()` on each.
 3. Registers only the providers whose binary is found in `$PATH`.
 
@@ -195,6 +195,7 @@ async function initializeProviders(): Promise<void> {
   const candidates: AgentProvider[] = [
     new ClaudeCodeProvider(),
     new OpenCodeProvider(),
+    new GeminiCliProvider(),
   ];
 
   for (const provider of candidates) {
@@ -255,6 +256,31 @@ startEventStream(onEvent: (result: HookEventResult) => void): Promise<void>;
 sendViaTUI(text: string): Promise<boolean>;
 ```
 
+### Gemini CLI Provider
+
+**Location:** `agent/src/providers/gemini-cli/`
+
+| File                  | Purpose                                            |
+|-----------------------|----------------------------------------------------|
+| `index.ts`            | Provider class, delegates to specialized modules   |
+| `session-discovery.ts`| Reads JSON session files from `~/.gemini/tmp/`     |
+| `message-parser.ts`   | Parses Gemini JSON messages into `SessionMessage[]` |
+| `process-mapper.ts`   | Extracts session ID from `--resume` args           |
+
+Key characteristics:
+- Sessions are stored as JSON files in `~/.gemini/tmp/<project_hash>/chats/` directories.
+- Session IDs are UUIDs (e.g., `4460d17e-a2b3-4c5d-8e9f-0123456789ab`).
+- Project-to-directory mapping is resolved via `~/.gemini/projects.json` or `.project_root` files in each project hash directory.
+- Status detection is based on file modification time heuristics (no hook or SSE support).
+- Launch command: `gemini [--model X] [--yolo]`
+- Resume command: `gemini --resume <sessionId> [--model X] [--yolo]`
+- Session ID extraction from args: matches `--resume <uuid>` or `-r <uuid>` patterns.
+- Message format includes thoughts (reasoning), tool calls with structured results, and token usage stats (input, output, cached, thoughts, tool, total).
+
+Limitations compared to other providers:
+- **No hook/event support:** Gemini CLI does not currently support hooks or webhooks for real-time status tracking. Status detection relies entirely on file modification time heuristics, which is less accurate than Claude Code hooks or OpenCode SSE events.
+- **No SDK integration:** Session discovery and message parsing read JSON files directly from disk rather than communicating with a running server process.
+
 ---
 
 ## How Session Discovery Works
@@ -299,7 +325,7 @@ agent/src/providers/my-agent/
 In `shared/src/index.ts`, add the new type to the `AgentType` union:
 
 ```typescript
-export type AgentType = "claude-code" | "opencode" | "my-agent";
+export type AgentType = "claude-code" | "opencode" | "gemini-cli" | "my-agent";
 ```
 
 ### Step 3: Implement the AgentProvider interface
@@ -403,11 +429,13 @@ In `agent/src/providers/registry.ts`, add the import and candidate:
 export async function initializeProviders(): Promise<void> {
   const { ClaudeCodeProvider } = await import("./claude-code/index");
   const { OpenCodeProvider } = await import("./opencode/index");
+  const { GeminiCliProvider } = await import("./gemini-cli/index");
   const { MyAgentProvider } = await import("./my-agent/index");
 
   const candidates: AgentProvider[] = [
     new ClaudeCodeProvider(),
     new OpenCodeProvider(),
+    new GeminiCliProvider(),
     new MyAgentProvider(),
   ];
 
@@ -431,7 +459,7 @@ agent/src/providers/my-agent/
   process-mapper.test.ts
 ```
 
-Use the existing test patterns from `agent/src/providers/claude-code/` and `agent/src/providers/opencode/` as reference. Run tests with:
+Use the existing test patterns from `agent/src/providers/claude-code/`, `agent/src/providers/opencode/`, and `agent/src/providers/gemini-cli/` as reference. Run tests with:
 
 ```bash
 bun test --filter agent

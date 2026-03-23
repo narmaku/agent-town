@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Gemini CLI provider: third supported agent type with session discovery from `~/.gemini/tmp/`, JSON-based message parsing, and process detection (2026-03-21)
+- Git diff preview with file navigation and syntax-highlighted diffs per session (2026-03-21)
+- Configurable keyboard navigation with customizable shortcuts (j/k, Enter, f, t, s, /, ?) (2026-03-21)
+- Unified activity feed for cross-session status change notifications (2026-03-21)
+- Mobile-responsive layout with three breakpoints (2026-03-21)
+- Browser notifications and sound alerts for session status changes (2026-03-21)
+- Token usage tracking (input/output token counts) per session (2026-03-21)
+- Enhanced message history with tool call grouping and toggle controls (2026-03-20)
+- Full-width cards and true fullscreen session view (2026-03-23)
+- "Display:" label on thinking/tools toggle controls (2026-03-23)
+- 292 additional tests for 9 previously untested modules (2026-03-19)
+
+### Changed
+- Removed cost estimation, kept token tracking only (2026-03-22)
+- Moved tool/thinking toggles to header as switch controls (2026-03-21)
+- Extracted shared utilities and constants to reduce duplication (2026-03-18)
+- Broke up heartbeat and send-text functions into focused helpers (2026-03-18)
+
+### Fixed
+- Gemini CLI text sending and git diff directory resolution (2026-03-21)
+- Full-width cards, true fullscreen view, and terminal blinking (2026-03-23)
+- Agent-type-aware text sending for Claude Code with bracketed paste (2026-03-19)
+- Strengthened validateProjectDir with path canonicalization (2026-03-18)
+
 ## [0.1.0] - 2026-03-18
 
 ### Added
