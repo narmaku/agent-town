@@ -236,7 +236,7 @@ describe("API", () => {
     }
   });
 
-  test("contains exactly 13 endpoints", () => {
-    expect(Object.keys(API)).toHaveLength(13);
+  test("contains exactly 14 endpoints", () => {
+    expect(Object.keys(API)).toHaveLength(14);
   });
 });

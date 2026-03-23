@@ -25,6 +25,16 @@ import { API } from "./utils";
 
 const logger = createBrowserLogger("App");
 
+const DEEP_SEARCH_MIN_CHARS = 3;
+const DEEP_SEARCH_DEBOUNCE_MS = 500;
+
+interface DeepSearchResult {
+  sessionId: string;
+  agentType: AgentType;
+  snippet: string;
+  matchCount: number;
+}
+
 export type SortMode = "recent" | "alphabetical" | "status";
 export type TimeFilter = "24h" | "3d" | "7d" | "all";
 export type GroupMode = "directory" | "status" | "none";
@@ -69,13 +79,20 @@ function loadLocalStorage<T>(key: string, fallback: T): T {
   }
 }
 
-function filterMachinesBySearch(machines: MachineInfo[], query: string): MachineInfo[] {
+function filterMachinesBySearch(
+  machines: MachineInfo[],
+  query: string,
+  deepSearchSessionIds?: Set<string>,
+): MachineInfo[] {
   if (!query.trim()) return machines;
   const q = query.toLowerCase();
   return machines
     .map((machine) => ({
       ...machine,
       sessions: machine.sessions.filter((s) => {
+        // Check deep search results first
+        if (deepSearchSessionIds?.has(s.sessionId)) return true;
+
         const name = (s.customName || s.slug).toLowerCase();
         const project = s.projectName.toLowerCase();
         const path = s.projectPath.toLowerCase();
@@ -114,6 +131,10 @@ export function App(): React.JSX.Element {
   const [groupMode, setGroupMode] = useState<GroupMode>(() => loadLocalStorage(STORAGE_KEYS.GROUP_MODE, "directory"));
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLocalStorage(STORAGE_KEYS.LAYOUT_MODE, "cards"));
   const [searchQuery, setSearchQuery] = useState("");
+  const [deepSearch, setDeepSearch] = useState(false);
+  const [deepSearchLoading, setDeepSearchLoading] = useState(false);
+  const [deepSearchSessionIds, setDeepSearchSessionIds] = useState<Set<string>>(new Set());
+  const deepSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [enableKeyboardNav, setEnableKeyboardNav] = useState(true);
   const [keyboardShortcuts, setKeyboardShortcuts] = useState<Record<string, string>>({
@@ -155,8 +176,75 @@ export function App(): React.JSX.Element {
     fetchSettings();
   }, [fetchSettings]);
 
-  // Filter machines by search query
-  const filteredMachines = useMemo(() => filterMachinesBySearch(machines, searchQuery), [machines, searchQuery]);
+  // Deep search: debounced API call when deepSearch is enabled and query has 3+ chars
+  useEffect(() => {
+    if (deepSearchTimerRef.current) {
+      clearTimeout(deepSearchTimerRef.current);
+      deepSearchTimerRef.current = null;
+    }
+
+    if (!deepSearch || searchQuery.length < DEEP_SEARCH_MIN_CHARS) {
+      setDeepSearchSessionIds(new Set());
+      setDeepSearchLoading(false);
+      return;
+    }
+
+    setDeepSearchLoading(true);
+
+    deepSearchTimerRef.current = setTimeout(() => {
+      const fetchDeepSearch = async (): Promise<void> => {
+        const allIds = new Set<string>();
+        const promises = machines.map(async (machine) => {
+          try {
+            const params = new URLSearchParams({
+              machineId: machine.machineId,
+              query: searchQuery,
+              limit: "50",
+            });
+            const resp = await fetch(`${API.SEARCH_MESSAGES}?${params.toString()}`);
+            if (!resp.ok) return;
+            const data = (await resp.json()) as { results?: DeepSearchResult[] };
+            if (data.results) {
+              for (const r of data.results) {
+                allIds.add(r.sessionId);
+              }
+            }
+          } catch (err) {
+            logger.warn(
+              `Deep search failed for machine ${machine.machineId}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        });
+
+        await Promise.all(promises);
+        setDeepSearchSessionIds(allIds);
+        setDeepSearchLoading(false);
+      };
+
+      fetchDeepSearch().catch((err) => {
+        logger.warn(`Deep search failed: ${err instanceof Error ? err.message : String(err)}`);
+        setDeepSearchLoading(false);
+      });
+    }, DEEP_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (deepSearchTimerRef.current) {
+        clearTimeout(deepSearchTimerRef.current);
+        deepSearchTimerRef.current = null;
+      }
+    };
+  }, [deepSearch, searchQuery, machines]);
+
+  // Filter machines by search query (including deep search results)
+  const filteredMachines = useMemo(
+    () =>
+      filterMachinesBySearch(
+        machines,
+        searchQuery,
+        deepSearch && deepSearchSessionIds.size > 0 ? deepSearchSessionIds : undefined,
+      ),
+    [machines, searchQuery, deepSearch, deepSearchSessionIds],
+  );
 
   // Flatten visible sessions for keyboard navigation, applying the same
   // filtering/sorting as MachineGroup so navigation order matches the UI.
@@ -312,87 +400,162 @@ export function App(): React.JSX.Element {
             </svg>
           </button>
           <div className={`header-actions ${showMobileFilters ? "show" : ""}`}>
-            <input
-              ref={searchInputRef}
-              className="search-input"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search sessions..."
-              aria-label="Search sessions"
-            />
-            <select
-              className="header-sort-select"
-              value={groupMode}
-              onChange={(e) => setGroupMode(e.target.value as GroupMode)}
-              title="Group sessions"
-            >
-              <option value="directory">By directory</option>
-              <option value="status">By status</option>
-              <option value="none">No grouping</option>
-            </select>
-            <select
-              className="header-sort-select"
-              value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
-              title="Filter by age"
-            >
-              <option value="24h">Last 24h</option>
-              <option value="3d">Last 3 days</option>
-              <option value="7d">Last 7 days</option>
-              <option value="all">All sessions</option>
-            </select>
-            <select
-              className="header-sort-select"
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as SortMode)}
-              title="Sort sessions"
-            >
-              <option value="recent">Recent first</option>
-              <option value="alphabetical">A-Z</option>
-              <option value="status">By status</option>
-            </select>
-            <button
-              type="button"
-              className={`header-btn ${hideIdle ? "active" : ""}`}
-              onClick={() => setHideIdle((h) => !h)}
-            >
-              Hide Idle
-            </button>
-            <div className="layout-toggle">
-              <button
-                type="button"
-                className={`layout-toggle-btn ${layoutMode === "cards" ? "active" : ""}`}
-                onClick={() => setLayoutMode("cards")}
-                title="Cards layout"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className={`layout-toggle-btn ${layoutMode === "explorer" ? "active" : ""}`}
-                onClick={() => setLayoutMode("explorer")}
-                title="Explorer layout"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                  <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5v-13zM4 3h12v2H4V3zm0 4h12v2H4V7zm0 4h12v2H4v-2z" />
-                </svg>
-              </button>
+            <div className="search-group">
+              <input
+                ref={searchInputRef}
+                className={`search-input ${deepSearch ? "deep-search-active" : ""}`}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search sessions..."
+                aria-label="Search sessions"
+              />
+              <label className="deep-search-toggle" title="Search in session message history">
+                <input
+                  type="checkbox"
+                  checked={deepSearch}
+                  onChange={(e) => setDeepSearch(e.target.checked)}
+                  aria-label="Search in message history"
+                />
+                <span className="deep-search-label">{deepSearchLoading ? "Searching..." : "Search history"}</span>
+              </label>
             </div>
-            <div className="activity-feed-wrapper">
+            <div className="filter-group">
+              <label className="filter-label" htmlFor="filter-group-select">
+                Group
+              </label>
+              <select
+                id="filter-group-select"
+                className="header-sort-select"
+                value={groupMode}
+                onChange={(e) => setGroupMode(e.target.value as GroupMode)}
+                title="Group sessions"
+                aria-label="Group sessions"
+              >
+                <option value="directory">By directory</option>
+                <option value="status">By status</option>
+                <option value="none">No grouping</option>
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label" htmlFor="filter-time-select">
+                Time
+              </label>
+              <select
+                id="filter-time-select"
+                className="header-sort-select"
+                value={timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
+                title="Filter by age"
+                aria-label="Filter by age"
+              >
+                <option value="24h">Last 24h</option>
+                <option value="3d">Last 3 days</option>
+                <option value="7d">Last 7 days</option>
+                <option value="all">All sessions</option>
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label" htmlFor="filter-sort-select">
+                Sort
+              </label>
+              <select
+                id="filter-sort-select"
+                className="header-sort-select"
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                title="Sort sessions"
+                aria-label="Sort sessions"
+              >
+                <option value="recent">Recent first</option>
+                <option value="alphabetical">A-Z</option>
+                <option value="status">By status</option>
+              </select>
+            </div>
+            <div className="header-toolbar">
               <button
                 type="button"
-                className={`header-btn header-btn-icon activity-toggle-btn ${activityOpen ? "active" : ""}`}
-                onClick={() => {
-                  setActivityOpen((prev) => {
-                    if (!prev) markActivityRead();
-                    return !prev;
-                  });
-                }}
-                title="Activity feed"
-                aria-label="Activity feed"
+                className={`header-btn ${hideIdle ? "active" : ""}`}
+                onClick={() => setHideIdle((h) => !h)}
+                aria-label={hideIdle ? "Show idle sessions" : "Hide idle sessions"}
+              >
+                Hide Idle
+              </button>
+              <div className="layout-toggle">
+                <button
+                  type="button"
+                  className={`layout-toggle-btn ${layoutMode === "cards" ? "active" : ""}`}
+                  onClick={() => setLayoutMode("cards")}
+                  title="Cards layout"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className={`layout-toggle-btn ${layoutMode === "explorer" ? "active" : ""}`}
+                  onClick={() => setLayoutMode("explorer")}
+                  title="Explorer layout"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5v-13zM4 3h12v2H4V3zm0 4h12v2H4V7zm0 4h12v2H4v-2z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="activity-feed-wrapper">
+                <button
+                  type="button"
+                  className={`header-btn header-btn-icon activity-toggle-btn ${activityOpen ? "active" : ""}`}
+                  onClick={() => {
+                    setActivityOpen((prev) => {
+                      if (!prev) markActivityRead();
+                      return !prev;
+                    });
+                  }}
+                  title="Activity feed"
+                  aria-label="Activity feed"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                  {unreadActivityCount > 0 && (
+                    <span className="activity-badge">{unreadActivityCount > 99 ? "99+" : unreadActivityCount}</span>
+                  )}
+                </button>
+                <ActivityFeed
+                  events={activityFeed}
+                  isOpen={activityOpen}
+                  onClose={() => setActivityOpen(false)}
+                  onNavigateToSession={(machineId, sessionId) => {
+                    if (layoutMode === "cards") {
+                      setFullscreen({ machineId, sessionId });
+                    } else {
+                      // In explorer mode, we cannot programmatically select — open fullscreen
+                      setFullscreen({ machineId, sessionId });
+                    }
+                  }}
+                />
+              </div>
+              <button type="button" className="header-btn" onClick={() => setLaunchOpen(true)} title="Launch new agent">
+                + New Agent
+              </button>
+              <button
+                type="button"
+                className="header-btn header-btn-icon"
+                onClick={() => setSettingsOpen(true)}
+                title="Settings"
+                aria-label="Settings"
               >
                 <svg
                   width="16"
@@ -405,58 +568,18 @@ export function App(): React.JSX.Element {
                   strokeLinejoin="round"
                   aria-hidden="true"
                 >
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  <line x1="4" y1="21" x2="4" y2="14" />
+                  <line x1="4" y1="10" x2="4" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12" y2="3" />
+                  <line x1="20" y1="21" x2="20" y2="16" />
+                  <line x1="20" y1="12" x2="20" y2="3" />
+                  <line x1="1" y1="14" x2="7" y2="14" />
+                  <line x1="9" y1="8" x2="15" y2="8" />
+                  <line x1="17" y1="16" x2="23" y2="16" />
                 </svg>
-                {unreadActivityCount > 0 && (
-                  <span className="activity-badge">{unreadActivityCount > 99 ? "99+" : unreadActivityCount}</span>
-                )}
               </button>
-              <ActivityFeed
-                events={activityFeed}
-                isOpen={activityOpen}
-                onClose={() => setActivityOpen(false)}
-                onNavigateToSession={(machineId, sessionId) => {
-                  if (layoutMode === "cards") {
-                    setFullscreen({ machineId, sessionId });
-                  } else {
-                    // In explorer mode, we cannot programmatically select — open fullscreen
-                    setFullscreen({ machineId, sessionId });
-                  }
-                }}
-              />
             </div>
-            <button type="button" className="header-btn" onClick={() => setLaunchOpen(true)} title="Launch new agent">
-              + New Agent
-            </button>
-            <button
-              type="button"
-              className="header-btn header-btn-icon"
-              onClick={() => setSettingsOpen(true)}
-              title="Settings"
-              aria-label="Settings"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <line x1="4" y1="21" x2="4" y2="14" />
-                <line x1="4" y1="10" x2="4" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12" y2="3" />
-                <line x1="20" y1="21" x2="20" y2="16" />
-                <line x1="20" y1="12" x2="20" y2="3" />
-                <line x1="1" y1="14" x2="7" y2="14" />
-                <line x1="9" y1="8" x2="15" y2="8" />
-                <line x1="17" y1="16" x2="23" y2="16" />
-              </svg>
-            </button>
           </div>
         </div>
       </header>
