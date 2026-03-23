@@ -207,6 +207,35 @@ async function routeRequest(
     }
   }
 
+  // API: search session message content (proxy to agent)
+  if (url.pathname === "/api/search-messages" && req.method === "GET") {
+    const machineId = url.searchParams.get("machineId");
+    const query = url.searchParams.get("query");
+    const limit = url.searchParams.get("limit") || "50";
+
+    if (!machineId || !query) {
+      return Response.json({ error: "Missing machineId or query" }, { status: 400 });
+    }
+
+    const machine = getMachine(machineId);
+    if (!machine || !machine.terminalPort) {
+      return Response.json({ error: "Machine not found" }, { status: 404 });
+    }
+
+    const agentUrl =
+      getAgentUrl(machine, "/api/search-messages") +
+      `?query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`;
+
+    try {
+      const agentResp = await fetch(agentUrl);
+      const data = await agentResp.json();
+      return Response.json(data, { status: agentResp.status });
+    } catch (err) {
+      log.error(`search-messages: failed to fetch from agent: ${err instanceof Error ? err.message : String(err)}`);
+      return Response.json({ error: "Failed to search messages on agent" }, { status: 502 });
+    }
+  }
+
   // API: get git diff for a session's working directory (proxy to agent)
   if (url.pathname === "/api/git-diff" && req.method === "GET") {
     const machineId = url.searchParams.get("machineId");

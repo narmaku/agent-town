@@ -6,7 +6,7 @@ import type { Server, Subprocess } from "bun";
 import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { getAllProviders, getProvider } from "./providers/registry";
-import { getSessionMessages } from "./session-messages";
+import { getSessionMessages, searchSessionMessages } from "./session-messages";
 
 const log = createLogger("terminal");
 
@@ -363,6 +363,30 @@ export function startTerminalServer(port: number, machineId: string): Server {
           const message = err instanceof Error ? err.message : "Unknown error";
           const status = message === "Session not found" ? 404 : 500;
           return Response.json({ error: message }, { status });
+        }
+      }
+
+      // HTTP endpoint: search across session message content
+      if (url.pathname === "/api/search-messages" && req.method === "GET") {
+        const query = url.searchParams.get("query");
+        const limitParam = url.searchParams.get("limit") || "50";
+        const limit = parseInt(limitParam, 10);
+
+        if (!query || query.length < 3) {
+          return Response.json({ error: "Query must be at least 3 characters" }, { status: 400 });
+        }
+
+        if (Number.isNaN(limit) || limit < 1 || limit > 200) {
+          return Response.json({ error: "Limit must be between 1 and 200" }, { status: 400 });
+        }
+
+        try {
+          const results = await searchSessionMessages(query, limit);
+          return Response.json({ results });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          log.error(`search-messages: failed: ${message}`);
+          return Response.json({ error: message }, { status: 500 });
         }
       }
 

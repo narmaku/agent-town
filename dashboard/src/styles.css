@@ -1584,6 +1584,55 @@ body {
   color: var(--text-muted);
 }
 
+/* Search Group (search input + deep search toggle) */
+.search-group {
+  display: contents;
+}
+
+.deep-search-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.deep-search-toggle input[type="checkbox"] {
+  accent-color: var(--blue);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.deep-search-label {
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.deep-search-toggle:hover .deep-search-label {
+  color: var(--text);
+}
+
+.search-input.deep-search-active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+/* Filter Group (label + select, labels hidden on desktop) */
+.filter-group {
+  display: contents;
+}
+
+.filter-label {
+  display: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 /* Layout Toggle */
 .layout-toggle {
   display: flex;
@@ -2263,6 +2312,12 @@ body {
   background: #ffffff;
 }
 
+/* Deep search active border */
+.app.theme-light .search-input.deep-search-active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.3);
+}
+
 /* Activity feed dropdown */
 .app.theme-light .activity-feed-dropdown {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
@@ -2527,11 +2582,11 @@ body {
     flex-shrink: 0;
   }
 
-  /* Header actions: hidden by default on mobile */
+  /* Header actions: hidden by default on mobile, vertical stack when shown */
   .header-actions {
     display: none;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-direction: column;
+    gap: 10px;
     flex-basis: 100%;
     padding-top: 10px;
     border-top: 1px solid var(--border);
@@ -2539,6 +2594,14 @@ body {
 
   .header-actions.show {
     display: flex;
+  }
+
+  /* Search group: vertical stack on mobile */
+  .search-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
   }
 
   /* Search: full width on mobile */
@@ -2555,26 +2618,79 @@ body {
     width: 100%;
   }
 
-  /* Selects: fill available space, touch-friendly */
-  .header-sort-select {
-    flex: 1;
-    min-width: 0;
+  /* Deep search toggle: inline with checkbox */
+  .deep-search-toggle {
+    font-size: 13px;
+    min-height: 36px;
+    padding: 4px 0;
+  }
+
+  .deep-search-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Filter groups: full width with visible labels */
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .filter-label {
+    display: block;
     font-size: 12px;
-    padding: 8px 28px 8px 8px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Selects: full width, touch-friendly */
+  .header-sort-select {
+    width: 100%;
+    flex: none;
+    min-width: 0;
+    font-size: 14px;
+    padding: 8px 28px 8px 12px;
     min-height: 44px;
   }
 
-  /* Buttons: touch-friendly sizing */
+  /* Buttons: full width on mobile */
   .header-btn {
-    font-size: 12px;
+    font-size: 13px;
     padding: 8px 12px;
     white-space: nowrap;
     min-height: 44px;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Bottom action row: layout toggle, activity, new agent, settings */
+  .header-actions .layout-toggle,
+  .header-actions .activity-feed-wrapper,
+  .header-actions > .header-btn,
+  .header-actions > .header-btn-icon {
+    width: auto;
   }
 
   /* Hide explorer layout toggle on mobile */
   .layout-toggle {
     display: none;
+  }
+
+  /* Mobile bottom actions: horizontal row */
+  .mobile-bottom-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .mobile-bottom-actions .header-btn {
+    width: auto;
+    flex: none;
   }
 
   /* Sessions grid: single column */

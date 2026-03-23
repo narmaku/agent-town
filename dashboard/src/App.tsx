@@ -25,6 +25,16 @@ import { API } from "./utils";
 
 const logger = createBrowserLogger("App");
 
+const DEEP_SEARCH_MIN_CHARS = 3;
+const DEEP_SEARCH_DEBOUNCE_MS = 500;
+
+interface DeepSearchResult {
+  sessionId: string;
+  agentType: AgentType;
+  snippet: string;
+  matchCount: number;
+}
+
 export type SortMode = "recent" | "alphabetical" | "status";
 export type TimeFilter = "24h" | "3d" | "7d" | "all";
 export type GroupMode = "directory" | "status" | "none";
@@ -69,13 +79,20 @@ function loadLocalStorage<T>(key: string, fallback: T): T {
   }
 }
 
-function filterMachinesBySearch(machines: MachineInfo[], query: string): MachineInfo[] {
+function filterMachinesBySearch(
+  machines: MachineInfo[],
+  query: string,
+  deepSearchSessionIds?: Set<string>,
+): MachineInfo[] {
   if (!query.trim()) return machines;
   const q = query.toLowerCase();
   return machines
     .map((machine) => ({
       ...machine,
       sessions: machine.sessions.filter((s) => {
+        // Check deep search results first
+        if (deepSearchSessionIds?.has(s.sessionId)) return true;
+
         const name = (s.customName || s.slug).toLowerCase();
         const project = s.projectName.toLowerCase();
         const path = s.projectPath.toLowerCase();
@@ -114,6 +131,10 @@ export function App(): React.JSX.Element {
   const [groupMode, setGroupMode] = useState<GroupMode>(() => loadLocalStorage(STORAGE_KEYS.GROUP_MODE, "directory"));
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLocalStorage(STORAGE_KEYS.LAYOUT_MODE, "cards"));
   const [searchQuery, setSearchQuery] = useState("");
+  const [deepSearch, setDeepSearch] = useState(false);
+  const [deepSearchLoading, setDeepSearchLoading] = useState(false);
+  const [deepSearchSessionIds, setDeepSearchSessionIds] = useState<Set<string>>(new Set());
+  const deepSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [enableKeyboardNav, setEnableKeyboardNav] = useState(true);
   const [keyboardShortcuts, setKeyboardShortcuts] = useState<Record<string, string>>({
@@ -155,8 +176,75 @@ export function App(): React.JSX.Element {
     fetchSettings();
   }, [fetchSettings]);
 
-  // Filter machines by search query
-  const filteredMachines = useMemo(() => filterMachinesBySearch(machines, searchQuery), [machines, searchQuery]);
+  // Deep search: debounced API call when deepSearch is enabled and query has 3+ chars
+  useEffect(() => {
+    if (deepSearchTimerRef.current) {
+      clearTimeout(deepSearchTimerRef.current);
+      deepSearchTimerRef.current = null;
+    }
+
+    if (!deepSearch || searchQuery.length < DEEP_SEARCH_MIN_CHARS) {
+      setDeepSearchSessionIds(new Set());
+      setDeepSearchLoading(false);
+      return;
+    }
+
+    setDeepSearchLoading(true);
+
+    deepSearchTimerRef.current = setTimeout(() => {
+      const fetchDeepSearch = async (): Promise<void> => {
+        const allIds = new Set<string>();
+        const promises = machines.map(async (machine) => {
+          try {
+            const params = new URLSearchParams({
+              machineId: machine.machineId,
+              query: searchQuery,
+              limit: "50",
+            });
+            const resp = await fetch(`${API.SEARCH_MESSAGES}?${params.toString()}`);
+            if (!resp.ok) return;
+            const data = (await resp.json()) as { results?: DeepSearchResult[] };
+            if (data.results) {
+              for (const r of data.results) {
+                allIds.add(r.sessionId);
+              }
+            }
+          } catch (err) {
+            logger.warn(
+              `Deep search failed for machine ${machine.machineId}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        });
+
+        await Promise.all(promises);
+        setDeepSearchSessionIds(allIds);
+        setDeepSearchLoading(false);
+      };
+
+      fetchDeepSearch().catch((err) => {
+        logger.warn(`Deep search failed: ${err instanceof Error ? err.message : String(err)}`);
+        setDeepSearchLoading(false);
+      });
+    }, DEEP_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (deepSearchTimerRef.current) {
+        clearTimeout(deepSearchTimerRef.current);
+        deepSearchTimerRef.current = null;
+      }
+    };
+  }, [deepSearch, searchQuery, machines]);
+
+  // Filter machines by search query (including deep search results)
+  const filteredMachines = useMemo(
+    () =>
+      filterMachinesBySearch(
+        machines,
+        searchQuery,
+        deepSearch && deepSearchSessionIds.size > 0 ? deepSearchSessionIds : undefined,
+      ),
+    [machines, searchQuery, deepSearch, deepSearchSessionIds],
+  );
 
   // Flatten visible sessions for keyboard navigation, applying the same
   // filtering/sorting as MachineGroup so navigation order matches the UI.
@@ -312,50 +400,83 @@ export function App(): React.JSX.Element {
             </svg>
           </button>
           <div className={`header-actions ${showMobileFilters ? "show" : ""}`}>
-            <input
-              ref={searchInputRef}
-              className="search-input"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search sessions..."
-              aria-label="Search sessions"
-            />
-            <select
-              className="header-sort-select"
-              value={groupMode}
-              onChange={(e) => setGroupMode(e.target.value as GroupMode)}
-              title="Group sessions"
-            >
-              <option value="directory">By directory</option>
-              <option value="status">By status</option>
-              <option value="none">No grouping</option>
-            </select>
-            <select
-              className="header-sort-select"
-              value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
-              title="Filter by age"
-            >
-              <option value="24h">Last 24h</option>
-              <option value="3d">Last 3 days</option>
-              <option value="7d">Last 7 days</option>
-              <option value="all">All sessions</option>
-            </select>
-            <select
-              className="header-sort-select"
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as SortMode)}
-              title="Sort sessions"
-            >
-              <option value="recent">Recent first</option>
-              <option value="alphabetical">A-Z</option>
-              <option value="status">By status</option>
-            </select>
+            <div className="search-group">
+              <input
+                ref={searchInputRef}
+                className={`search-input ${deepSearch ? "deep-search-active" : ""}`}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search sessions..."
+                aria-label="Search sessions"
+              />
+              <label className="deep-search-toggle" title="Search in session message history">
+                <input
+                  type="checkbox"
+                  checked={deepSearch}
+                  onChange={(e) => setDeepSearch(e.target.checked)}
+                  aria-label="Search in message history"
+                />
+                <span className="deep-search-label">{deepSearchLoading ? "Searching..." : "Search history"}</span>
+              </label>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label" htmlFor="filter-group-select">
+                Group
+              </label>
+              <select
+                id="filter-group-select"
+                className="header-sort-select"
+                value={groupMode}
+                onChange={(e) => setGroupMode(e.target.value as GroupMode)}
+                title="Group sessions"
+                aria-label="Group sessions"
+              >
+                <option value="directory">By directory</option>
+                <option value="status">By status</option>
+                <option value="none">No grouping</option>
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label" htmlFor="filter-time-select">
+                Time
+              </label>
+              <select
+                id="filter-time-select"
+                className="header-sort-select"
+                value={timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
+                title="Filter by age"
+                aria-label="Filter by age"
+              >
+                <option value="24h">Last 24h</option>
+                <option value="3d">Last 3 days</option>
+                <option value="7d">Last 7 days</option>
+                <option value="all">All sessions</option>
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label" htmlFor="filter-sort-select">
+                Sort
+              </label>
+              <select
+                id="filter-sort-select"
+                className="header-sort-select"
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                title="Sort sessions"
+                aria-label="Sort sessions"
+              >
+                <option value="recent">Recent first</option>
+                <option value="alphabetical">A-Z</option>
+                <option value="status">By status</option>
+              </select>
+            </div>
             <button
               type="button"
               className={`header-btn ${hideIdle ? "active" : ""}`}
               onClick={() => setHideIdle((h) => !h)}
+              aria-label={hideIdle ? "Show idle sessions" : "Hide idle sessions"}
             >
               Hide Idle
             </button>

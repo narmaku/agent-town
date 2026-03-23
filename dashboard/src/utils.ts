@@ -54,6 +54,7 @@ export const API = {
   AGENTS_RESUME: "/api/agents/resume",
   SESSIONS_RECONNECT: "/api/sessions/reconnect",
   GIT_DIFF: "/api/git-diff",
+  SEARCH_MESSAGES: "/api/search-messages",
   NODES: "/api/nodes",
   NODES_TEST: "/api/nodes/test",
 } as const;
