@@ -121,6 +121,7 @@ export function App(): React.JSX.Element {
   });
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Persist layout and group preferences
   useEffect(() => {
@@ -499,19 +500,44 @@ export function App(): React.JSX.Element {
           ))}
         </main>
       ) : (
-        <ExplorerLayout
-          machines={filteredMachines}
-          allMachines={machines}
-          groupMode={groupMode}
-          sortMode={sortMode}
-          hideIdle={hideIdle}
-          timeFilter={timeFilter}
-          autoDeleteOnClose={autoDeleteOnClose}
-          onOpenTerminal={handleOpenTerminal}
-          onResume={(machineId, sessionId, projectDir, agentType) =>
-            setResumeTarget({ machineId, sessionId, projectDir, agentType })
-          }
-        />
+        <>
+          <ExplorerLayout
+            machines={filteredMachines}
+            allMachines={machines}
+            groupMode={groupMode}
+            sortMode={sortMode}
+            hideIdle={hideIdle}
+            timeFilter={timeFilter}
+            autoDeleteOnClose={autoDeleteOnClose}
+            sidebarOpen={sidebarOpen}
+            onSidebarClose={() => setSidebarOpen(false)}
+            onOpenTerminal={handleOpenTerminal}
+            onResume={(machineId, sessionId, projectDir, agentType) =>
+              setResumeTarget({ machineId, sessionId, projectDir, agentType })
+            }
+          />
+          <button
+            type="button"
+            className="sidebar-toggle-fab"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            aria-label={sidebarOpen ? "Close session navigator" : "Open session navigator"}
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+          </button>
+        </>
       )}
 
       {terminal && (

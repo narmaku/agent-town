@@ -14,6 +14,8 @@ interface Props {
   hideIdle: boolean;
   timeFilter: TimeFilter;
   autoDeleteOnClose?: boolean;
+  sidebarOpen: boolean;
+  onSidebarClose: () => void;
   onOpenTerminal: (machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) => void;
   onResume: (machineId: string, sessionId: string, projectDir: string, agentType: AgentType) => void;
 }
@@ -202,6 +204,8 @@ export function ExplorerLayout({
   hideIdle,
   timeFilter,
   autoDeleteOnClose,
+  sidebarOpen,
+  onSidebarClose,
   onOpenTerminal,
   onResume,
 }: Props): React.JSX.Element {
@@ -211,6 +215,28 @@ export function ExplorerLayout({
   const [renaming, setRenaming] = useState<{ machineId: string; sessionId: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Close sidebar on Escape key (for mobile overlay)
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onSidebarClose();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [sidebarOpen, onSidebarClose]);
+
+  function selectSession(machineId: string, sessionId: string) {
+    setSelected({ machineId, sessionId });
+    onSidebarClose();
+  }
+
+  function selectDashboard() {
+    setSelected(null);
+    onSidebarClose();
+  }
 
   useEffect(() => {
     if (renaming) renameInputRef.current?.focus();
@@ -282,15 +308,17 @@ export function ExplorerLayout({
 
   return (
     <div className="explorer-layout">
-      <div className="explorer-sidebar">
+      {/* Backdrop for mobile sidebar overlay */}
+      <div className={`sidebar-backdrop${sidebarOpen ? " open" : ""}`} onClick={onSidebarClose} aria-hidden="true" />
+      <div className={`explorer-sidebar${sidebarOpen ? " open" : ""}`}>
         {/* biome-ignore lint/a11y/useSemanticElements: sidebar navigation entry */}
         <div
           className={`explorer-dashboard-btn${selected === null ? " active" : ""}`}
-          onClick={() => setSelected(null)}
+          onClick={selectDashboard}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              setSelected(null);
+              selectDashboard();
             }
           }}
           role="button"
@@ -378,19 +406,11 @@ export function ExplorerLayout({
                               className={`explorer-session ${
                                 selected?.sessionId === session.sessionId ? "selected" : ""
                               }`}
-                              onClick={() =>
-                                setSelected({
-                                  machineId: machine.machineId,
-                                  sessionId: session.sessionId,
-                                })
-                              }
+                              onClick={() => selectSession(machine.machineId, session.sessionId)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
-                                  setSelected({
-                                    machineId: machine.machineId,
-                                    sessionId: session.sessionId,
-                                  });
+                                  selectSession(machine.machineId, session.sessionId);
                                 }
                               }}
                               onDoubleClick={(e) => {
@@ -491,7 +511,7 @@ export function ExplorerLayout({
         ) : (
           <ExplorerDashboard
             allMachines={allMachines}
-            onSelect={(machineId, sessionId) => setSelected({ machineId, sessionId })}
+            onSelect={(machineId, sessionId) => selectSession(machineId, sessionId)}
           />
         )}
       </div>
