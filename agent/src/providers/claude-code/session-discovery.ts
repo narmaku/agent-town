@@ -127,9 +127,7 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
           if (typeof usage.output_tokens === "number") totalOutputTokens += usage.output_tokens;
           // Context = all input tokens sent on this turn (uncached + cache creation + cache read)
           const ctx =
-            (usage.input_tokens ?? 0) +
-            (usage.cache_creation_input_tokens ?? 0) +
-            (usage.cache_read_input_tokens ?? 0);
+            (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
           if (ctx > 0) lastContextTokens = ctx;
         }
       } catch (_err) {
