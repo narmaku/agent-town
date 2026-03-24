@@ -1,72 +1,42 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { mkdtemp, stat } from "node:fs/promises";
-import * as fsPromises from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { SessionInfo } from "@agent-town/shared";
+import { SESSION_RETENTION_MS } from "@agent-town/shared";
 
-import type { GeminiSessionFile } from "./session-discovery";
-
-// We need to mock the file system paths. Since the module uses hardcoded paths,
-// we'll test via the exported cache utilities and by mocking at the fs level.
+import {
+	clearGeminiSessionCache,
+	getCachedGeminiSession,
+	getGeminiSessionCacheSize,
+	pruneGeminiSessionCache,
+	setCachedGeminiSession,
+} from "./session-discovery";
 
 // ---------------------------------------------------------------------------
 // Factory helpers
 // ---------------------------------------------------------------------------
 
-function makeGeminiSessionFile(overrides: Partial<GeminiSessionFile> = {}): GeminiSessionFile {
+function makeSessionInfo(overrides: Partial<SessionInfo> = {}): SessionInfo {
 	return {
 		sessionId: "550e8400-e29b-41d4-a716-446655440000",
-		projectHash: "abc123",
-		startTime: "2026-03-20T10:00:00.000Z",
-		lastUpdated: new Date().toISOString(),
-		messages: [
-			{
-				id: "msg-1",
-				timestamp: new Date().toISOString(),
-				type: "user",
-				content: [{ text: "Hello, Gemini!" }],
-			},
-			{
-				id: "msg-2",
-				timestamp: new Date().toISOString(),
-				type: "gemini",
-				content: "I will help you with that.",
-				model: "gemini-2.5-pro",
-				tokens: {
-					input: 100,
-					output: 50,
-					cached: 0,
-					thoughts: 0,
-					tool: 0,
-					total: 150,
-				},
-			},
-		],
+		agentType: "gemini-cli",
+		slug: "550e8400",
+		projectPath: "/home/user/project",
+		projectName: "project",
+		gitBranch: "",
+		status: "idle",
+		lastActivity: new Date().toISOString(),
+		lastMessage: "Hello from Gemini",
+		cwd: "/home/user/project",
+		model: "gemini-2.5-pro",
 		...overrides,
 	};
 }
 
 // ---------------------------------------------------------------------------
-// Session cache tests
+// Session cache data structure tests
 // ---------------------------------------------------------------------------
 
 describe("Gemini session cache", () => {
-	// Import dynamically to allow clearing the module cache if needed
-	let clearGeminiSessionCache: () => void;
-	let getGeminiSessionCacheSize: () => number;
-	let getCachedGeminiSession: (filePath: string) => { mtimeMs: number; session: unknown } | undefined;
-	let setCachedGeminiSession: (
-		filePath: string,
-		entry: { mtimeMs: number; session: unknown },
-	) => void;
-
-	beforeEach(async () => {
-		const mod = await import("./session-discovery");
-		clearGeminiSessionCache = mod.clearGeminiSessionCache;
-		getGeminiSessionCacheSize = mod.getGeminiSessionCacheSize;
-		getCachedGeminiSession = mod.getCachedGeminiSession;
-		setCachedGeminiSession = mod.setCachedGeminiSession;
+	beforeEach(() => {
 		clearGeminiSessionCache();
 	});
 
@@ -79,7 +49,7 @@ describe("Gemini session cache", () => {
 	});
 
 	test("setCachedGeminiSession stores an entry and getCachedGeminiSession retrieves it", () => {
-		const session = { sessionId: "test-123", agentType: "gemini-cli" as const };
+		const session = makeSessionInfo({ sessionId: "test-123" });
 		setCachedGeminiSession("/tmp/test.json", { mtimeMs: 1000, session });
 
 		expect(getGeminiSessionCacheSize()).toBe(1);
@@ -87,7 +57,7 @@ describe("Gemini session cache", () => {
 		const cached = getCachedGeminiSession("/tmp/test.json");
 		expect(cached).toBeDefined();
 		expect(cached?.mtimeMs).toBe(1000);
-		expect(cached?.session).toEqual(session);
+		expect(cached?.session.sessionId).toBe("test-123");
 	});
 
 	test("getCachedGeminiSession returns undefined for missing entries", () => {
@@ -96,8 +66,8 @@ describe("Gemini session cache", () => {
 	});
 
 	test("clearGeminiSessionCache removes all entries", () => {
-		setCachedGeminiSession("/tmp/a.json", { mtimeMs: 1000, session: {} });
-		setCachedGeminiSession("/tmp/b.json", { mtimeMs: 2000, session: {} });
+		setCachedGeminiSession("/tmp/a.json", { mtimeMs: 1000, session: makeSessionInfo() });
+		setCachedGeminiSession("/tmp/b.json", { mtimeMs: 2000, session: makeSessionInfo() });
 		expect(getGeminiSessionCacheSize()).toBe(2);
 
 		clearGeminiSessionCache();
@@ -105,8 +75,8 @@ describe("Gemini session cache", () => {
 	});
 
 	test("setCachedGeminiSession overwrites existing entry with same key", () => {
-		const session1 = { sessionId: "old" };
-		const session2 = { sessionId: "new" };
+		const session1 = makeSessionInfo({ sessionId: "old" });
+		const session2 = makeSessionInfo({ sessionId: "new" });
 
 		setCachedGeminiSession("/tmp/test.json", { mtimeMs: 1000, session: session1 });
 		setCachedGeminiSession("/tmp/test.json", { mtimeMs: 2000, session: session2 });
@@ -114,6 +84,58 @@ describe("Gemini session cache", () => {
 		expect(getGeminiSessionCacheSize()).toBe(1);
 		const cached = getCachedGeminiSession("/tmp/test.json");
 		expect(cached?.mtimeMs).toBe(2000);
-		expect(cached?.session).toEqual(session2);
+		expect(cached?.session.sessionId).toBe("new");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Cache pruning tests
+// ---------------------------------------------------------------------------
+
+describe("pruneGeminiSessionCache", () => {
+	beforeEach(() => {
+		clearGeminiSessionCache();
+	});
+
+	afterEach(() => {
+		clearGeminiSessionCache();
+	});
+
+	test("removes cache entries whose file paths are not in the active set", () => {
+		setCachedGeminiSession("/chats/a.json", { mtimeMs: 1000, session: makeSessionInfo({ sessionId: "a" }) });
+		setCachedGeminiSession("/chats/b.json", { mtimeMs: 2000, session: makeSessionInfo({ sessionId: "b" }) });
+		setCachedGeminiSession("/chats/c.json", { mtimeMs: 3000, session: makeSessionInfo({ sessionId: "c" }) });
+
+		// Only a.json and c.json are still active (b.json was deleted)
+		const activeFiles = new Set(["/chats/a.json", "/chats/c.json"]);
+		pruneGeminiSessionCache(activeFiles);
+
+		expect(getGeminiSessionCacheSize()).toBe(2);
+		expect(getCachedGeminiSession("/chats/a.json")).toBeDefined();
+		expect(getCachedGeminiSession("/chats/b.json")).toBeUndefined();
+		expect(getCachedGeminiSession("/chats/c.json")).toBeDefined();
+	});
+
+	test("removes all entries when active set is empty", () => {
+		setCachedGeminiSession("/chats/a.json", { mtimeMs: 1000, session: makeSessionInfo() });
+		setCachedGeminiSession("/chats/b.json", { mtimeMs: 2000, session: makeSessionInfo() });
+
+		pruneGeminiSessionCache(new Set());
+
+		expect(getGeminiSessionCacheSize()).toBe(0);
+	});
+
+	test("keeps all entries when all are in the active set", () => {
+		setCachedGeminiSession("/chats/a.json", { mtimeMs: 1000, session: makeSessionInfo() });
+		setCachedGeminiSession("/chats/b.json", { mtimeMs: 2000, session: makeSessionInfo() });
+
+		pruneGeminiSessionCache(new Set(["/chats/a.json", "/chats/b.json"]));
+
+		expect(getGeminiSessionCacheSize()).toBe(2);
+	});
+
+	test("handles empty cache gracefully", () => {
+		pruneGeminiSessionCache(new Set(["/chats/a.json"]));
+		expect(getGeminiSessionCacheSize()).toBe(0);
 	});
 });

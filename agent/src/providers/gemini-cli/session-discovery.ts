@@ -54,6 +54,15 @@ export function setCachedGeminiSession(filePath: string, entry: CachedGeminiSess
   geminiSessionCache.set(filePath, entry);
 }
 
+/** Prune cache entries whose file paths are not in the given active set. */
+export function pruneGeminiSessionCache(activeFiles: Set<string>): void {
+  for (const key of geminiSessionCache.keys()) {
+    if (!activeFiles.has(key)) {
+      geminiSessionCache.delete(key);
+    }
+  }
+}
+
 /** Shape of a Gemini CLI session file. */
 export interface GeminiSessionFile {
   sessionId: string;
