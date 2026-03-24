@@ -1397,6 +1397,66 @@ body {
   background: rgba(59, 130, 246, 0.1);
 }
 
+/* Session Tab Toggle */
+.session-tabs {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.session-tab {
+  background: var(--bg-elevated);
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.session-tab:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.session-tab.active {
+  background: var(--blue);
+  color: white;
+}
+
+.session-tab:hover:not(.active) {
+  color: var(--text);
+  background: #252525;
+}
+
+/* Embedded Terminal Tab Content */
+.terminal-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.terminal-tab-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.terminal-pane-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+.terminal-pane-container .xterm {
+  height: 100%;
+  padding: 4px;
+}
+
 /* Resizable panel dividers */
 .resize-handle {
   width: 5px;
@@ -2558,6 +2618,11 @@ body {
   border-color: #ccc;
 }
 
+/* Session tab hover (light theme) */
+.app.theme-light .session-tab:hover:not(.active) {
+  background: #e5e5e5;
+}
+
 /* Layout toggle hover */
 .app.theme-light .layout-toggle-btn:hover:not(.active) {
   background: #e5e5e5;
@@ -3094,6 +3159,22 @@ body {
 
   .fullscreen-actions {
     display: none;
+  }
+
+  /* Session tabs: compact on mobile */
+  .session-tabs {
+    flex-shrink: 0;
+  }
+
+  .session-tab {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+
+  /* Terminal tab content: fill available space on mobile */
+  .terminal-tab-toolbar {
+    padding: 6px 12px;
   }
 
   /* Info pane: always overlay on mobile */

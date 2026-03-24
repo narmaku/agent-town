@@ -575,7 +575,7 @@ export function ExplorerLayout({
               session={activeSession}
               machineId={selected.machineId}
               machineName={selectedMachine?.hostname}
-              onOpenTerminal={(sessionName, multiplexer) =>
+              onOpenTerminalFullscreen={(sessionName, multiplexer) =>
                 onOpenTerminal(selected.machineId, sessionName, multiplexer)
               }
               onResume={(sessionId, projectDir, agentType) =>
