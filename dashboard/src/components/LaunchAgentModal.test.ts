@@ -31,4 +31,14 @@ describe("resolveSelectedMachineId", () => {
     const result = resolveSelectedMachineId("", "initial-machine", "first-machine");
     expect(result).toBe("initial-machine");
   });
+
+  test("treats empty-string initialMachineId same as undefined and falls back to first machine", () => {
+    const result = resolveSelectedMachineId("", "", "first-machine");
+    expect(result).toBe("first-machine");
+  });
+
+  test("returns empty string when all inputs are empty strings", () => {
+    const result = resolveSelectedMachineId("", "", "");
+    expect(result).toBe("");
+  });
 });
