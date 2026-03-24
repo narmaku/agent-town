@@ -55,8 +55,8 @@ export function getHookState(sessionId: string): HookSessionState | undefined {
   if (!state) return undefined;
   const elapsed = Date.now() - state.lastEventTime;
   // Expire transient states (working) after 60s without events.
-  // "done" does NOT expire — it persists until the session is
-  // resumed (SessionStart clears it) or deleted (clearHookSession).
+  // "done" persists here (periodic pruneExpiredSessions handles
+  // long-term cleanup after DONE_EXPIRY_MS).
   if (elapsed > STALE_THRESHOLD_MS && state.status === "working") return undefined;
   return state;
 }
