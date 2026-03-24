@@ -375,4 +375,40 @@ describe("appendActivityEvents", () => {
     expect(existing).toEqual(existingCopy);
     expect(newEvents).toEqual(newEventsCopy);
   });
+
+  test("new events accumulate normally after clearing (empty feed)", () => {
+    // Simulates the state after clearActivity: feed is empty
+    const clearedFeed: ActivityEvent[] = [];
+    const newEvents = [
+      makeEvent({ id: "post-clear-1", toStatus: "working" }),
+      makeEvent({ id: "post-clear-2", toStatus: "error" }),
+    ];
+
+    const result = appendActivityEvents(clearedFeed, newEvents);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe("post-clear-2");
+    expect(result[1].id).toBe("post-clear-1");
+  });
+
+  test("cleared feed does not contain any previous events", () => {
+    // Build up a feed, then simulate clear by starting from empty
+    const preClearFeed = [makeEvent({ id: "old-1" }), makeEvent({ id: "old-2" }), makeEvent({ id: "old-3" })];
+    expect(preClearFeed).toHaveLength(3);
+
+    // After clear, feed is empty
+    const clearedFeed: ActivityEvent[] = [];
+    expect(clearedFeed).toHaveLength(0);
+
+    // New events after clear should not contain old events
+    const postClearEvents = [makeEvent({ id: "new-after-clear" })];
+    const result = appendActivityEvents(clearedFeed, postClearEvents);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("new-after-clear");
+    // None of the old event IDs should be present
+    expect(result.find((e) => e.id === "old-1")).toBeUndefined();
+    expect(result.find((e) => e.id === "old-2")).toBeUndefined();
+    expect(result.find((e) => e.id === "old-3")).toBeUndefined();
+  });
 });

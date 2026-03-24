@@ -27,6 +27,7 @@ interface UseWebSocketResult {
   activityFeed: ActivityEvent[];
   unreadActivityCount: number;
   markActivityRead: () => void;
+  clearActivity: () => void;
 }
 
 const NOTIFICATION_TITLES: Partial<Record<SessionStatus, string>> = {
@@ -222,5 +223,10 @@ export function useWebSocket(): UseWebSocketResult {
     setUnreadActivityCount(0);
   }, []);
 
-  return { machines, connected, activityFeed, unreadActivityCount, markActivityRead };
+  const clearActivity = useCallback(() => {
+    setActivityFeed([]);
+    setUnreadActivityCount(0);
+  }, []);
+
+  return { machines, connected, activityFeed, unreadActivityCount, markActivityRead, clearActivity };
 }
