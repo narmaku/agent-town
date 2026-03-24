@@ -411,4 +411,96 @@ describe("appendActivityEvents", () => {
     expect(result.find((e) => e.id === "old-2")).toBeUndefined();
     expect(result.find((e) => e.id === "old-3")).toBeUndefined();
   });
+
+  test("returns empty array when both existing feed and new events are empty", () => {
+    const result = appendActivityEvents([], []);
+
+    expect(result).toHaveLength(0);
+    expect(result).toEqual([]);
+  });
+
+  test("multiple sequential appends accumulate correctly after clearing", () => {
+    // Simulate: clear -> first WS update -> second WS update -> third WS update
+    let feed: ActivityEvent[] = [];
+
+    // First batch after clear
+    const batch1 = [makeEvent({ id: "b1-1", toStatus: "working" })];
+    feed = appendActivityEvents(feed, batch1);
+    expect(feed).toHaveLength(1);
+    expect(feed[0].id).toBe("b1-1");
+
+    // Second batch
+    const batch2 = [makeEvent({ id: "b2-1", toStatus: "done" }), makeEvent({ id: "b2-2", toStatus: "error" })];
+    feed = appendActivityEvents(feed, batch2);
+    expect(feed).toHaveLength(3);
+    // Newest first: b2-2, b2-1, then b1-1
+    expect(feed[0].id).toBe("b2-2");
+    expect(feed[1].id).toBe("b2-1");
+    expect(feed[2].id).toBe("b1-1");
+
+    // Third batch
+    const batch3 = [makeEvent({ id: "b3-1", toStatus: "awaiting_input" })];
+    feed = appendActivityEvents(feed, batch3);
+    expect(feed).toHaveLength(4);
+    expect(feed[0].id).toBe("b3-1");
+    expect(feed[3].id).toBe("b1-1");
+  });
+
+  test("maxEvents cap is enforced even after sequential appends post-clear", () => {
+    let feed: ActivityEvent[] = [];
+    const maxEvents = 3;
+
+    // First batch fills 2 of 3 slots
+    const batch1 = [makeEvent({ id: "a1" }), makeEvent({ id: "a2" })];
+    feed = appendActivityEvents(feed, batch1, maxEvents);
+    expect(feed).toHaveLength(2);
+
+    // Second batch pushes past cap
+    const batch2 = [makeEvent({ id: "a3" }), makeEvent({ id: "a4" })];
+    feed = appendActivityEvents(feed, batch2, maxEvents);
+    expect(feed).toHaveLength(3);
+    // Oldest event (a1) should be trimmed
+    expect(feed[0].id).toBe("a4");
+    expect(feed[1].id).toBe("a3");
+    expect(feed[2].id).toBe("a2");
+  });
+});
+
+describe("clearActivity does not affect buildActivityEvents", () => {
+  const NOW = 1700000000000;
+
+  test("buildActivityEvents generates events based on status map, independent of feed state", () => {
+    // This verifies that clearing the activity feed (setting it to [])
+    // does not interfere with buildActivityEvents, which only depends on
+    // the prevStatuses map and incoming machine data.
+    const machines = [
+      makeMachine({
+        sessions: [
+          {
+            sessionId: "s1",
+            agentType: "claude-code",
+            slug: "my-project",
+            projectPath: "/home/user/project",
+            projectName: "project",
+            gitBranch: "main",
+            status: "error",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "failed",
+            cwd: "/home/user/project",
+          },
+        ],
+      }),
+    ];
+
+    // prevStatuses map is maintained independently of the feed
+    const prevStatuses = new Map<string, SessionStatus>([["s1", "working"]]);
+
+    // Even after clearing the feed, buildActivityEvents still detects transitions
+    const events = buildActivityEvents(machines, prevStatuses, NOW);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].sessionId).toBe("s1");
+    expect(events[0].fromStatus).toBe("working");
+    expect(events[0].toStatus).toBe("error");
+  });
 });
