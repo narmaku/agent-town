@@ -1,5 +1,6 @@
 import { formatCompactTokens, type SessionInfo } from "@agent-town/shared";
 import { AGENT_TYPE_LABELS, STATUS_CONFIG } from "../utils";
+import { BranchIcon, ContextIcon, FolderIcon, ModelIcon, TokensIcon } from "./Icons";
 
 interface InfoPaneProps {
   session: SessionInfo;
@@ -47,18 +48,14 @@ export function InfoPane({
       <div className="info-pane-section">
         <div className="info-pane-detail-row" title={session.projectPath}>
           <span className="info-pane-detail-icon" aria-hidden="true">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" role="img" aria-label="Project">
-              <path d="M1.5 1h5l1 1H14.5a1 1 0 011 1v10a1 1 0 01-1 1h-13a1 1 0 01-1-1V2a1 1 0 011-1z" />
-            </svg>
+            <FolderIcon />
           </span>
           <span className="detail-value mono">{session.projectPath}</span>
         </div>
         {session.gitBranch && (
           <div className="info-pane-detail-row">
             <span className="info-pane-detail-icon" aria-hidden="true">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" role="img" aria-label="Branch">
-                <path d="M11.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122V6.5a2.5 2.5 0 01-2.5 2.5H7.5a1 1 0 00-1 1v1.128a2.251 2.251 0 11-1.5 0V4.872a2.25 2.25 0 111.5 0V6.5a2.5 2.5 0 002.5-2.5v-1.128A2.251 2.251 0 019.5 3.25zM4.25 12a.75.75 0 100 1.5.75.75 0 000-1.5zM4.25 2.5a.75.75 0 100 1.5.75.75 0 000-1.5z" />
-              </svg>
+              <BranchIcon />
             </span>
             <span className="detail-value mono">{session.gitBranch}</span>
           </div>
@@ -66,9 +63,7 @@ export function InfoPane({
         {session.model && (
           <div className="info-pane-detail-row">
             <span className="info-pane-detail-icon" aria-hidden="true">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" role="img" aria-label="Model">
-                <path d="M8 1a2 2 0 012 2v.5h2A1.5 1.5 0 0113.5 5v2H14a2 2 0 110 4h-.5v2a1.5 1.5 0 01-1.5 1.5h-2V14a2 2 0 11-4 0v-.5H4A1.5 1.5 0 012.5 12v-2H2a2 2 0 110-4h.5V4A1.5 1.5 0 014 2.5h2V2a2 2 0 012-2z" />
-              </svg>
+              <ModelIcon />
             </span>
             <span className="detail-value mono">{session.model}</span>
           </div>
@@ -76,9 +71,7 @@ export function InfoPane({
         {session.totalInputTokens != null && session.totalInputTokens > 0 && (
           <div className="info-pane-detail-row">
             <span className="info-pane-detail-icon" aria-hidden="true">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" role="img" aria-label="Tokens">
-                <path d="M8 2a6 6 0 100 12A6 6 0 008 2zM0 8a8 8 0 1116 0A8 8 0 010 8zm9-3a1 1 0 10-2 0v3a1 1 0 00.4.8l2 1.5a1 1 0 101.2-1.6L9 7.5V5z" />
-              </svg>
+              <TokensIcon />
             </span>
             <span className="detail-value mono">
               {session.totalInputTokens.toLocaleString()} in / {(session.totalOutputTokens ?? 0).toLocaleString()} out (
@@ -89,9 +82,7 @@ export function InfoPane({
         {session.contextTokens != null && session.contextTokens > 0 && (
           <div className="info-pane-detail-row">
             <span className="info-pane-detail-icon" aria-hidden="true">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" role="img" aria-label="Context">
-                <path d="M2 2.5A2.5 2.5 0 014.5 0h8.75a.75.75 0 01.75.75v12.5a.75.75 0 01-.75.75h-2.5a.75.75 0 010-1.5h1.75v-2h-8a1 1 0 00-.714 1.7.75.75 0 01-1.072 1.05A2.495 2.495 0 012 11.5v-9zm10.5-1h-6a1 1 0 00-1 1v6.708A2.486 2.486 0 016.5 9h6V1.5z" />
-              </svg>
+              <ContextIcon />
             </span>
             <span className="detail-value mono">{formatCompactTokens(session.contextTokens)} context</span>
           </div>

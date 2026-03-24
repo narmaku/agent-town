@@ -5,6 +5,7 @@ import type { GroupMode, SortMode, TimeFilter } from "../App";
 import { useResizable } from "../hooks/useResizable";
 import { useWindowWidth } from "../hooks/useWindowWidth";
 import { AGENT_TYPE_LABELS, API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
+import { DashboardIcon } from "./Icons";
 import { buildGroups, filterSessionsByTime, sortSessions } from "./MachineGroup";
 import { SessionDetail } from "./SessionDetail";
 
@@ -403,12 +404,7 @@ export function ExplorerLayout({
           role="button"
           tabIndex={0}
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <rect x="1" y="1" width="6" height="6" rx="1" />
-            <rect x="9" y="1" width="6" height="6" rx="1" />
-            <rect x="1" y="9" width="6" height="6" rx="1" />
-            <rect x="9" y="9" width="6" height="6" rx="1" />
-          </svg>
+          <DashboardIcon />
           Dashboard
         </div>
         {machines.map((machine) => {
