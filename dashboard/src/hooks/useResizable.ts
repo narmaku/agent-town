@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const STORAGE_PREFIX = "agentTown:panelSize:";
+export const STORAGE_PREFIX = "agentTown:panelSize:";
 
 interface UseResizableOptions {
   /** localStorage key suffix for persisting size */
@@ -26,7 +26,7 @@ interface UseResizableResult {
   resetSize: () => void;
 }
 
-function loadStoredSize(key: string, fallback: number): number {
+export function loadStoredSize(key: string, fallback: number): number {
   try {
     const stored = localStorage.getItem(STORAGE_PREFIX + key);
     if (stored) {
