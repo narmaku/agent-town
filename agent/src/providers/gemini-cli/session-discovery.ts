@@ -154,6 +154,7 @@ async function readProjectRoot(projectHashDir: string): Promise<string | undefin
 /** Discover Gemini CLI sessions by scanning ~/.gemini/tmp/{project_hash}/chats/. */
 export async function discoverGeminiSessions(): Promise<SessionInfo[]> {
   const sessions: SessionInfo[] = [];
+  const activeFiles = new Set<string>();
 
   try {
     const projectsMap = await loadProjectsMapping();
@@ -180,13 +181,29 @@ export async function discoverGeminiSessions(): Promise<SessionInfo[]> {
 
         if (Date.now() - fileStat.mtimeMs > SESSION_RETENTION_MS) continue;
 
+        activeFiles.add(jsonPath);
+
+        // Check cache: if mtime hasn't changed, use cached SessionInfo
+        const cached = geminiSessionCache.get(jsonPath);
+        if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+          sessions.push(cached.session);
+          continue;
+        }
+
+        // Cache miss or mtime changed — re-parse the file
         const session = await parseGeminiSession(jsonPath, fileStat.mtimeMs, projectHash, projectHashDir, projectsMap);
-        if (session) sessions.push(session);
+        if (session) {
+          geminiSessionCache.set(jsonPath, { mtimeMs: fileStat.mtimeMs, session });
+          sessions.push(session);
+        }
       }
     }
   } catch (err) {
     log.debug(`discoverGeminiSessions: ${err instanceof Error ? err.message : String(err)}`);
   }
+
+  // Prune cache entries for deleted or expired files
+  pruneGeminiSessionCache(activeFiles);
 
   return sessions;
 }
