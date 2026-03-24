@@ -14,6 +14,8 @@ import { DiffModal } from "./DiffModal";
 import { SendMessage } from "./SendMessage";
 
 const BATCH_SIZE = 10;
+const LOAD_ALL_MESSAGES_LIMIT = 10_000;
+const DEFAULT_AGENT_TYPE: AgentType = "claude-code";
 const INFO_PANE_BREAKPOINT = 1200;
 const INFO_PANE_DEFAULT_WIDTH = 300;
 const INFO_PANE_MIN_WIDTH = 220;
@@ -193,7 +195,7 @@ export function SessionDetail({
         const resp = await fetch(
           `${API.SESSION_MESSAGES}?machineId=${machineId}` +
             `&sessionId=${session.sessionId}` +
-            `&agentType=${session.agentType || "claude-code"}` +
+            `&agentType=${session.agentType || DEFAULT_AGENT_TYPE}` +
             `&offset=${currentOffset}&limit=${BATCH_SIZE}`,
         );
         if (!resp.ok) return;
@@ -221,7 +223,7 @@ export function SessionDetail({
       const resp = await fetch(
         `${API.SESSION_MESSAGES}?machineId=${machineId}` +
           `&sessionId=${session.sessionId}` +
-          `&agentType=${session.agentType || "claude-code"}` +
+          `&agentType=${session.agentType || DEFAULT_AGENT_TYPE}` +
           `&offset=0&limit=${BATCH_SIZE}`,
       );
       if (!resp.ok) return;
@@ -284,8 +286,8 @@ export function SessionDetail({
       const resp = await fetch(
         `${API.SESSION_MESSAGES}?machineId=${machineId}` +
           `&sessionId=${session.sessionId}` +
-          `&agentType=${session.agentType || "claude-code"}` +
-          `&offset=0&limit=10000`,
+          `&agentType=${session.agentType || DEFAULT_AGENT_TYPE}` +
+          `&offset=0&limit=${LOAD_ALL_MESSAGES_LIMIT}`,
       );
       if (!resp.ok) return;
       const data: { messages: SessionMessage[]; total: number; hasMore: boolean } = await resp.json();
