@@ -48,7 +48,7 @@ export function SessionFullscreen({
           session={session}
           machineId={machineId}
           machineName={machineName}
-          onOpenTerminal={onOpenTerminal}
+          onOpenTerminalFullscreen={onOpenTerminal}
           onResume={onResume}
           onClose={onClose}
           autoDeleteOnClose={autoDeleteOnClose}
