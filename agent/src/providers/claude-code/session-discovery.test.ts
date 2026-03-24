@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
   CLAUDE_PROJECTS_DIR,
   type ClaudeJsonlEntry,
+  clearSessionCache,
   deleteClaudeSessionData,
   discoverClaudeSessions,
   parseClaudeSession,
@@ -94,10 +95,12 @@ describe("parseClaudeSession", () => {
   let tempDir: string;
 
   beforeEach(async () => {
+    clearSessionCache();
     tempDir = await mkdtemp(join(require("node:os").tmpdir(), "agent-town-sd-test-"));
   });
 
   afterEach(async () => {
+    clearSessionCache();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -516,6 +519,101 @@ describe("discoverClaudeSessions", () => {
     for (const s of sessions) {
       expect(s.agentType).toBe("claude-code");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Session cache (mtime-based)
+// ---------------------------------------------------------------------------
+
+describe("session cache", () => {
+  let tempDir: string;
+  let projectDir: string;
+
+  beforeEach(async () => {
+    clearSessionCache();
+    tempDir = await mkdtemp(join(require("node:os").tmpdir(), "agent-town-cache-test-"));
+    projectDir = join(tempDir, "project-a");
+    await mkdir(projectDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    clearSessionCache();
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  test("cache hit: same mtime returns cached result without re-reading file", async () => {
+    const entry = makeJsonlEntry({ sessionId: "cached-session" });
+    const filePath = await writeTempJsonl(projectDir, "cached-session.jsonl", toJsonl([entry]));
+
+    // Get actual file mtime
+    const { stat: fileStat } = await import("node:fs/promises");
+    const statBefore = await fileStat(filePath);
+    const mtime = statBefore.mtimeMs;
+
+    // First call: parses the file and caches it
+    const result1 = await parseClaudeSession(filePath, mtime);
+    expect(result1).not.toBeNull();
+    expect(result1?.sessionId).toBe("cached-session");
+
+    // Overwrite the file with different content but restore the same mtime
+    const differentEntry = makeJsonlEntry({ sessionId: "different-session" });
+    await writeFile(filePath, toJsonl([differentEntry]));
+    await utimes(filePath, new Date(statBefore.atimeMs), new Date(statBefore.mtimeMs));
+
+    // Second call with same mtime: should return cached result (original sessionId)
+    const result2 = await parseClaudeSession(filePath, mtime);
+    expect(result2).not.toBeNull();
+    expect(result2?.sessionId).toBe("cached-session");
+  });
+
+  test("cache miss: changed mtime triggers re-read and cache update", async () => {
+    const entry1 = makeJsonlEntry({ sessionId: "original-session" });
+    const filePath = await writeTempJsonl(projectDir, "changing-session.jsonl", toJsonl([entry1]));
+
+    // Get actual file mtime
+    const { stat: fileStat } = await import("node:fs/promises");
+    const stat1 = await fileStat(filePath);
+
+    // First call: parses the file
+    const result1 = await parseClaudeSession(filePath, stat1.mtimeMs);
+    expect(result1).not.toBeNull();
+    expect(result1?.sessionId).toBe("original-session");
+
+    // Update the file content with a new mtime
+    const entry2 = makeJsonlEntry({ sessionId: "updated-session" });
+    const futureTime = new Date(Date.now() + 10_000);
+    await writeFile(filePath, toJsonl([entry2]));
+    await utimes(filePath, futureTime, futureTime);
+
+    // Second call with new mtime: should re-parse and return updated session
+    const stat2 = await fileStat(filePath);
+    const result2 = await parseClaudeSession(filePath, stat2.mtimeMs);
+    expect(result2).not.toBeNull();
+    expect(result2?.sessionId).toBe("updated-session");
+  });
+
+  test("clearSessionCache removes all cached entries", async () => {
+    const entry = makeJsonlEntry({ sessionId: "to-be-cleared" });
+    const filePath = await writeTempJsonl(projectDir, "clear-test.jsonl", toJsonl([entry]));
+
+    // Get actual file mtime and parse to populate cache
+    const { stat: fileStat } = await import("node:fs/promises");
+    const statBefore = await fileStat(filePath);
+    await parseClaudeSession(filePath, statBefore.mtimeMs);
+
+    // Clear the cache
+    clearSessionCache();
+
+    // Write different content but restore original mtime
+    const differentEntry = makeJsonlEntry({ sessionId: "after-clear" });
+    await writeFile(filePath, toJsonl([differentEntry]));
+    await utimes(filePath, new Date(statBefore.atimeMs), new Date(statBefore.mtimeMs));
+
+    // After clearing cache, even same mtime should re-read (no cache entry exists)
+    const result = await parseClaudeSession(filePath, statBefore.mtimeMs);
+    expect(result).not.toBeNull();
+    expect(result?.sessionId).toBe("after-clear");
   });
 });
 

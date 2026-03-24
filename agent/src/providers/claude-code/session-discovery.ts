@@ -9,6 +9,36 @@ const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
 const LAST_LINES_LIMIT = 200;
 
+// ---------------------------------------------------------------------------
+// mtime-based session cache
+// ---------------------------------------------------------------------------
+
+interface CachedSession {
+  mtimeMs: number;
+  session: SessionInfo;
+}
+
+/** Module-level cache: file path -> cached parse result with mtime. */
+const sessionCache = new Map<string, CachedSession>();
+
+/** Clear the session cache. Exported for testing. */
+export function clearSessionCache(): void {
+  sessionCache.clear();
+}
+
+/**
+ * Remove cache entries for file paths not present in the current scan,
+ * and entries older than SESSION_RETENTION_MS.
+ */
+function pruneSessionCache(currentPaths: Set<string>): void {
+  const now = Date.now();
+  for (const [path, entry] of sessionCache) {
+    if (!currentPaths.has(path) || now - entry.mtimeMs > SESSION_RETENTION_MS) {
+      sessionCache.delete(path);
+    }
+  }
+}
+
 export interface ClaudeJsonlEntry {
   type: "user" | "assistant";
   sessionId: string;
@@ -45,6 +75,7 @@ function detectClaudeStatus(lastModifiedMs: number): SessionStatus {
 /** Discover Claude Code sessions by scanning JSONL files in ~/.claude/projects/. */
 export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
   const sessions: SessionInfo[] = [];
+  const currentPaths = new Set<string>();
 
   try {
     const projectDirs = await readdir(CLAUDE_PROJECTS_DIR);
@@ -62,6 +93,7 @@ export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
 
         if (Date.now() - jsonlStat.mtimeMs > SESSION_RETENTION_MS) continue;
 
+        currentPaths.add(jsonlPath);
         const session = await parseClaudeSessionFromJsonl(jsonlPath, jsonlStat.mtimeMs);
         if (session) sessions.push(session);
       }
@@ -70,10 +102,19 @@ export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
     log.debug(`discoverClaudeSessions: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  pruneSessionCache(currentPaths);
+
   return sessions;
 }
 
 async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): Promise<SessionInfo | null> {
+  // Check cache: if file mtime hasn't changed, return cached session with updated status
+  const cached = sessionCache.get(jsonlPath);
+  if (cached && cached.mtimeMs === mtimeMs) {
+    log.debug(`cache hit for ${jsonlPath}`);
+    return { ...cached.session, status: detectClaudeStatus(mtimeMs) };
+  }
+
   try {
     const text = await Bun.file(jsonlPath).text();
     const lines = text.trim().split("\n");
@@ -133,7 +174,7 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
 
     const model = lastEntry.message?.model;
 
-    return {
+    const session: SessionInfo = {
       sessionId: lastEntry.sessionId,
       agentType: "claude-code",
       slug: lastEntry.slug || lastEntry.sessionId.slice(0, 8),
@@ -150,6 +191,12 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
       totalOutputTokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
       contextTokens: lastContextTokens > 0 ? lastContextTokens : undefined,
     };
+
+    // Update cache
+    sessionCache.set(jsonlPath, { mtimeMs, session });
+    log.debug(`cache miss for ${jsonlPath}, parsed and cached`);
+
+    return session;
   } catch (err) {
     log.debug(`parseClaudeSession: ${err instanceof Error ? err.message : String(err)}`);
     return null;
