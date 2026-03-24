@@ -126,6 +126,7 @@ export function App(): React.JSX.Element {
   const [terminal, setTerminal] = useState<TerminalTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [launchOpen, setLaunchOpen] = useState(false);
+  const [launchMachineId, setLaunchMachineId] = useState<string | undefined>(undefined);
   const [hideIdle, setHideIdle] = useState(false);
   const [resumeTarget, setResumeTarget] = useState<ResumeTarget | null>(null);
   const [fullscreen, setFullscreen] = useState<FullscreenTarget | null>(null);
@@ -372,6 +373,11 @@ export function App(): React.JSX.Element {
     setTerminal({ machineId, sessionName, multiplexer });
   }
 
+  function handleLaunchOnMachine(machineId: string) {
+    setLaunchMachineId(machineId);
+    setLaunchOpen(true);
+  }
+
   return (
     <div className={`app theme-${theme} font-${fontSize} ${layoutMode === "explorer" ? "app-explorer" : ""}`}>
       <header className="app-header">
@@ -613,6 +619,7 @@ export function App(): React.JSX.Element {
               onFullscreen={(session) => setFullscreen({ machineId: machine.machineId, sessionId: session.sessionId })}
               autoDeleteOnClose={autoDeleteOnClose}
               selectedSessionId={selectedSessionId}
+              onLaunchAgent={handleLaunchOnMachine}
             />
           ))}
         </main>
@@ -631,6 +638,7 @@ export function App(): React.JSX.Element {
           onResume={(machineId, sessionId, projectDir, agentType) =>
             setResumeTarget({ machineId, sessionId, projectDir, agentType })
           }
+          onLaunchAgent={handleLaunchOnMachine}
         />
       )}
 
@@ -670,9 +678,13 @@ export function App(): React.JSX.Element {
       />
       <LaunchAgentModal
         open={launchOpen}
-        onClose={() => setLaunchOpen(false)}
+        onClose={() => {
+          setLaunchOpen(false);
+          setLaunchMachineId(undefined);
+        }}
         machines={machines}
         onLaunched={(machineId, sessionName, multiplexer) => handleOpenTerminal(machineId, sessionName, multiplexer)}
+        initialMachineId={launchMachineId}
       />
       <ResumeAgentModal
         open={!!resumeTarget}
