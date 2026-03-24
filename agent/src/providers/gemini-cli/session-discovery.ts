@@ -23,6 +23,37 @@ const GEMINI_BASE_DIR = join(homedir(), ".gemini");
 const GEMINI_TMP_DIR = join(GEMINI_BASE_DIR, "tmp");
 const GEMINI_PROJECTS_FILE = join(GEMINI_BASE_DIR, "projects.json");
 
+// ---------------------------------------------------------------------------
+// Session cache — avoids re-reading/re-parsing unchanged JSON files
+// ---------------------------------------------------------------------------
+
+interface CachedGeminiSession {
+  mtimeMs: number;
+  session: SessionInfo;
+}
+
+const geminiSessionCache = new Map<string, CachedGeminiSession>();
+
+/** Clear the entire session cache (exported for testing). */
+export function clearGeminiSessionCache(): void {
+  geminiSessionCache.clear();
+}
+
+/** Return the number of entries in the session cache (exported for testing). */
+export function getGeminiSessionCacheSize(): number {
+  return geminiSessionCache.size;
+}
+
+/** Get a cached session entry by file path (exported for testing). */
+export function getCachedGeminiSession(filePath: string): CachedGeminiSession | undefined {
+  return geminiSessionCache.get(filePath);
+}
+
+/** Set a cached session entry by file path (exported for testing). */
+export function setCachedGeminiSession(filePath: string, entry: CachedGeminiSession): void {
+  geminiSessionCache.set(filePath, entry);
+}
+
 /** Shape of a Gemini CLI session file. */
 export interface GeminiSessionFile {
   sessionId: string;
