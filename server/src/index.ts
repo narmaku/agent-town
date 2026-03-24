@@ -67,7 +67,7 @@ function broadcastToClients(message: WebSocketMessage): void {
   for (const client of wsClients) {
     try {
       client.send(data);
-    } catch {
+    } catch (_err) {
       wsClients.delete(client);
     }
   }
@@ -802,7 +802,7 @@ const _server = Bun.serve({
             } else {
               ws.send(event.data);
             }
-          } catch {
+          } catch (_err) {
             agentWs.close();
           }
         };
@@ -810,7 +810,7 @@ const _server = Bun.serve({
         agentWs.onclose = () => {
           try {
             ws.close();
-          } catch {
+          } catch (_err) {
             // already closed
           }
           terminalProxies.delete(ws);
@@ -821,7 +821,7 @@ const _server = Bun.serve({
           try {
             ws.send("\r\n\x1b[31mFailed to connect to agent terminal server\x1b[0m\r\n");
             ws.close();
-          } catch {
+          } catch (_err) {
             // already closed
           }
         };

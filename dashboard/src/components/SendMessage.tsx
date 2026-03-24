@@ -55,7 +55,7 @@ export function SendMessage({ machineId, multiplexer, session, agentType, onSent
         const data = await resp.json().catch(() => ({ error: "Send failed" }));
         setError(data.error || `Send failed (${resp.status})`);
       }
-    } catch {
+    } catch (_err) {
       setError("Failed to connect to server");
     } finally {
       setSending(false);

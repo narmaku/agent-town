@@ -24,7 +24,7 @@ function loadInfoPaneVisible(): boolean {
   try {
     const stored = localStorage.getItem(INFO_PANE_STORAGE_KEY);
     if (stored !== null) return stored === "true";
-  } catch {
+  } catch (_err) {
     // localStorage unavailable
   }
   return true;
@@ -207,8 +207,8 @@ export function SessionDetail({
         }
         setHasMore(data.hasMore);
         setOffset(currentOffset + BATCH_SIZE);
-      } catch {
-        // silently fail
+      } catch (err) {
+        console.warn("Failed to load messages:", err instanceof Error ? err.message : String(err));
       } finally {
         setLoadingHistory(false);
       }
@@ -239,8 +239,8 @@ export function SessionDetail({
         setHasMore(data.total > totalLoaded);
         return currentOffset;
       });
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.warn("Failed to refresh latest messages:", err instanceof Error ? err.message : String(err));
     }
   }, [machineId, session.sessionId, session.agentType]);
 
@@ -292,8 +292,8 @@ export function SessionDetail({
       setHistory(data.messages);
       setHasMore(false);
       setOffset(data.total);
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.warn("Failed to load all messages:", err instanceof Error ? err.message : String(err));
     } finally {
       setLoadingHistory(false);
     }
@@ -336,11 +336,11 @@ export function SessionDetail({
               multiplexerSession: session.multiplexerSession,
             }),
           });
-        } catch {
+        } catch (_err) {
           // deletion is best-effort
         }
       }
-    } catch {
+    } catch (_err) {
       // will disappear on next heartbeat
     }
   }
@@ -515,7 +515,7 @@ export function SessionDetail({
                 setInfoPaneVisible(next);
                 try {
                   localStorage.setItem(INFO_PANE_STORAGE_KEY, String(next));
-                } catch {
+                } catch (_err) {
                   // localStorage unavailable
                 }
               } else {

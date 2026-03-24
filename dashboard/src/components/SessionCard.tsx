@@ -58,7 +58,7 @@ export function SessionCard({
           name: trimmed,
         }),
       });
-    } catch {
+    } catch (_err) {
       setName(session.customName || "");
     }
   }
@@ -116,11 +116,11 @@ export function SessionCard({
               sessionId: session.sessionId,
             }),
           });
-        } catch {
+        } catch (_err) {
           // deletion is best-effort
         }
       }
-    } catch {
+    } catch (_err) {
       // will disappear on next heartbeat
     }
   }
@@ -295,7 +295,7 @@ export function SessionCard({
                         multiplexerSession: session.multiplexerSession,
                       }),
                     });
-                  } catch {
+                  } catch (_err) {
                     // will disappear on next heartbeat
                   }
                 }}

@@ -33,7 +33,7 @@ function loadStoredSize(key: string, fallback: number): number {
       const parsed = Number(stored);
       if (Number.isFinite(parsed) && parsed > 0) return parsed;
     }
-  } catch {
+  } catch (_err) {
     // localStorage unavailable
   }
   return fallback;
@@ -83,7 +83,7 @@ export function useResizable({
       setSize((s) => {
         try {
           localStorage.setItem(STORAGE_PREFIX + storageKey, String(s));
-        } catch {
+        } catch (_err) {
           // localStorage unavailable
         }
         return s;
@@ -102,7 +102,7 @@ export function useResizable({
     setSize(defaultSize);
     try {
       localStorage.removeItem(STORAGE_PREFIX + storageKey);
-    } catch {
+    } catch (_err) {
       // localStorage unavailable
     }
   }, [defaultSize, storageKey]);

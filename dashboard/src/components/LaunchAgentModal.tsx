@@ -29,7 +29,9 @@ export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props)
           setGlobalSettings(s);
           if (s.defaultAgentType) setAgentType(s.defaultAgentType);
         })
-        .catch(() => {});
+        .catch((_err) => {
+          // settings load is best-effort
+        });
     }
   }, [open]);
 
@@ -114,7 +116,7 @@ export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props)
         const data = await resp.json().catch(() => ({ error: "Launch failed" }));
         setError(data.error || "Launch failed");
       }
-    } catch {
+    } catch (_err) {
       setError("Failed to connect to server");
     } finally {
       setLaunching(false);

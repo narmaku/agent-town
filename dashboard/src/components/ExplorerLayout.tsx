@@ -277,8 +277,8 @@ export function ExplorerLayout({
     try {
       const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
       if (stored !== null) return stored === "true";
-    } catch {
-      /* */
+    } catch (_err) {
+      // localStorage unavailable
     }
     return true;
   });
@@ -337,7 +337,7 @@ export function ExplorerLayout({
           name: trimmed,
         }),
       });
-    } catch {
+    } catch (_err) {
       // best-effort
     }
   }
@@ -558,8 +558,8 @@ export function ExplorerLayout({
             setSidebarVisible(next);
             try {
               localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
-            } catch {
-              /* */
+            } catch (_err) {
+              // localStorage unavailable
             }
           }}
           aria-label={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
@@ -606,7 +606,7 @@ export function ExplorerLayout({
                           multiplexerSession: activeSession.multiplexerSession,
                         }),
                       });
-                    } catch {
+                    } catch (_err) {
                       // best-effort
                     }
                   }}

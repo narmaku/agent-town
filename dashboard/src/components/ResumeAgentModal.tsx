@@ -50,7 +50,7 @@ export function ResumeAgentModal({
         const data = await resp.json().catch(() => ({ error: "Resume failed" }));
         setError(data.error || "Resume failed");
       }
-    } catch {
+    } catch (_err) {
       setError("Failed to connect to server");
     } finally {
       setResuming(false);

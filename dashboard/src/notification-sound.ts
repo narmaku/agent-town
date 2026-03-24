@@ -43,8 +43,8 @@ export function playNotificationSound(status: SessionStatus): void {
     osc.start();
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
     osc.stop(ctx.currentTime + 0.3);
-  } catch {
-    // AudioContext may be blocked or unavailable — silently ignore
+  } catch (_err) {
+    // AudioContext may be blocked or unavailable
   }
 }
 
