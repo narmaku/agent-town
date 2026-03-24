@@ -15,7 +15,7 @@ import { SendMessage } from "./SendMessage";
 
 const BATCH_SIZE = 10;
 const LOAD_ALL_MESSAGES_LIMIT = 10_000;
-const DEFAULT_AGENT_TYPE = "unknown";
+const DEFAULT_AGENT_TYPE: AgentType = "claude-code";
 const INFO_PANE_BREAKPOINT = 1200;
 const INFO_PANE_DEFAULT_WIDTH = 300;
 const INFO_PANE_MIN_WIDTH = 220;
