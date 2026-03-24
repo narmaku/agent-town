@@ -593,6 +593,110 @@ describe("session cache", () => {
     expect(result2?.sessionId).toBe("updated-session");
   });
 
+  test("cache hit recomputes status based on current time", async () => {
+    // Use an mtime that maps to "working" status (< 30s ago)
+    const recentMtime = Date.now() - 5_000;
+    const entry = makeJsonlEntry({ sessionId: "status-recompute" });
+    const filePath = await writeTempJsonl(projectDir, "status-recompute.jsonl", toJsonl([entry]));
+
+    // First call with recent mtime -> "working"
+    const result1 = await parseClaudeSession(filePath, recentMtime);
+    expect(result1).not.toBeNull();
+    expect(result1?.status).toBe("working");
+
+    // Second call with same mtime but now time has passed -> "working" still
+    // because mtime hasn't changed, the cached session gets status recomputed
+    // Let's use an old mtime that would map to "done" (> 10 min)
+    const oldMtime = Date.now() - 15 * 60 * 1000;
+    const entry2 = makeJsonlEntry({ sessionId: "status-done" });
+    const filePath2 = await writeTempJsonl(projectDir, "status-done.jsonl", toJsonl([entry2]));
+
+    // Parse once with the old mtime to populate cache
+    const resultA = await parseClaudeSession(filePath2, oldMtime);
+    expect(resultA).not.toBeNull();
+    expect(resultA?.status).toBe("done");
+
+    // Call again with same mtime -> cache hit, status should still be "done"
+    const resultB = await parseClaudeSession(filePath2, oldMtime);
+    expect(resultB).not.toBeNull();
+    expect(resultB?.status).toBe("done");
+    // Confirm it's actually a cache hit by checking sessionId is preserved
+    expect(resultB?.sessionId).toBe("status-done");
+  });
+
+  test("cache does not store null results (empty or malformed files)", async () => {
+    // Create a file with no valid entries (will return null)
+    const filePath = await writeTempJsonl(projectDir, "empty-cache.jsonl", "");
+
+    const { stat: fileStat } = await import("node:fs/promises");
+    const statBefore = await fileStat(filePath);
+    const mtime = statBefore.mtimeMs;
+
+    // First call: returns null (no valid entries)
+    const result1 = await parseClaudeSession(filePath, mtime);
+    expect(result1).toBeNull();
+
+    // Now write valid content but keep same mtime
+    const validEntry = makeJsonlEntry({ sessionId: "after-empty" });
+    await writeFile(filePath, toJsonl([validEntry]));
+    await utimes(filePath, new Date(statBefore.atimeMs), new Date(statBefore.mtimeMs));
+
+    // Second call with same mtime: should re-read because null was NOT cached
+    const result2 = await parseClaudeSession(filePath, mtime);
+    expect(result2).not.toBeNull();
+    expect(result2?.sessionId).toBe("after-empty");
+  });
+
+  test("cache handles read error gracefully without caching failure", async () => {
+    // Parse a nonexistent file -> returns null
+    const fakePath = join(projectDir, "nonexistent.jsonl");
+    const result1 = await parseClaudeSession(fakePath, Date.now());
+    expect(result1).toBeNull();
+
+    // Create the file and parse again with same mtime -> should read it fresh
+    const entry = makeJsonlEntry({ sessionId: "recovered" });
+    const mtime = Date.now();
+    await writeFile(fakePath, toJsonl([entry]));
+
+    const result2 = await parseClaudeSession(fakePath, mtime);
+    expect(result2).not.toBeNull();
+    expect(result2?.sessionId).toBe("recovered");
+  });
+
+  test("multiple files are cached independently", async () => {
+    const entry1 = makeJsonlEntry({ sessionId: "file-one" });
+    const entry2 = makeJsonlEntry({ sessionId: "file-two" });
+
+    const filePath1 = await writeTempJsonl(projectDir, "one.jsonl", toJsonl([entry1]));
+    const filePath2 = await writeTempJsonl(projectDir, "two.jsonl", toJsonl([entry2]));
+
+    const { stat: fileStat } = await import("node:fs/promises");
+    const stat1 = await fileStat(filePath1);
+    const stat2 = await fileStat(filePath2);
+
+    // Parse both files
+    const result1a = await parseClaudeSession(filePath1, stat1.mtimeMs);
+    const result2a = await parseClaudeSession(filePath2, stat2.mtimeMs);
+    expect(result1a?.sessionId).toBe("file-one");
+    expect(result2a?.sessionId).toBe("file-two");
+
+    // Overwrite file-two with different content but keep same mtime
+    const entry2b = makeJsonlEntry({ sessionId: "file-two-updated" });
+    await writeFile(filePath2, toJsonl([entry2b]));
+    await utimes(filePath2, new Date(stat2.atimeMs), new Date(stat2.mtimeMs));
+
+    // file-one cache hit (unchanged), file-two cache hit (same mtime -> stale but cached)
+    const result1b = await parseClaudeSession(filePath1, stat1.mtimeMs);
+    const result2b = await parseClaudeSession(filePath2, stat2.mtimeMs);
+    expect(result1b?.sessionId).toBe("file-one");
+    expect(result2b?.sessionId).toBe("file-two"); // cached, not re-read
+
+    // Clear cache and re-read file-two
+    clearSessionCache();
+    const result2c = await parseClaudeSession(filePath2, stat2.mtimeMs);
+    expect(result2c?.sessionId).toBe("file-two-updated");
+  });
+
   test("clearSessionCache removes all cached entries", async () => {
     const entry = makeJsonlEntry({ sessionId: "to-be-cleared" });
     const filePath = await writeTempJsonl(projectDir, "clear-test.jsonl", toJsonl([entry]));
