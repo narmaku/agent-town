@@ -137,6 +137,8 @@ export function MachineGroup({
       <div className="machine-header">
         <div className="machine-info">
           <span className="machine-hostname">{machine.hostname}</span>
+          <span className="machine-platform">{machine.platform}</span>
+          <span className="machine-multiplexers">{machine.multiplexers.join(", ")}</span>
           {onLaunchAgent && (
             <button
               type="button"
@@ -151,8 +153,6 @@ export function MachineGroup({
               +
             </button>
           )}
-          <span className="machine-platform">{machine.platform}</span>
-          <span className="machine-multiplexers">{machine.multiplexers.join(", ")}</span>
         </div>
         <div className="machine-stats">
           {needsAttention > 0 && <span className="stat attention">{needsAttention} need attention</span>}
