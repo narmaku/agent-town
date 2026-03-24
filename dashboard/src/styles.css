@@ -1856,6 +1856,15 @@ body {
   display: contents;
 }
 
+/* Desktop: show search in header-left, hide in header-actions */
+.search-group-desktop {
+  display: contents;
+}
+
+.search-group-mobile {
+  display: none;
+}
+
 .deep-search-toggle {
   display: flex;
   align-items: center;
@@ -2948,8 +2957,12 @@ body {
     display: flex;
   }
 
-  /* Search group: vertical stack on mobile */
-  .search-group {
+  /* Mobile: hide desktop search, show mobile search */
+  .search-group-desktop {
+    display: none !important;
+  }
+
+  .search-group-mobile {
     display: flex;
     flex-direction: column;
     gap: 6px;

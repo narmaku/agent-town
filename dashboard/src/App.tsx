@@ -386,6 +386,26 @@ export function App(): React.JSX.Element {
           <span className={`connection-status ${connected ? "online" : "offline"}`}>
             {connected ? "Connected" : "Reconnecting..."}
           </span>
+          <div className="search-group search-group-desktop">
+            <input
+              ref={searchInputRef}
+              className={`search-input ${deepSearch ? "deep-search-active" : ""}`}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search sessions..."
+              aria-label="Search sessions"
+            />
+            <label className="deep-search-toggle" title="Search in session message history">
+              <input
+                type="checkbox"
+                checked={deepSearch}
+                onChange={(e) => setDeepSearch(e.target.checked)}
+                aria-label="Search in message history"
+              />
+              <span className="deep-search-label">{deepSearchLoading ? "Searching..." : "Search history"}</span>
+            </label>
+          </div>
         </div>
         <div className="header-right">
           <div className="header-stats">
@@ -421,9 +441,8 @@ export function App(): React.JSX.Element {
             </svg>
           </button>
           <div className={`header-actions ${showMobileFilters ? "show" : ""}`}>
-            <div className="search-group">
+            <div className="search-group search-group-mobile">
               <input
-                ref={searchInputRef}
                 className={`search-input ${deepSearch ? "deep-search-active" : ""}`}
                 type="text"
                 value={searchQuery}
