@@ -18,17 +18,16 @@ export interface SessionCandidate {
 
 const BIRTHTIME_MATCH_WINDOW_MS = 120_000; // 2 minutes
 
-/** Get file creation time using system stat (Bun's birthtimeMs returns 0 on Linux). */
+/** Get file creation time using statx syscall via Bun's native stat.
+ * Falls back to mtimeMs if birthtimeMs is unavailable (returns 0 on some Linux filesystems). */
 async function getBirthtimeMs(filePath: string): Promise<number> {
   try {
-    const proc = Bun.spawn(["stat", "-c", "%W", filePath], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const output = await new Response(proc.stdout).text();
-    await proc.exited;
-    const seconds = parseInt(output.trim(), 10);
-    return seconds > 0 ? seconds * 1000 : 0;
+    const fileStat = await stat(filePath);
+    // Bun's stat returns birthtimeMs via statx on Linux (kernel 4.11+).
+    // Falls back to 0 on older kernels or unsupported filesystems.
+    if (fileStat.birthtimeMs > 0) return fileStat.birthtimeMs;
+    // Fallback: use mtimeMs as approximation (less accurate but no subprocess)
+    return fileStat.mtimeMs;
   } catch (err) {
     log.debug(`getBirthtimeMs: failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     return 0;

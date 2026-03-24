@@ -6,7 +6,7 @@ const log = createLogger("providers:utils");
 /** Check if a binary is available on the system PATH. */
 export async function isBinaryAvailable(binary: string): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "ignore" });
     await proc.exited;
     return proc.exitCode === 0;
   } catch (err) {

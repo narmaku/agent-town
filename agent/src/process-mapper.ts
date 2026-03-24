@@ -63,7 +63,7 @@ async function getCwd(pid: number): Promise<string | null> {
 export async function runPs(): Promise<AgentProcess[]> {
   const proc = Bun.spawn(["ps", "-eo", "pid,ppid,etimes,args", "--no-headers"], {
     stdout: "pipe",
-    stderr: "pipe",
+    stderr: "ignore",
   });
   const output = await new Response(proc.stdout).text();
   await proc.exited;
@@ -104,7 +104,7 @@ async function resolveMultiplexerSession(
       const tty = ttyLink.split("/").pop();
       const tmuxProc = Bun.spawn(["tmux", "list-panes", "-a", "-F", "#{pane_tty}:#{session_name}"], {
         stdout: "pipe",
-        stderr: "pipe",
+        stderr: "ignore",
       });
       const tmuxOutput = await new Response(tmuxProc.stdout).text();
       await tmuxProc.exited;

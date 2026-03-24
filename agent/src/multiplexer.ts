@@ -5,7 +5,7 @@ const log = createLogger("multiplexer");
 async function runCommand(cmd: string[]): Promise<string> {
   const proc = Bun.spawn(cmd, {
     stdout: "pipe",
-    stderr: "pipe",
+    stderr: "ignore",
   });
   const output = await new Response(proc.stdout).text();
   await proc.exited;
@@ -14,7 +14,7 @@ async function runCommand(cmd: string[]): Promise<string> {
 
 async function isAvailable(binary: string): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "pipe" });
+    const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "ignore" });
     await proc.exited;
     return proc.exitCode === 0;
   } catch (err) {
@@ -23,10 +23,15 @@ async function isAvailable(binary: string): Promise<boolean> {
   }
 }
 
+// Cache detectMultiplexers result — available multiplexers don't change at runtime
+let cachedMultiplexers: TerminalMultiplexer[] | null = null;
+
 export async function detectMultiplexers(): Promise<TerminalMultiplexer[]> {
+  if (cachedMultiplexers) return cachedMultiplexers;
   const result: TerminalMultiplexer[] = [];
   if (await isAvailable("zellij")) result.push("zellij");
   if (await isAvailable("tmux")) result.push("tmux");
+  cachedMultiplexers = result;
   return result;
 }
 
