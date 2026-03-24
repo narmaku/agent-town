@@ -162,7 +162,7 @@ export function DirectoryBrowserModal({
                   <span>..</span>
                 </button>
               )}
-              {dirs.length === 0 && !parent && <div className="dir-browser-empty">No subdirectories</div>}
+              {dirs.length === 0 && <div className="dir-browser-empty">No subdirectories</div>}
               {dirs.map((dir) => (
                 <button
                   type="button"
