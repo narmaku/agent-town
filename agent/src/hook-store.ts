@@ -7,6 +7,15 @@ const log = createLogger("hook-store");
 // After this, we fall back to JSONL heuristics.
 const STALE_THRESHOLD_MS = 60_000;
 
+/** How long a "done" session is retained before automatic cleanup (5 minutes). */
+export const DONE_EXPIRY_MS = 5 * 60 * 1000;
+
+/** How long any session (regardless of status) is retained without events (10 minutes). */
+export const MAX_STALE_MS = 10 * 60 * 1000;
+
+/** How often the periodic cleanup runs (1 minute). */
+const CLEANUP_INTERVAL_MS = 60_000;
+
 export interface HookSessionState {
   sessionId: string;
   status: SessionStatus;
@@ -73,3 +82,32 @@ export function getAllHookSessions(): Map<string, HookSessionState> {
 export function clearHookSessions(): void {
   sessions.clear();
 }
+
+/**
+ * Remove expired sessions from the in-memory store.
+ * - "done" sessions older than DONE_EXPIRY_MS are removed.
+ * - Any session with no events for longer than MAX_STALE_MS is removed.
+ */
+export function pruneExpiredSessions(): void {
+  const now = Date.now();
+  let pruned = 0;
+
+  for (const [id, state] of sessions) {
+    const elapsed = now - state.lastEventTime;
+    const isDoneExpired = state.status === "done" && elapsed > DONE_EXPIRY_MS;
+    const isStale = elapsed > MAX_STALE_MS;
+
+    if (isDoneExpired || isStale) {
+      sessions.delete(id);
+      pruned++;
+    }
+  }
+
+  if (pruned > 0) {
+    log.debug(`pruned ${pruned} expired hook session(s)`);
+  }
+}
+
+// Periodic cleanup timer — unref'd so it doesn't prevent process shutdown.
+const cleanupTimer = setInterval(pruneExpiredSessions, CLEANUP_INTERVAL_MS);
+cleanupTimer.unref();

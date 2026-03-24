@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { clearHookSessions, getAllHookSessions, getHookState, updateHookState } from "./hook-store";
+import {
+  clearHookSessions,
+  DONE_EXPIRY_MS,
+  getAllHookSessions,
+  getHookState,
+  MAX_STALE_MS,
+  pruneExpiredSessions,
+  updateHookState,
+} from "./hook-store";
 import { handleClaudeHookEvent } from "./providers/claude-code/hook-handler";
 
 /** Helper: process a Claude Code hook event through the full pipeline. */
@@ -190,5 +198,122 @@ describe("hook-store", () => {
       tool_name: "Bash",
     });
     expect(getHookState("s1")?.status).toBe("working");
+  });
+});
+
+describe("pruneExpiredSessions", () => {
+  beforeEach(() => {
+    clearHookSessions();
+  });
+
+  test("removes done sessions older than DONE_EXPIRY_MS", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "SessionEnd" });
+    expect(getHookState("s1")?.status).toBe("done");
+
+    // Simulate time passing beyond expiry
+    const sessions = getAllHookSessions();
+    const entry = sessions.get("s1");
+    if (entry) {
+      entry.lastEventTime = Date.now() - DONE_EXPIRY_MS - 1;
+    }
+
+    pruneExpiredSessions();
+    expect(sessions.has("s1")).toBe(false);
+  });
+
+  test("preserves done sessions younger than DONE_EXPIRY_MS", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "SessionEnd" });
+    expect(getHookState("s1")?.status).toBe("done");
+
+    // Session is recent — should not be pruned
+    pruneExpiredSessions();
+    const sessions = getAllHookSessions();
+    expect(sessions.has("s1")).toBe(true);
+  });
+
+  test("removes any session older than MAX_STALE_MS regardless of status", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "Stop" });
+    expect(getHookState("s1")?.status).toBe("awaiting_input");
+
+    const sessions = getAllHookSessions();
+    const entry = sessions.get("s1");
+    if (entry) {
+      entry.lastEventTime = Date.now() - MAX_STALE_MS - 1;
+    }
+
+    pruneExpiredSessions();
+    expect(sessions.has("s1")).toBe(false);
+  });
+
+  test("preserves recent working sessions", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
+    expect(getHookState("s1")?.status).toBe("working");
+
+    pruneExpiredSessions();
+    const sessions = getAllHookSessions();
+    expect(sessions.has("s1")).toBe(true);
+  });
+
+  test("preserves awaiting_input sessions within MAX_STALE_MS", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "Stop" });
+    expect(getHookState("s1")?.status).toBe("awaiting_input");
+
+    pruneExpiredSessions();
+    const sessions = getAllHookSessions();
+    expect(sessions.has("s1")).toBe(true);
+  });
+
+  test("prunes stale action_required sessions beyond MAX_STALE_MS", () => {
+    processHookEvent({
+      session_id: "s1",
+      hook_event_name: "Notification",
+      notification_type: "permission_prompt",
+    });
+    expect(getHookState("s1")?.status).toBe("action_required");
+
+    const sessions = getAllHookSessions();
+    const entry = sessions.get("s1");
+    if (entry) {
+      entry.lastEventTime = Date.now() - MAX_STALE_MS - 1;
+    }
+
+    pruneExpiredSessions();
+    expect(sessions.has("s1")).toBe(false);
+  });
+
+  test("clearHookSessions still clears all sessions", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
+    processHookEvent({ session_id: "s2", hook_event_name: "SessionEnd" });
+    processHookEvent({ session_id: "s3", hook_event_name: "Stop" });
+
+    const sessions = getAllHookSessions();
+    expect(sessions.size).toBe(3);
+
+    clearHookSessions();
+    expect(sessions.size).toBe(0);
+  });
+
+  test("prunes only expired sessions from a mix of fresh and stale", () => {
+    // Fresh working session
+    processHookEvent({ session_id: "fresh", hook_event_name: "UserPromptSubmit" });
+    // Old done session
+    processHookEvent({ session_id: "old-done", hook_event_name: "SessionEnd" });
+    // Old awaiting_input session
+    processHookEvent({ session_id: "old-await", hook_event_name: "Stop" });
+
+    const sessions = getAllHookSessions();
+    const oldDone = sessions.get("old-done");
+    if (oldDone) {
+      oldDone.lastEventTime = Date.now() - DONE_EXPIRY_MS - 1;
+    }
+    const oldAwait = sessions.get("old-await");
+    if (oldAwait) {
+      oldAwait.lastEventTime = Date.now() - MAX_STALE_MS - 1;
+    }
+
+    pruneExpiredSessions();
+    expect(sessions.has("fresh")).toBe(true);
+    expect(sessions.has("old-done")).toBe(false);
+    expect(sessions.has("old-await")).toBe(false);
   });
 });
