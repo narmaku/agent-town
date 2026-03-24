@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export const STORAGE_PREFIX = "agentTown:panelSize:";
 
+type PanelSide = "left" | "right" | "top" | "bottom";
+
 interface UseResizableOptions {
   /** localStorage key suffix for persisting size */
   storageKey: string;
@@ -12,7 +14,7 @@ interface UseResizableOptions {
   /** Maximum allowed size in pixels */
   maxSize: number;
   /** Which side/edge the panel is on — determines drag direction */
-  side: "left" | "right" | "top" | "bottom";
+  side: PanelSide;
 }
 
 interface UseResizableResult {
@@ -24,6 +26,21 @@ interface UseResizableResult {
   handleMouseDown: (e: React.MouseEvent) => void;
   /** Reset size to default */
   resetSize: () => void;
+}
+
+/** Clamp a value between min and max bounds. */
+export function clampValue(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/** Determine whether a panel side uses vertical (Y-axis) dragging. */
+export function isVerticalSide(side: PanelSide): boolean {
+  return side === "top" || side === "bottom";
+}
+
+/** Compute new panel size from a drag delta, accounting for panel side direction. */
+export function computeNewSize(startSize: number, delta: number, side: PanelSide): number {
+  return side === "left" || side === "top" ? startSize + delta : startSize - delta;
 }
 
 export function loadStoredSize(key: string, fallback: number): number {
@@ -52,8 +69,8 @@ export function useResizable({
   const startPosRef = useRef(0);
   const startSizeRef = useRef(0);
 
-  const isVertical = side === "top" || side === "bottom";
-  const clamp = useCallback((s: number) => Math.max(minSize, Math.min(maxSize, s)), [minSize, maxSize]);
+  const isVertical = isVerticalSide(side);
+  const clamp = useCallback((s: number) => clampValue(s, minSize, maxSize), [minSize, maxSize]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -71,8 +88,7 @@ export function useResizable({
       if (!isDraggingRef.current) return;
       const pos = isVertical ? e.clientY : e.clientX;
       const delta = pos - startPosRef.current;
-      // For left/top panels, positive drag = larger. For right/bottom, negative drag = larger.
-      const newSize = side === "left" || side === "top" ? startSizeRef.current + delta : startSizeRef.current - delta;
+      const newSize = computeNewSize(startSizeRef.current, delta, side);
       setSize(clamp(newSize));
     }
 
