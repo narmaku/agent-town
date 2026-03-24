@@ -183,9 +183,12 @@ export async function discoverGeminiSessions(): Promise<SessionInfo[]> {
 
         activeFiles.add(jsonPath);
 
-        // Check cache: if mtime hasn't changed, use cached SessionInfo
+        // Check cache: if mtime hasn't changed, reuse cached SessionInfo
+        // (status must be recomputed — it depends on elapsed time, not file content)
         const cached = geminiSessionCache.get(jsonPath);
         if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+          const lastUpdatedMs = new Date(cached.session.lastActivity).getTime();
+          cached.session.status = detectGeminiStatus(lastUpdatedMs);
           sessions.push(cached.session);
           continue;
         }
