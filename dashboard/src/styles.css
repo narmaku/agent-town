@@ -1234,6 +1234,7 @@ body {
 
 /* Info pane (right sidebar) */
 .info-pane {
+  width: var(--panel-width, 300px);
   flex-shrink: 0;
   background: var(--bg);
   overflow-y: auto;
@@ -1242,7 +1243,7 @@ body {
 }
 
 .info-pane.collapsed {
-  width: 0 !important;
+  width: 0;
   overflow: hidden;
 }
 
@@ -1957,6 +1958,7 @@ body {
 }
 
 .explorer-sidebar {
+  width: var(--panel-width, 300px);
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--bg);
@@ -1966,7 +1968,7 @@ body {
 }
 
 .explorer-sidebar.collapsed {
-  width: 0 !important;
+  width: 0;
   padding: 0;
   overflow: hidden;
 }
@@ -3178,7 +3180,7 @@ body {
     top: 0;
     left: 0;
     bottom: 0;
-    width: 85vw !important;
+    width: 85vw;
     max-width: 320px;
     min-width: 0;
     z-index: 901;

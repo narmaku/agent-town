@@ -388,7 +388,7 @@ export function ExplorerLayout({
       <div className={`sidebar-backdrop${sidebarOpen ? " open" : ""}`} onClick={onSidebarClose} aria-hidden="true" />
       <div
         className={`explorer-sidebar${sidebarOpen ? " open" : ""}${!sidebarVisible && !isMobile ? " collapsed" : ""}`}
-        style={{ width: sidebarVisible || isMobile ? sidebarResize.size : undefined }}
+        style={{ "--panel-width": `${sidebarResize.size}px` } as React.CSSProperties}
       >
         {/* biome-ignore lint/a11y/useSemanticElements: sidebar navigation entry */}
         <div

@@ -662,7 +662,7 @@ export function SessionDetail({
         {isWide && (
           <div
             className={`info-pane${!infoPaneVisible ? " collapsed" : ""}`}
-            style={infoPaneVisible ? { width: infoPaneResize.size } : undefined}
+            style={{ "--panel-width": `${infoPaneResize.size}px` } as React.CSSProperties}
           >
             {infoPaneContent}
           </div>
