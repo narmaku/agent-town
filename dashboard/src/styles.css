@@ -1415,9 +1415,10 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px 10px;
   line-height: 1;
   transition: color 0.15s, border-color 0.15s;
 }
@@ -3499,6 +3500,29 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+}
+
+.activity-feed-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.activity-feed-clear-btn {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: color 0.15s, background 0.15s;
+}
+
+.activity-feed-clear-btn:hover {
+  color: var(--text);
+  background: var(--bg-elevated);
 }
 
 .activity-feed-count {

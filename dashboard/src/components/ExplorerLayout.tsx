@@ -28,6 +28,8 @@ interface Props {
   onOpenTerminal: (machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) => void;
   onResume: (machineId: string, sessionId: string, projectDir: string, agentType: AgentType) => void;
   onLaunchAgent?: (machineId: string) => void;
+  initialSelection?: { machineId: string; sessionId: string } | null;
+  onInitialSelectionConsumed?: () => void;
 }
 
 interface SelectedSession {
@@ -294,6 +296,8 @@ export function ExplorerLayout({
   onOpenTerminal,
   onResume,
   onLaunchAgent,
+  initialSelection,
+  onInitialSelectionConsumed,
 }: Props): React.JSX.Element {
   const [selected, setSelected] = useState<SelectedSession | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -388,6 +392,14 @@ export function ExplorerLayout({
     );
     if (!found) setSelected(null);
   }, [selected, machines]);
+
+  // Sync initialSelection from parent (e.g. activity feed navigation)
+  useEffect(() => {
+    if (initialSelection) {
+      setSelected({ machineId: initialSelection.machineId, sessionId: initialSelection.sessionId });
+      onInitialSelectionConsumed?.();
+    }
+  }, [initialSelection, onInitialSelectionConsumed]);
 
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => {

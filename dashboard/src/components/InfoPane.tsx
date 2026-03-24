@@ -1,6 +1,10 @@
 import { formatCompactTokens, type SessionInfo } from "@agent-town/shared";
 import { AGENT_TYPE_LABELS, STATUS_CONFIG } from "../utils";
-import { BranchIcon, ContextIcon, FolderIcon, ModelIcon, TokensIcon } from "./icons";
+import { BranchIcon, ContextIcon, CwdIcon, FolderIcon, ModelIcon, TokensIcon } from "./icons";
+
+export function shouldShowCwd(cwd: string, projectPath: string): boolean {
+  return !!cwd && cwd !== projectPath;
+}
 
 interface InfoPaneProps {
   session: SessionInfo;
@@ -52,6 +56,14 @@ export function InfoPane({
           </span>
           <span className="detail-value mono">{session.projectPath}</span>
         </div>
+        {shouldShowCwd(session.cwd, session.projectPath) && (
+          <div className="info-pane-detail-row" title="Current working directory">
+            <span className="info-pane-detail-icon" aria-hidden="true">
+              <CwdIcon />
+            </span>
+            <span className="detail-value mono">{session.cwd}</span>
+          </div>
+        )}
         {session.gitBranch && (
           <div className="info-pane-detail-row">
             <span className="info-pane-detail-icon" aria-hidden="true">
