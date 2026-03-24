@@ -5,7 +5,7 @@ import type { GroupMode, SortMode, TimeFilter } from "../App";
 import { useResizable } from "../hooks/useResizable";
 import { useWindowWidth } from "../hooks/useWindowWidth";
 import { AGENT_TYPE_LABELS, API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
-import { DashboardIcon } from "./Icons";
+import { DashboardIcon } from "./icons";
 import { buildGroups, filterSessionsByTime, sortSessions } from "./MachineGroup";
 import { SessionDetail } from "./SessionDetail";
 

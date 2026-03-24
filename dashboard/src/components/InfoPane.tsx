@@ -1,6 +1,6 @@
 import { formatCompactTokens, type SessionInfo } from "@agent-town/shared";
 import { AGENT_TYPE_LABELS, STATUS_CONFIG } from "../utils";
-import { BranchIcon, ContextIcon, FolderIcon, ModelIcon, TokensIcon } from "./Icons";
+import { BranchIcon, ContextIcon, FolderIcon, ModelIcon, TokensIcon } from "./icons";
 
 interface InfoPaneProps {
   session: SessionInfo;

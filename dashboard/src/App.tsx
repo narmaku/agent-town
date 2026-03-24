@@ -18,7 +18,7 @@ import {
   MenuIcon,
   SettingsIcon,
   SidebarIcon,
-} from "./components/Icons";
+} from "./components/icons";
 import { KeyboardHelp } from "./components/KeyboardHelp";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
 import { buildGroups, filterSessionsByTime, MachineGroup, sortSessions } from "./components/MachineGroup";
@@ -489,6 +489,7 @@ export function App(): React.JSX.Element {
                   className={`layout-toggle-btn ${layoutMode === "cards" ? "active" : ""}`}
                   onClick={() => setLayoutMode("cards")}
                   title="Cards layout"
+                  aria-label="Cards layout"
                 >
                   <CardsLayoutIcon />
                 </button>
@@ -497,6 +498,7 @@ export function App(): React.JSX.Element {
                   className={`layout-toggle-btn ${layoutMode === "explorer" ? "active" : ""}`}
                   onClick={() => setLayoutMode("explorer")}
                   title="Explorer layout"
+                  aria-label="Explorer layout"
                 >
                   <ExplorerLayoutIcon />
                 </button>
