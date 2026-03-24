@@ -55,7 +55,7 @@ export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
     try {
       const resp = await fetch(API.NODES);
       if (resp.ok) setNodes(await resp.json());
-    } catch {
+    } catch (_err) {
       // ignore
     }
   }, []);
@@ -86,7 +86,7 @@ export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
       });
       const result = await resp.json();
       setTestResult(result);
-    } catch {
+    } catch (_err) {
       setTestResult({ ok: false, error: "Failed to reach server" });
     } finally {
       setTesting(false);
@@ -112,7 +112,7 @@ export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
         resetForm();
         await loadNodes();
       }
-    } catch {
+    } catch (_err) {
       // ignore
     }
   }

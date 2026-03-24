@@ -337,7 +337,7 @@ export function ExplorerLayout({
           name: trimmed,
         }),
       });
-    } catch {
+    } catch (_err) {
       // best-effort
     }
   }
@@ -606,7 +606,7 @@ export function ExplorerLayout({
                           multiplexerSession: activeSession.multiplexerSession,
                         }),
                       });
-                    } catch {
+                    } catch (_err) {
                       // best-effort
                     }
                   }}

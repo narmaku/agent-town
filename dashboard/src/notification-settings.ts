@@ -25,7 +25,7 @@ export function loadNotificationSettings(): NotificationSettings {
       ...DEFAULT_NOTIFICATION_SETTINGS,
       ...parsed,
     };
-  } catch {
+  } catch (_err) {
     return { ...DEFAULT_NOTIFICATION_SETTINGS };
   }
 }

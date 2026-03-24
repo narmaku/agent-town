@@ -89,7 +89,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     try {
       const resp = await fetch(API.NODES);
       if (resp.ok) setNodes(await resp.json());
-    } catch {
+    } catch (_err) {
       // ignore
     }
   }, []);
@@ -149,7 +149,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
         }),
       });
       setTestResult(await resp.json());
-    } catch {
+    } catch (_err) {
       setTestResult({ ok: false, error: "Failed to reach server" });
     } finally {
       setTesting(false);
@@ -176,7 +176,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
         resetNodeForm();
         await loadNodes();
       }
-    } catch {
+    } catch (_err) {
       // ignore
     }
   }

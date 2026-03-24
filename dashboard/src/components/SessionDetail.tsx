@@ -24,7 +24,7 @@ function loadInfoPaneVisible(): boolean {
   try {
     const stored = localStorage.getItem(INFO_PANE_STORAGE_KEY);
     if (stored !== null) return stored === "true";
-  } catch {
+  } catch (_err) {
     // localStorage unavailable
   }
   return true;
@@ -336,11 +336,11 @@ export function SessionDetail({
               multiplexerSession: session.multiplexerSession,
             }),
           });
-        } catch {
+        } catch (_err) {
           // deletion is best-effort
         }
       }
-    } catch {
+    } catch (_err) {
       // will disappear on next heartbeat
     }
   }
@@ -515,7 +515,7 @@ export function SessionDetail({
                 setInfoPaneVisible(next);
                 try {
                   localStorage.setItem(INFO_PANE_STORAGE_KEY, String(next));
-                } catch {
+                } catch (_err) {
                   // localStorage unavailable
                 }
               } else {
