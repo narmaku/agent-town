@@ -110,6 +110,7 @@ interface Props {
   onFullscreen: (session: SessionInfo) => void;
   autoDeleteOnClose?: boolean;
   selectedSessionId?: string | null;
+  onLaunchAgent?: (machineId: string) => void;
 }
 
 export function MachineGroup({
@@ -123,6 +124,7 @@ export function MachineGroup({
   onFullscreen,
   autoDeleteOnClose,
   selectedSessionId,
+  onLaunchAgent,
 }: Props): React.JSX.Element {
   const needsAttention = machine.sessions.filter((s) => s.status === "awaiting_input").length;
   const working = machine.sessions.filter((s) => s.status === "working").length;
@@ -135,6 +137,20 @@ export function MachineGroup({
       <div className="machine-header">
         <div className="machine-info">
           <span className="machine-hostname">{machine.hostname}</span>
+          {onLaunchAgent && (
+            <button
+              type="button"
+              className="machine-launch-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onLaunchAgent(machine.machineId);
+              }}
+              title={`Launch new agent on ${machine.hostname}`}
+              aria-label={`Launch new agent on ${machine.hostname}`}
+            >
+              +
+            </button>
+          )}
           <span className="machine-platform">{machine.platform}</span>
           <span className="machine-multiplexers">{machine.multiplexers.join(", ")}</span>
         </div>

@@ -27,6 +27,9 @@ interface Props {
   onSidebarClose: () => void;
   onOpenTerminal: (machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) => void;
   onResume: (machineId: string, sessionId: string, projectDir: string, agentType: AgentType) => void;
+  onLaunchAgent?: (machineId: string) => void;
+  initialSelection?: { machineId: string; sessionId: string } | null;
+  onInitialSelectionConsumed?: () => void;
 }
 
 interface SelectedSession {
@@ -77,7 +80,13 @@ function SessionEntry({
   );
 }
 
-function MachineCard({ machine }: { machine: MachineInfo }) {
+function MachineCard({
+  machine,
+  onLaunchAgent,
+}: {
+  machine: MachineInfo;
+  onLaunchAgent?: (machineId: string) => void;
+}) {
   const agentTypes = machine.availableAgents?.length
     ? machine.availableAgents
     : [...new Set(machine.sessions.map((s) => s.agentType))];
@@ -90,7 +99,23 @@ function MachineCard({ machine }: { machine: MachineInfo }) {
   return (
     <div className="dashboard-machine-card">
       <div className="dashboard-machine-card-header">
-        <span className="dashboard-machine-hostname">{machine.hostname}</span>
+        <span className="dashboard-machine-hostname-row">
+          <span className="dashboard-machine-hostname">{machine.hostname}</span>
+          {onLaunchAgent && (
+            <button
+              type="button"
+              className="machine-launch-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onLaunchAgent(machine.machineId);
+              }}
+              title={`Launch new agent on ${machine.hostname}`}
+              aria-label={`Launch new agent on ${machine.hostname}`}
+            >
+              +
+            </button>
+          )}
+        </span>
         <span
           className="dashboard-machine-heartbeat"
           title={`Last heartbeat: ${new Date(machine.lastHeartbeat).toLocaleString()}`}
@@ -145,9 +170,11 @@ function MachineCard({ machine }: { machine: MachineInfo }) {
 function ExplorerDashboard({
   allMachines,
   onSelect,
+  onLaunchAgent,
 }: {
   allMachines: MachineInfo[];
   onSelect: (machineId: string, sessionId: string) => void;
+  onLaunchAgent?: (machineId: string) => void;
 }) {
   const allSessions: { machineId: string; session: SessionInfo }[] = [];
   for (const m of allMachines) {
@@ -247,7 +274,7 @@ function ExplorerDashboard({
           <h2>Machines</h2>
           <div className="dashboard-machines">
             {allMachines.map((machine) => (
-              <MachineCard key={machine.machineId} machine={machine} />
+              <MachineCard key={machine.machineId} machine={machine} onLaunchAgent={onLaunchAgent} />
             ))}
           </div>
         </div>
@@ -268,6 +295,9 @@ export function ExplorerLayout({
   onSidebarClose,
   onOpenTerminal,
   onResume,
+  onLaunchAgent,
+  initialSelection,
+  onInitialSelectionConsumed,
 }: Props): React.JSX.Element {
   const [selected, setSelected] = useState<SelectedSession | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -363,6 +393,14 @@ export function ExplorerLayout({
     if (!found) setSelected(null);
   }, [selected, machines]);
 
+  // Sync initialSelection from parent (e.g. activity feed navigation)
+  useEffect(() => {
+    if (initialSelection) {
+      setSelected({ machineId: initialSelection.machineId, sessionId: initialSelection.sessionId });
+      onInitialSelectionConsumed?.();
+    }
+  }, [initialSelection, onInitialSelectionConsumed]);
+
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -430,6 +468,20 @@ export function ExplorerLayout({
                 >
                   <span className="explorer-chevron">{machineCollapsed ? "\u25b6" : "\u25bc"}</span>
                   <span>{machine.hostname}</span>
+                  {onLaunchAgent && (
+                    <button
+                      type="button"
+                      className="machine-launch-btn machine-launch-btn-sidebar"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onLaunchAgent(machine.machineId);
+                      }}
+                      title={`Launch new agent on ${machine.hostname}`}
+                      aria-label={`Launch new agent on ${machine.hostname}`}
+                    >
+                      +
+                    </button>
+                  )}
                   <span className="explorer-machine-count">{machine.sessions.length}</span>
                 </div>
               )}
@@ -618,6 +670,7 @@ export function ExplorerLayout({
           <ExplorerDashboard
             allMachines={allMachines}
             onSelect={(machineId, sessionId) => selectSession(machineId, sessionId)}
+            onLaunchAgent={onLaunchAgent}
           />
         )}
       </div>
