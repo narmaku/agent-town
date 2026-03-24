@@ -1,5 +1,5 @@
-import { readdir, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readdir } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 /**
  * Result of listing directories in a path.

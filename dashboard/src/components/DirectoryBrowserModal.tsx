@@ -128,7 +128,7 @@ export function DirectoryBrowserModal({
           </button>
           {pathSegments.map((segment, i) =>
             segment === "/" ? null : (
-              <span key={`${segment}-${i}`}>
+              <span key={`/${pathSegments.slice(0, i + 1).join("/")}`}>
                 <span className="dir-breadcrumb-separator">/</span>
                 <button
                   type="button"

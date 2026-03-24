@@ -335,7 +335,12 @@ export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props)
                 </button>
               </div>
               {showRecentDirs && recentDirs.length > 0 && (
-                <div className="recent-dirs-dropdown" ref={recentDirsRef} role="listbox" aria-label="Recent directories">
+                <div
+                  className="recent-dirs-dropdown"
+                  ref={recentDirsRef}
+                  role="listbox"
+                  aria-label="Recent directories"
+                >
                   {recentDirs.map((dir) => (
                     <button
                       type="button"
