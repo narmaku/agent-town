@@ -81,7 +81,10 @@ function SessionEntry({
 function MachineCard({
   machine,
   onLaunchAgent,
-}: { machine: MachineInfo; onLaunchAgent?: (machineId: string) => void }) {
+}: {
+  machine: MachineInfo;
+  onLaunchAgent?: (machineId: string) => void;
+}) {
   const agentTypes = machine.availableAgents?.length
     ? machine.availableAgents
     : [...new Set(machine.sessions.map((s) => s.agentType))];

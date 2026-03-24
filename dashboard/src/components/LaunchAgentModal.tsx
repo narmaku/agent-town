@@ -91,14 +91,13 @@ export function LaunchAgentModal({
     }
   }, [availableMux, globalSettings, selectedMachine, selectedMachineId, machines]);
 
-  // Reset initialization tracking when modal opens or initialMachineId changes
-  // so defaults are re-applied
+  // Reset initialization tracking when modal opens so defaults are re-applied
   useEffect(() => {
     if (open) {
       initializedForRef.current = "";
       setMachineId("");
     }
-  }, [open, initialMachineId]);
+  }, [open]);
 
   if (!open) return null;
 
