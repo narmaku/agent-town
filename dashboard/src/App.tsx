@@ -140,7 +140,6 @@ export function App(): React.JSX.Element {
   const [keyboardShortcuts, setKeyboardShortcuts] = useState<Record<string, string>>({
     ...DEFAULT_KEYBOARD_SHORTCUTS,
   });
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -336,7 +335,17 @@ export function App(): React.JSX.Element {
     onExpand: toggleExpanded,
     onFullscreen: handleKeyboardFullscreen,
     onOpenTerminal: handleKeyboardTerminal,
-    onFocusSearch: () => searchInputRef.current?.focus(),
+    onFocusSearch: () => {
+      // Find the visible search input (desktop or mobile, depending on viewport).
+      // Both instances exist in the DOM but only one is visible at a time via CSS media queries.
+      const inputs = document.querySelectorAll<HTMLInputElement>(".search-group .search-input");
+      for (const input of inputs) {
+        if (input.offsetWidth > 0) {
+          input.focus();
+          return;
+        }
+      }
+    },
     onFocusSendMessage: handleKeyboardSendMessage,
     onClose: handleKeyboardClose,
     onShowHelp: () => setHelpOpen((prev) => !prev),
@@ -388,7 +397,6 @@ export function App(): React.JSX.Element {
           </span>
           <div className="search-group search-group-desktop">
             <input
-              ref={searchInputRef}
               className={`search-input ${deepSearch ? "deep-search-active" : ""}`}
               type="text"
               value={searchQuery}
