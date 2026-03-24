@@ -79,7 +79,10 @@ export function buildGroups(sessions: SessionInfo[], groupMode: GroupMode): [str
       if (!statusGroups.has(session.status)) statusGroups.set(session.status, []);
       statusGroups.get(session.status)?.push(session);
     }
-    return STATUS_GROUP_ORDER.filter((s) => statusGroups.has(s)).map((s) => [STATUS_LABELS[s], statusGroups.get(s)!]);
+    return STATUS_GROUP_ORDER.filter((s) => statusGroups.has(s)).map((s) => [
+      STATUS_LABELS[s],
+      statusGroups.get(s) ?? [],
+    ]);
   }
 
   if (groupMode === "none") {

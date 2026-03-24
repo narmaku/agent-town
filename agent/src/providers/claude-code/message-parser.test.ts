@@ -362,7 +362,7 @@ describe("formatClaudeEntry", () => {
     const result = formatClaudeEntry(entry);
     expect(result.toolUse).toHaveLength(1);
     expect(result.toolUse?.[0].input).toBeDefined();
-    const parsed = JSON.parse(result.toolUse![0].input!);
+    const parsed = JSON.parse(result.toolUse?.[0]?.input ?? "");
     expect(parsed.file_path).toBe("/home/user/file.ts");
   });
 
@@ -376,7 +376,7 @@ describe("formatClaudeEntry", () => {
     });
     const result = formatClaudeEntry(entry);
     expect(result.toolUse?.[0].input).toBeDefined();
-    expect(result.toolUse![0].input!.length).toBeLessThanOrEqual(2000);
+    expect(result.toolUse?.[0]?.input?.length).toBeLessThanOrEqual(2000);
   });
 
   test("tool_use input is undefined when input is not provided", () => {
