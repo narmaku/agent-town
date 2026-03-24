@@ -7,6 +7,8 @@ import { useEffect, useRef } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalMultiplexer } from "@agent-town/shared";
 
+const DOUBLE_ESC_THRESHOLD_MS = 500;
+
 interface Props {
   machineId: string;
   sessionName: string;
@@ -16,8 +18,6 @@ interface Props {
 
 export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc }: Props): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const onDoubleEscRef = useRef(onDoubleEsc);
   onDoubleEscRef.current = onDoubleEsc;
 
@@ -54,8 +54,6 @@ export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc 
       fitAddon.fit();
     });
 
-    terminalRef.current = term;
-
     // Connect after fit so we send accurate cols/rows from the start
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const params = new URLSearchParams({
@@ -68,8 +66,6 @@ export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc 
     const wsUrl = `${protocol}//${window.location.host}/ws/terminal?${params}`;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
-
     ws.onopen = () => {
       term.focus();
       // Send a resize after connect to ensure the PTY matches the browser size
@@ -123,7 +119,7 @@ export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc 
     const keyHandler = term.onKey(({ domEvent }) => {
       if (domEvent.key === "Escape") {
         const now = Date.now();
-        if (now - lastEscTime < 500 && onDoubleEscRef.current) {
+        if (now - lastEscTime < DOUBLE_ESC_THRESHOLD_MS && onDoubleEscRef.current) {
           onDoubleEscRef.current();
         }
         lastEscTime = now;

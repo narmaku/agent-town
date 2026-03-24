@@ -157,6 +157,7 @@ export function SessionDetail({
   const [activeTab, setActiveTab] = useState<SessionTab>("chat");
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [pendingTerminalSwitch, setPendingTerminalSwitch] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
@@ -363,7 +364,7 @@ export function SessionDetail({
 
       if (resp.ok) {
         setShowResumeConfirm(false);
-        setActiveTab("terminal");
+        setPendingTerminalSwitch(true);
       } else {
         const data = await resp.json().catch(() => ({ error: "Resume failed" }));
         window.alert(data.error || "Resume failed");
@@ -381,14 +382,18 @@ export function SessionDetail({
       setShowResumeConfirm(false);
       setActiveTab("terminal");
     }
-  }, [hasTerminal, showResumeConfirm]);
+    if (hasTerminal && pendingTerminalSwitch) {
+      setPendingTerminalSwitch(false);
+      setActiveTab("terminal");
+    }
+  }, [hasTerminal, showResumeConfirm, pendingTerminalSwitch]);
 
-  // If terminal goes away while on terminal tab, switch back to chat
+  // If terminal goes away while on terminal tab (and not waiting for one), switch back to chat
   useEffect(() => {
-    if (!hasTerminal && activeTab === "terminal") {
+    if (!hasTerminal && activeTab === "terminal" && !pendingTerminalSwitch) {
       setActiveTab("chat");
     }
-  }, [hasTerminal, activeTab]);
+  }, [hasTerminal, activeTab, pendingTerminalSwitch]);
 
   const displayMachineName = machineName || machineId;
   const showInlineActions = isWide && !infoPaneVisible;
@@ -710,7 +715,12 @@ export function SessionDetail({
           <div className="modal-panel">
             <div className="modal-header">
               <h2 className="modal-title">Resume Session</h2>
-              <button type="button" className="modal-close" onClick={() => setShowResumeConfirm(false)}>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowResumeConfirm(false)}
+                aria-label="Close resume dialog"
+              >
                 &times;
               </button>
             </div>
@@ -721,10 +731,21 @@ export function SessionDetail({
               </p>
             </div>
             <div className="modal-footer">
-              <button type="button" className="action-btn" onClick={() => setShowResumeConfirm(false)}>
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => setShowResumeConfirm(false)}
+                aria-label="Cancel resume"
+              >
                 Cancel
               </button>
-              <button type="button" className="send-btn" onClick={handleResumeForTerminal} disabled={resuming}>
+              <button
+                type="button"
+                className="send-btn"
+                onClick={handleResumeForTerminal}
+                disabled={resuming}
+                aria-label={resuming ? "Resuming session" : "Resume session and connect terminal"}
+              >
                 {resuming ? "Resuming..." : "Resume & Connect"}
               </button>
             </div>
