@@ -230,13 +230,21 @@ describe("API", () => {
     expect(API.GIT_DIFF).toBe("/api/git-diff");
   });
 
+  test("LIST_DIRS endpoint is correct", () => {
+    expect(API.LIST_DIRS).toBe("/api/list-dirs");
+  });
+
+  test("SEARCH_MESSAGES endpoint is correct", () => {
+    expect(API.SEARCH_MESSAGES).toBe("/api/search-messages");
+  });
+
   test("all endpoints start with /api/", () => {
     for (const value of Object.values(API)) {
       expect(value).toMatch(/^\/api\//);
     }
   });
 
-  test("contains exactly 14 endpoints", () => {
-    expect(Object.keys(API)).toHaveLength(14);
+  test("contains exactly 15 endpoints", () => {
+    expect(Object.keys(API)).toHaveLength(15);
   });
 });

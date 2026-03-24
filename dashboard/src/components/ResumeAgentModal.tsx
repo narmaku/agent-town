@@ -89,7 +89,14 @@ export function ResumeAgentModal({
             <label className="form-label" htmlFor="resume-project-dir">
               Project Directory
             </label>
-            <input id="resume-project-dir" className="form-input" type="text" value={projectDir} disabled />
+            <input
+              id="resume-project-dir"
+              className="form-input form-input-readonly"
+              type="text"
+              value={projectDir}
+              readOnly
+              aria-label="Project directory (read-only)"
+            />
           </div>
           <div className="form-group">
             <label className="form-toggle-row">

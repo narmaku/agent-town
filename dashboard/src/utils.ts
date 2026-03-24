@@ -63,6 +63,7 @@ export const API = {
   SESSIONS_RECONNECT: "/api/sessions/reconnect",
   GIT_DIFF: "/api/git-diff",
   SEARCH_MESSAGES: "/api/search-messages",
+  LIST_DIRS: "/api/list-dirs",
   NODES: "/api/nodes",
   NODES_TEST: "/api/nodes/test",
 } as const;

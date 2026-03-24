@@ -262,6 +262,32 @@ async function routeRequest(
     }
   }
 
+  // API: list directories on a machine (proxy to agent)
+  if (url.pathname === "/api/list-dirs" && req.method === "GET") {
+    const machineId = url.searchParams.get("machineId");
+    const dir = url.searchParams.get("dir");
+
+    if (!machineId || !dir) {
+      return Response.json({ error: "Missing machineId or dir" }, { status: 400 });
+    }
+
+    const machine = getMachine(machineId);
+    if (!machine || !machine.terminalPort) {
+      return Response.json({ error: "Machine not found" }, { status: 404 });
+    }
+
+    const agentUrl = `${getAgentUrl(machine, "/api/list-dirs")}?dir=${encodeURIComponent(dir)}`;
+
+    try {
+      const agentResp = await fetch(agentUrl);
+      const data = await agentResp.json();
+      return Response.json(data, { status: agentResp.status });
+    } catch (err) {
+      log.error(`list-dirs: failed to fetch from agent: ${err instanceof Error ? err.message : String(err)}`);
+      return Response.json({ error: "Failed to list directories from agent" }, { status: 502 });
+    }
+  }
+
   // API: rename a session (also renames multiplexer session if active)
   if (url.pathname === "/api/sessions/rename" && req.method === "POST") {
     try {

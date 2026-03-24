@@ -1198,6 +1198,193 @@ body {
   color: var(--text);
 }
 
+/* Form input with adjacent button */
+.form-input-with-button {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.form-input-with-button .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.browse-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+/* Read-only form input */
+.form-input-readonly {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-elevated);
+}
+
+/* Recent directories dropdown */
+.form-group-dir {
+  position: relative;
+}
+
+.recent-dirs-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  margin-top: 2px;
+}
+
+.recent-dirs-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  font-family: monospace;
+  padding: 8px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-dirs-item:hover {
+  background: var(--bg-elevated);
+}
+
+.recent-dirs-item[aria-selected="true"] {
+  color: var(--blue);
+}
+
+/* Directory browser modal */
+.dir-browser-overlay {
+  z-index: 950;
+}
+
+.dir-browser-panel {
+  max-width: 520px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dir-browser-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-family: monospace;
+  min-height: 36px;
+}
+
+.dir-breadcrumb-segment {
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: 12px;
+  font-family: monospace;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.dir-breadcrumb-segment:hover {
+  background: var(--bg-elevated);
+  text-decoration: underline;
+}
+
+.dir-breadcrumb-separator {
+  color: var(--text-muted);
+}
+
+.dir-browser-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+  padding: 0;
+}
+
+.dir-browser-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dir-browser-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  padding: 10px 20px;
+  cursor: pointer;
+  text-align: left;
+  min-height: 44px;
+}
+
+.dir-browser-item:hover {
+  background: var(--bg-elevated);
+}
+
+.dir-browser-item:last-child {
+  border-bottom: none;
+}
+
+.dir-browser-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.dir-browser-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.dir-browser-panel .modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.dir-browser-current-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dir-browser-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* Fullscreen session view */
 .fullscreen-overlay {
   position: fixed;
@@ -2763,6 +2950,22 @@ body {
   background: rgba(0, 0, 0, 0.3);
 }
 
+.app.theme-light .recent-dirs-dropdown {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.app.theme-light .recent-dirs-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.app.theme-light .dir-browser-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.app.theme-light .dir-breadcrumb-segment:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 /* Fullscreen overlay */
 .app.theme-light .fullscreen-overlay {
   background: var(--bg);
@@ -3287,6 +3490,27 @@ body {
 
   .form-select {
     padding-right: 32px;
+  }
+
+  /* Directory browser: full-screen on mobile */
+  .dir-browser-panel {
+    max-width: none;
+    max-height: none;
+  }
+
+  .dir-browser-item {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .browse-btn {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .recent-dirs-item {
+    min-height: 44px;
+    font-size: 14px;
   }
 
   /* Send button: touch-friendly */
