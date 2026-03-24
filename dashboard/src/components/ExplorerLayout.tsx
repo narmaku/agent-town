@@ -3,6 +3,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { GroupMode, SortMode, TimeFilter } from "../App";
 import { useResizable } from "../hooks/useResizable";
+import { useWindowWidth } from "../hooks/useWindowWidth";
 import { AGENT_TYPE_LABELS, API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
 import { buildGroups, filterSessionsByTime, sortSessions } from "./MachineGroup";
 import { SessionDetail } from "./SessionDetail";
@@ -282,7 +283,8 @@ export function ExplorerLayout({
     }
     return true;
   });
-  const isMobile = typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT;
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < MOBILE_BREAKPOINT;
   const sidebarResize = useResizable({
     storageKey: "explorerSidebarWidth",
     defaultSize: SIDEBAR_DEFAULT_WIDTH,

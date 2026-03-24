@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useResizable } from "../hooks/useResizable";
+import { useWindowWidth } from "../hooks/useWindowWidth";
 import { AGENT_TYPE_LABELS, API, STATUS_CONFIG, timeAgo } from "../utils";
 import { DiffModal } from "./DiffModal";
 import { SendMessage } from "./SendMessage";
@@ -103,18 +104,6 @@ const markdownComponents: Record<
     );
   },
 };
-
-function useWindowWidth(): number {
-  const [width, setWidth] = useState(window.innerWidth);
-  useEffect(() => {
-    function handleResize() {
-      setWidth(window.innerWidth);
-    }
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-  return width;
-}
 
 interface Props {
   session: SessionInfo;
