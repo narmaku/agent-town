@@ -458,9 +458,7 @@ export function SessionDetail({
                 <path d="M2 2.5A2.5 2.5 0 014.5 0h8.75a.75.75 0 01.75.75v12.5a.75.75 0 01-.75.75h-2.5a.75.75 0 010-1.5h1.75v-2h-8a1 1 0 00-.714 1.7.75.75 0 01-1.072 1.05A2.495 2.495 0 012 11.5v-9zm10.5-1h-6a1 1 0 00-1 1v6.708A2.486 2.486 0 016.5 9h6V1.5z" />
               </svg>
             </span>
-            <span className="detail-value mono">
-              {formatCompactTokens(session.contextTokens)} context
-            </span>
+            <span className="detail-value mono">{formatCompactTokens(session.contextTokens)} context</span>
           </div>
         )}
       </div>

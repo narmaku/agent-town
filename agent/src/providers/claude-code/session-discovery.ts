@@ -31,6 +31,8 @@ export interface ClaudeJsonlEntry {
   toolUseResult?: string;
 }
 
+type UsageFields = NonNullable<ClaudeJsonlEntry["message"]["usage"]>;
+
 function detectClaudeStatus(lastModifiedMs: number): SessionStatus {
   const age = Date.now() - lastModifiedMs;
 
@@ -110,12 +112,6 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
     }
 
     // Aggregate token usage from all lines and find last context size
-    interface UsageFields {
-      input_tokens?: number;
-      output_tokens?: number;
-      cache_creation_input_tokens?: number;
-      cache_read_input_tokens?: number;
-    }
     let lastContextTokens = 0;
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -127,9 +123,7 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
           if (typeof usage.output_tokens === "number") totalOutputTokens += usage.output_tokens;
           // Context = all input tokens sent on this turn (uncached + cache creation + cache read)
           const ctx =
-            (usage.input_tokens ?? 0) +
-            (usage.cache_creation_input_tokens ?? 0) +
-            (usage.cache_read_input_tokens ?? 0);
+            (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
           if (ctx > 0) lastContextTokens = ctx;
         }
       } catch (_err) {
