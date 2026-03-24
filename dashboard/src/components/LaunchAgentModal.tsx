@@ -3,14 +3,29 @@ import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AGENT_TYPE_LABELS, API } from "../utils";
 
+export function resolveSelectedMachineId(
+  userSelected: string,
+  initialMachineId: string | undefined,
+  firstMachineId: string,
+): string {
+  return userSelected || initialMachineId || firstMachineId || "";
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   machines: MachineInfo[];
   onLaunched: (machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) => void;
+  initialMachineId?: string;
 }
 
-export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props): React.JSX.Element | null {
+export function LaunchAgentModal({
+  open,
+  onClose,
+  machines,
+  onLaunched,
+  initialMachineId,
+}: Props): React.JSX.Element | null {
   const [sessionName, setSessionName] = useState("");
   const [projectDir, setProjectDir] = useState("");
   const [machineId, setMachineId] = useState("");
@@ -35,7 +50,7 @@ export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props)
     }
   }, [open]);
 
-  const selectedMachineId = machineId || machines[0]?.machineId || "";
+  const selectedMachineId = resolveSelectedMachineId(machineId, initialMachineId, machines[0]?.machineId || "");
   const selectedMachine = machines.find((m) => m.machineId === selectedMachineId);
 
   // Available multiplexers for the selected machine (from heartbeat data)
@@ -76,12 +91,14 @@ export function LaunchAgentModal({ open, onClose, machines, onLaunched }: Props)
     }
   }, [availableMux, globalSettings, selectedMachine, selectedMachineId, machines]);
 
-  // Reset initialization tracking when modal opens so defaults are re-applied
+  // Reset initialization tracking when modal opens or initialMachineId changes
+  // so defaults are re-applied
   useEffect(() => {
     if (open) {
       initializedForRef.current = "";
+      setMachineId("");
     }
-  }, [open]);
+  }, [open, initialMachineId]);
 
   if (!open) return null;
 
