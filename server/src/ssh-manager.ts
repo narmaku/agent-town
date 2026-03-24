@@ -223,7 +223,7 @@ with open(path, "w") as f:
 print("HOOKS: configured")
 `;
 
-  const proc = Bun.spawn(["ssh", ...sshOpts, sshTarget, "python3 -c " + JSON.stringify(script)], {
+  const proc = Bun.spawn(["ssh", ...sshOpts, sshTarget, `python3 -c ${JSON.stringify(script)}`], {
     stdout: "pipe",
     stderr: "pipe",
   });

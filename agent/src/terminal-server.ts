@@ -247,7 +247,7 @@ export function resolveSessionName(name: string): string {
   const seen = new Set<string>();
   while (sessionRenameMap.has(resolved) && !seen.has(resolved)) {
     seen.add(resolved);
-    resolved = sessionRenameMap.get(resolved)!;
+    resolved = sessionRenameMap.get(resolved) ?? resolved;
   }
   return resolved;
 }
@@ -400,7 +400,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
         }
 
         try {
-          const result = await fetchGitDiff(dir!);
+          const result = await fetchGitDiff(dir ?? "");
           return Response.json(result);
         } catch (err) {
           if (err instanceof GitDiffError) {

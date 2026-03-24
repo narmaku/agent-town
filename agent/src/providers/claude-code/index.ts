@@ -1,12 +1,10 @@
-import { createLogger, type SessionInfo, type SessionMessagesResponse } from "@agent-town/shared";
+import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
 import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
 import { filterProcessesByBinary, isBinaryAvailable } from "../utils";
 import { handleClaudeHookEvent } from "./hook-handler";
 import { getClaudeSessionMessages } from "./message-parser";
 import { extractClaudeSessionIdFromArgs, findSessionCandidates, matchSessionByBirthTime } from "./process-mapper";
 import { deleteClaudeSessionData, discoverClaudeSessions } from "./session-discovery";
-
-const log = createLogger("claude:provider");
 
 export class ClaudeCodeProvider implements AgentProvider {
   readonly type = "claude-code" as const;

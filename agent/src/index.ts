@@ -214,9 +214,9 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
     // against unclaimed mux session names. Handles sessions that existed before
     // tracking was added, and sessions whose customName is only in session-names.json.
     const nameCandidates = [savedNames[session.sessionId], session.customName, session.slug].filter(Boolean);
-    const matchedName = nameCandidates.find((n) => unclaimedMuxLookup.has(n!));
-    if (matchedName && unclaimedMuxLookup.has(matchedName)) {
-      const muxType = unclaimedMuxLookup.get(matchedName)!;
+    const matchedName = nameCandidates.find((n) => n != null && unclaimedMuxLookup.has(n));
+    const muxType = matchedName ? unclaimedMuxLookup.get(matchedName) : undefined;
+    if (matchedName && muxType) {
       session.multiplexer = muxType;
       session.multiplexerSession = matchedName;
       session.status = "exited";

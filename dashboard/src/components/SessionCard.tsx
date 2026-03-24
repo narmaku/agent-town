@@ -86,7 +86,7 @@ export function SessionCard({
   function handleOpenTerminal(e: React.MouseEvent) {
     e.stopPropagation();
     if (hasTerminal) {
-      onOpenTerminal(session.multiplexerSession!, session.multiplexer!);
+      onOpenTerminal(session.multiplexerSession ?? "", session.multiplexer ?? "zellij");
     }
   }
 
@@ -327,8 +327,8 @@ export function SessionCard({
           {hasTerminal && (
             <SendMessage
               machineId={machineId}
-              multiplexer={session.multiplexer!}
-              session={session.multiplexerSession!}
+              multiplexer={session.multiplexer ?? "zellij"}
+              session={session.multiplexerSession ?? ""}
               agentType={session.agentType}
             />
           )}

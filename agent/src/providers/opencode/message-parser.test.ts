@@ -851,7 +851,7 @@ describe("getOpenCodeSessionMessages", () => {
 
       const result = await getOpenCodeSessionMessages("ses_abc", 0, 10);
       expect(result.messages[0].toolUse?.[0].input).toBeDefined();
-      const parsed = JSON.parse(result.messages[0].toolUse![0].input!);
+      const parsed = JSON.parse(result.messages[0].toolUse?.[0]?.input ?? "");
       expect(parsed.file_path).toBe("/home/user/test.ts");
     });
 
@@ -1003,7 +1003,7 @@ describe("getOpenCodeSessionMessages", () => {
 
       const result = await getOpenCodeSessionMessages("ses_test123", 0, 10);
       expect(result.messages[0].toolUse?.[0].input).toBeDefined();
-      const parsed = JSON.parse(result.messages[0].toolUse![0].input!);
+      const parsed = JSON.parse(result.messages[0].toolUse?.[0]?.input ?? "");
       expect(parsed.file_path).toBe("/tmp/test.ts");
     });
 
