@@ -29,6 +29,24 @@ describe("validateListDirsPath", () => {
     expect(validateListDirsPath("/home/./user")).not.toBeNull();
     expect(validateListDirsPath("/home//user")).not.toBeNull();
   });
+
+  test("rejects paths with trailing slash", () => {
+    expect(validateListDirsPath("/home/user/")).not.toBeNull();
+    expect(validateListDirsPath("/tmp/")).not.toBeNull();
+  });
+
+  test("returns specific error message for empty path", () => {
+    expect(validateListDirsPath("")).toBe("Missing dir parameter");
+  });
+
+  test("returns specific error message for relative path", () => {
+    expect(validateListDirsPath("relative")).toBe("dir must be an absolute path");
+  });
+
+  test("returns specific error message for non-canonical path", () => {
+    const msg = validateListDirsPath("/home/../etc");
+    expect(msg).toContain("canonical");
+  });
 });
 
 describe("listDirectories", () => {
@@ -82,5 +100,23 @@ describe("listDirectories", () => {
     mkdirSync(emptyDir, { recursive: true });
     const result = await listDirectories(emptyDir);
     expect(result.dirs).toEqual([]);
+  });
+
+  test("returns correct parent path", async () => {
+    const subDir = join(testDir, "subdir-a");
+    const result = await listDirectories(subDir);
+    expect(result.parent).toBe(testDir);
+  });
+
+  test("throws when path is a file, not a directory", async () => {
+    const filePath = join(testDir, "file.txt");
+    await expect(listDirectories(filePath)).rejects.toThrow();
+  });
+
+  test("returns only directory names without full paths", async () => {
+    const result = await listDirectories(testDir);
+    for (const dir of result.dirs) {
+      expect(dir).not.toContain("/");
+    }
   });
 });

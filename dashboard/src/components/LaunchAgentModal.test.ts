@@ -93,4 +93,44 @@ describe("deriveRecentDirectories", () => {
     const result = deriveRecentDirectories(machine);
     expect(result).toEqual(["/home/user/project"]);
   });
+
+  test("skips sessions with undefined projectPath", () => {
+    const machine = makeMachine([
+      makeSession({ projectPath: "/home/user/project", lastActivity: "2025-01-01T00:00:00.000Z" }),
+      makeSession({ projectPath: undefined as unknown as string, lastActivity: "2025-01-02T00:00:00.000Z" }),
+    ]);
+
+    const result = deriveRecentDirectories(machine);
+    expect(result).toEqual(["/home/user/project"]);
+  });
+
+  test("handles machine with undefined sessions gracefully", () => {
+    const machine = makeMachine([]);
+    // Simulate old agent without sessions array
+    (machine as Record<string, unknown>).sessions = undefined;
+    expect(deriveRecentDirectories(machine)).toEqual([]);
+  });
+
+  test("handles machine with null sessions gracefully", () => {
+    const machine = makeMachine([]);
+    (machine as Record<string, unknown>).sessions = null;
+    expect(deriveRecentDirectories(machine)).toEqual([]);
+  });
+
+  test("handles many directories and preserves ordering", () => {
+    const sessions = Array.from({ length: 20 }, (_, i) =>
+      makeSession({
+        projectPath: `/home/user/project-${String(i).padStart(2, "0")}`,
+        lastActivity: new Date(2025, 0, i + 1).toISOString(),
+      }),
+    );
+    const machine = makeMachine(sessions);
+
+    const result = deriveRecentDirectories(machine);
+    expect(result).toHaveLength(20);
+    // Most recent (Jan 20) should come first
+    expect(result[0]).toBe("/home/user/project-19");
+    // Oldest (Jan 1) should come last
+    expect(result[result.length - 1]).toBe("/home/user/project-00");
+  });
 });
