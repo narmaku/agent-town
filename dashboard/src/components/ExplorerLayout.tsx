@@ -2,9 +2,16 @@ import type { AgentType, MachineInfo, SessionInfo, SessionStatus, TerminalMultip
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { GroupMode, SortMode, TimeFilter } from "../App";
-import { API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
+import { useResizable } from "../hooks/useResizable";
+import { AGENT_TYPE_LABELS, API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
 import { buildGroups, filterSessionsByTime, sortSessions } from "./MachineGroup";
 import { SessionDetail } from "./SessionDetail";
+
+const SIDEBAR_DEFAULT_WIDTH = 300;
+const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_MAX_WIDTH = 500;
+const SIDEBAR_STORAGE_KEY = "agentTown:explorerSidebarVisible";
+const MOBILE_BREAKPOINT = 768;
 
 interface Props {
   machines: MachineInfo[];
@@ -23,6 +30,114 @@ interface Props {
 interface SelectedSession {
   machineId: string;
   sessionId: string;
+}
+
+function SessionEntry({
+  session,
+  machineId,
+  onSelect,
+  showMessage,
+}: {
+  session: SessionInfo;
+  machineId: string;
+  onSelect: (machineId: string, sessionId: string) => void;
+  showMessage?: boolean;
+}) {
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: complex list entry, not a simple button
+    <div
+      className="dashboard-session-entry"
+      onClick={() => onSelect(machineId, session.sessionId)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(machineId, session.sessionId);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
+      <span className="status-dot" style={{ background: STATUS_CONFIG[session.status].color, width: 6, height: 6 }} />
+      <span className="dashboard-session-name">{session.customName || session.slug}</span>
+      {showMessage ? (
+        <span className="dashboard-session-message">
+          {session.lastMessage
+            ? session.lastMessage.length > 80
+              ? `${session.lastMessage.slice(0, 80)}...`
+              : session.lastMessage
+            : ""}
+        </span>
+      ) : (
+        <span className="dashboard-session-project">{session.projectName}</span>
+      )}
+      <span className="dashboard-session-time">{timeAgo(session.lastActivity)}</span>
+    </div>
+  );
+}
+
+function MachineCard({ machine }: { machine: MachineInfo }) {
+  const agentTypes = machine.availableAgents?.length
+    ? machine.availableAgents
+    : [...new Set(machine.sessions.map((s) => s.agentType))];
+  const activeSessions = machine.sessions.filter(
+    (s) => s.status === "working" || s.status === "awaiting_input" || s.status === "starting",
+  );
+  const totalTokensIn = machine.sessions.reduce((sum, s) => sum + (s.totalInputTokens ?? 0), 0);
+  const totalTokensOut = machine.sessions.reduce((sum, s) => sum + (s.totalOutputTokens ?? 0), 0);
+
+  return (
+    <div className="dashboard-machine-card">
+      <div className="dashboard-machine-card-header">
+        <span className="dashboard-machine-hostname">{machine.hostname}</span>
+        <span
+          className="dashboard-machine-heartbeat"
+          title={`Last heartbeat: ${new Date(machine.lastHeartbeat).toLocaleString()}`}
+        >
+          {timeAgo(machine.lastHeartbeat)}
+        </span>
+      </div>
+
+      <div className="dashboard-machine-details">
+        <div className="dashboard-machine-detail-row">
+          <span className="dashboard-machine-detail-label">Platform</span>
+          <span className="dashboard-machine-detail-value">{machine.platform}</span>
+        </div>
+        <div className="dashboard-machine-detail-row">
+          <span className="dashboard-machine-detail-label">Sessions</span>
+          <span className="dashboard-machine-detail-value">
+            {machine.sessions.length} total
+            {activeSessions.length > 0 && (
+              <span style={{ color: "var(--green)" }}> ({activeSessions.length} active)</span>
+            )}
+          </span>
+        </div>
+        {machine.multiplexers.length > 0 && (
+          <div className="dashboard-machine-detail-row">
+            <span className="dashboard-machine-detail-label">Multiplexer</span>
+            <span className="dashboard-machine-detail-value">{machine.multiplexers.join(", ")}</span>
+          </div>
+        )}
+        {(totalTokensIn > 0 || totalTokensOut > 0) && (
+          <div className="dashboard-machine-detail-row">
+            <span className="dashboard-machine-detail-label">Tokens</span>
+            <span className="dashboard-machine-detail-value mono">
+              {totalTokensIn.toLocaleString()} in / {totalTokensOut.toLocaleString()} out
+            </span>
+          </div>
+        )}
+      </div>
+
+      {agentTypes.length > 0 && (
+        <div className="dashboard-machine-agents">
+          {agentTypes.map((t) => (
+            <span key={t} className={`dashboard-machine-agent-badge agent-${t}`}>
+              {AGENT_TYPE_LABELS[t] || t}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ExplorerDashboard({
@@ -71,127 +186,70 @@ function ExplorerDashboard({
 
   return (
     <div className="explorer-dashboard">
-      <h2>Dashboard</h2>
+      <div className="dashboard-columns">
+        {/* Left column: sessions overview */}
+        <div className="dashboard-col-left">
+          <h2>Dashboard</h2>
 
-      {/* Status summary cards */}
-      <div className="dashboard-status-cards">
-        {statusOrder
-          .filter((status) => (statusCounts[status] || 0) > 0)
-          .map((status) => (
-            <div
-              key={status}
-              className="dashboard-status-card"
-              style={{ borderLeftColor: STATUS_CONFIG[status].color }}
-            >
-              <div className="dashboard-status-count" style={{ color: STATUS_CONFIG[status].color }}>
-                {statusCounts[status]}
-              </div>
-              <div className="dashboard-status-label">{STATUS_CONFIG[status].label}</div>
-            </div>
-          ))}
-      </div>
+          {/* Status summary cards */}
+          <div className="dashboard-status-cards">
+            {statusOrder
+              .filter((status) => (statusCounts[status] || 0) > 0)
+              .map((status) => (
+                <div
+                  key={status}
+                  className="dashboard-status-card"
+                  style={{ borderLeftColor: STATUS_CONFIG[status].color }}
+                >
+                  <div className="dashboard-status-count" style={{ color: STATUS_CONFIG[status].color }}>
+                    {statusCounts[status]}
+                  </div>
+                  <div className="dashboard-status-label">{STATUS_CONFIG[status].label}</div>
+                </div>
+              ))}
+          </div>
 
-      {/* Sessions needing attention */}
-      <h3>Needs Attention</h3>
-      <div className="dashboard-session-list">
-        {attentionSessions.length === 0 ? (
-          <div className="dashboard-all-clear">All clear — no sessions need attention</div>
-        ) : (
-          attentionSessions.map(({ machineId, session }) => (
-            // biome-ignore lint/a11y/useSemanticElements: complex list entry, not a simple button
-            <div
-              key={session.sessionId}
-              className="dashboard-session-entry"
-              onClick={() => onSelect(machineId, session.sessionId)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onSelect(machineId, session.sessionId);
-                }
-              }}
-              role="button"
-              tabIndex={0}
-            >
-              <span
-                className="status-dot"
-                style={{
-                  background: STATUS_CONFIG[session.status].color,
-                  width: 6,
-                  height: 6,
-                }}
-              />
-              <span className="dashboard-session-name">{session.customName || session.slug}</span>
-              <span className="dashboard-session-project">{session.projectName}</span>
-              <span className="dashboard-session-time">{timeAgo(session.lastActivity)}</span>
-            </div>
-          ))
-        )}
-      </div>
+          {/* Sessions needing attention */}
+          <h3>Needs Attention</h3>
+          <div className="dashboard-session-list">
+            {attentionSessions.length === 0 ? (
+              <div className="dashboard-all-clear">All clear — no sessions need attention</div>
+            ) : (
+              attentionSessions.map(({ machineId, session }) => (
+                <SessionEntry key={session.sessionId} session={session} machineId={machineId} onSelect={onSelect} />
+              ))
+            )}
+          </div>
 
-      {/* Recent activity */}
-      <h3>Recent Activity</h3>
-      <div className="dashboard-session-list">
-        {recentSessions.length === 0 ? (
-          <div className="dashboard-all-clear">No sessions</div>
-        ) : (
-          recentSessions.map(({ machineId, session }) => (
-            // biome-ignore lint/a11y/useSemanticElements: complex list entry
-            <div
-              key={session.sessionId}
-              className="dashboard-session-entry"
-              onClick={() => onSelect(machineId, session.sessionId)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onSelect(machineId, session.sessionId);
-                }
-              }}
-              role="button"
-              tabIndex={0}
-            >
-              <span
-                className="status-dot"
-                style={{
-                  background: STATUS_CONFIG[session.status].color,
-                  width: 6,
-                  height: 6,
-                }}
-              />
-              <span className="dashboard-session-name">{session.customName || session.slug}</span>
-              <span className="dashboard-session-message">
-                {session.lastMessage
-                  ? session.lastMessage.length > 80
-                    ? `${session.lastMessage.slice(0, 80)}...`
-                    : session.lastMessage
-                  : ""}
-              </span>
-              <span className="dashboard-session-time">{timeAgo(session.lastActivity)}</span>
-            </div>
-          ))
-        )}
-      </div>
+          {/* Recent activity */}
+          <h3>Recent Activity</h3>
+          <div className="dashboard-session-list">
+            {recentSessions.length === 0 ? (
+              <div className="dashboard-all-clear">No sessions</div>
+            ) : (
+              recentSessions.map(({ machineId, session }) => (
+                <SessionEntry
+                  key={session.sessionId}
+                  session={session}
+                  machineId={machineId}
+                  onSelect={onSelect}
+                  showMessage
+                />
+              ))
+            )}
+          </div>
+        </div>
 
-      {/* Machines overview (only if > 1 machine) */}
-      {allMachines.length > 1 && (
-        <>
-          <h3>Machines</h3>
+        {/* Right column: machines */}
+        <div className="dashboard-col-right">
+          <h2>Machines</h2>
           <div className="dashboard-machines">
             {allMachines.map((machine) => (
-              <div key={machine.machineId} className="dashboard-machine-row">
-                <span className="dashboard-machine-hostname">{machine.hostname}</span>
-                <span className="dashboard-machine-info">{machine.platform}</span>
-                <span className="dashboard-machine-info">
-                  {machine.sessions.length} session
-                  {machine.sessions.length !== 1 ? "s" : ""}
-                </span>
-                {machine.multiplexers.length > 0 && (
-                  <span className="dashboard-machine-info">{machine.multiplexers.join(", ")}</span>
-                )}
-              </div>
+              <MachineCard key={machine.machineId} machine={machine} />
             ))}
           </div>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -215,6 +273,23 @@ export function ExplorerLayout({
   const [renaming, setRenaming] = useState<{ machineId: string; sessionId: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [sidebarVisible, setSidebarVisible] = useState(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (stored !== null) return stored === "true";
+    } catch {
+      /* */
+    }
+    return true;
+  });
+  const isMobile = typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT;
+  const sidebarResize = useResizable({
+    storageKey: "explorerSidebarWidth",
+    defaultSize: SIDEBAR_DEFAULT_WIDTH,
+    minSize: SIDEBAR_MIN_WIDTH,
+    maxSize: SIDEBAR_MAX_WIDTH,
+    side: "left",
+  });
 
   // Close sidebar on Escape key (for mobile overlay)
   useEffect(() => {
@@ -273,9 +348,8 @@ export function ExplorerLayout({
     if (e.key === "Escape") setRenaming(null);
   }
 
-  const activeSession = selected
-    ? machines.find((m) => m.machineId === selected.machineId)?.sessions.find((s) => s.sessionId === selected.sessionId)
-    : null;
+  const selectedMachine = selected ? machines.find((m) => m.machineId === selected.machineId) : null;
+  const activeSession = selectedMachine?.sessions.find((s) => s.sessionId === selected?.sessionId) ?? null;
 
   // Clear selection when the selected session disappears
   useEffect(() => {
@@ -307,10 +381,13 @@ export function ExplorerLayout({
   const showMachineHeaders = machines.length > 1;
 
   return (
-    <div className="explorer-layout">
+    <div className={`explorer-layout${sidebarResize.isDragging ? " resizing" : ""}`}>
       {/* Backdrop for mobile sidebar overlay */}
       <div className={`sidebar-backdrop${sidebarOpen ? " open" : ""}`} onClick={onSidebarClose} aria-hidden="true" />
-      <div className={`explorer-sidebar${sidebarOpen ? " open" : ""}`}>
+      <div
+        className={`explorer-sidebar${sidebarOpen ? " open" : ""}${!sidebarVisible && !isMobile ? " collapsed" : ""}`}
+        style={{ width: sidebarVisible || isMobile ? sidebarResize.size : undefined }}
+      >
         {/* biome-ignore lint/a11y/useSemanticElements: sidebar navigation entry */}
         <div
           className={`explorer-dashboard-btn${selected === null ? " active" : ""}`}
@@ -462,6 +539,36 @@ export function ExplorerLayout({
         {machines.length === 0 && <div className="explorer-no-sessions">No machines connected</div>}
       </div>
 
+      {sidebarVisible && !isMobile && (
+        /* biome-ignore lint/a11y/noStaticElementInteractions: resize handle requires mouse interaction */
+        <div
+          className={`resize-handle resize-handle-left${sidebarResize.isDragging ? " active" : ""}`}
+          onMouseDown={sidebarResize.handleMouseDown}
+          onDoubleClick={sidebarResize.resetSize}
+          title="Drag to resize, double-click to reset"
+        />
+      )}
+
+      {!isMobile && (
+        <button
+          type="button"
+          className="sidebar-collapse-btn"
+          onClick={() => {
+            const next = !sidebarVisible;
+            setSidebarVisible(next);
+            try {
+              localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+            } catch {
+              /* */
+            }
+          }}
+          aria-label={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+          title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+        >
+          {sidebarVisible ? "\u25C0" : "\u25B6"}
+        </button>
+      )}
+
       <div className="explorer-detail">
         {activeSession && selected ? (
           <div className="explorer-detail-inner">
@@ -469,6 +576,7 @@ export function ExplorerLayout({
               key={selected.sessionId}
               session={activeSession}
               machineId={selected.machineId}
+              machineName={selectedMachine?.hostname}
               onOpenTerminal={(sessionName, multiplexer) =>
                 onOpenTerminal(selected.machineId, sessionName, multiplexer)
               }

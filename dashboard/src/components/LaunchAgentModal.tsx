@@ -1,13 +1,7 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { API } from "../utils";
-
-const AGENT_TYPE_LABELS: Record<AgentType, string> = {
-  "claude-code": "Claude Code",
-  opencode: "OpenCode",
-  "gemini-cli": "Gemini CLI",
-};
+import { AGENT_TYPE_LABELS, API } from "../utils";
 
 interface Props {
   open: boolean;

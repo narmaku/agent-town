@@ -373,6 +373,32 @@ describe("parseClaudeSession", () => {
     expect(session).not.toBeNull();
     expect(session?.totalInputTokens).toBe(300);
     expect(session?.totalOutputTokens).toBe(200);
+    // contextTokens = last entry's input_tokens (no cache fields in test data)
+    expect(session?.contextTokens).toBe(200);
+  });
+
+  test("contextTokens includes cache tokens from last entry", async () => {
+    const entries = [
+      makeJsonlEntry({
+        message: {
+          role: "assistant",
+          model: "claude-opus-4-6",
+          content: [{ type: "text", text: "Response with cache." }],
+          usage: {
+            input_tokens: 5,
+            output_tokens: 100,
+            cache_creation_input_tokens: 200,
+            cache_read_input_tokens: 50000,
+          },
+        },
+      }),
+    ];
+    const filePath = await writeTempJsonl(tempDir, "cache-tokens.jsonl", toJsonl(entries));
+
+    const session = await parseClaudeSession(filePath, Date.now());
+    expect(session).not.toBeNull();
+    expect(session?.contextTokens).toBe(50205); // 5 + 200 + 50000
+    expect(session?.totalInputTokens).toBe(5); // only non-cache input
   });
 
   test("token totals are undefined when no usage data is present", async () => {

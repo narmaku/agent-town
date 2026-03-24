@@ -14,7 +14,7 @@ import { getHookState, updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
 import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
-import { getProvider, initializeProviders } from "./providers/registry";
+import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
 import { discoverSessions } from "./session-parser";
 import { startTerminalServer } from "./terminal-server";
 
@@ -301,6 +301,7 @@ async function sendHeartbeat(): Promise<void> {
       sessions,
       multiplexers,
       multiplexerSessions: activeMuxSessions,
+      availableAgents: getAllProviders().map((p) => p.type),
       terminalPort: TERMINAL_PORT,
       timestamp: new Date().toISOString(),
     };

@@ -24,6 +24,8 @@ export interface ClaudeJsonlEntry {
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
     };
   };
   toolUseResult?: string;
@@ -107,15 +109,28 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
       }
     }
 
-    // Aggregate token usage from all lines
+    // Aggregate token usage from all lines and find last context size
+    interface UsageFields {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+    }
+    let lastContextTokens = 0;
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const entry = JSON.parse(line) as { message?: { usage?: { input_tokens?: number; output_tokens?: number } } };
+        const entry = JSON.parse(line) as { message?: { usage?: UsageFields } };
         const usage = entry.message?.usage;
         if (usage) {
           if (typeof usage.input_tokens === "number") totalInputTokens += usage.input_tokens;
           if (typeof usage.output_tokens === "number") totalOutputTokens += usage.output_tokens;
+          // Context = all input tokens sent on this turn (uncached + cache creation + cache read)
+          const ctx =
+            (usage.input_tokens ?? 0) +
+            (usage.cache_creation_input_tokens ?? 0) +
+            (usage.cache_read_input_tokens ?? 0);
+          if (ctx > 0) lastContextTokens = ctx;
         }
       } catch (_err) {
         // skip malformed JSONL line
@@ -139,6 +154,7 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
       version: lastEntry.version,
       totalInputTokens: totalInputTokens > 0 ? totalInputTokens : undefined,
       totalOutputTokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
+      contextTokens: lastContextTokens > 0 ? lastContextTokens : undefined,
     };
   } catch (err) {
     log.debug(`parseClaudeSession: ${err instanceof Error ? err.message : String(err)}`);

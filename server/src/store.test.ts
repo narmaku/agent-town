@@ -17,6 +17,7 @@ function makeHeartbeat(overrides: Partial<Heartbeat> = {}): Heartbeat {
     sessions: [],
     multiplexers: ["zellij"],
     multiplexerSessions: [],
+    availableAgents: ["claude-code"],
     terminalPort: 4681,
     timestamp: new Date().toISOString(),
     ...overrides,

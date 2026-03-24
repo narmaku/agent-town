@@ -6,6 +6,7 @@ import { SessionDetail } from "./SessionDetail";
 interface Props {
   session: SessionInfo;
   machineId: string;
+  machineName?: string;
   onClose: () => void;
   onOpenTerminal: (sessionName: string, multiplexer: TerminalMultiplexer) => void;
   onResume: (sessionId: string, projectDir: string, agentType: AgentType) => void;
@@ -15,6 +16,7 @@ interface Props {
 export function SessionFullscreen({
   session,
   machineId,
+  machineName,
   onClose,
   onOpenTerminal,
   onResume,
@@ -45,6 +47,7 @@ export function SessionFullscreen({
         <SessionDetail
           session={session}
           machineId={machineId}
+          machineName={machineName}
           onOpenTerminal={onOpenTerminal}
           onResume={onResume}
           onClose={onClose}

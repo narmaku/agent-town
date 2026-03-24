@@ -1,4 +1,4 @@
-import type { SessionStatus } from "@agent-town/shared";
+import type { AgentType, SessionStatus } from "@agent-town/shared";
 
 // --- Time formatting ---
 
@@ -39,6 +39,14 @@ export function shortenPath(path: string): string {
   if (home) return path.replace(home, "~");
   return path;
 }
+
+// --- Agent type labels ---
+
+export const AGENT_TYPE_LABELS: Record<AgentType, string> = {
+  "claude-code": "Claude Code",
+  opencode: "OpenCode",
+  "gemini-cli": "Gemini CLI",
+};
 
 // --- API endpoints ---
 

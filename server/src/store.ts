@@ -127,6 +127,7 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     sessions,
     multiplexers: heartbeat.multiplexers,
     multiplexerSessions: heartbeat.multiplexerSessions,
+    availableAgents: heartbeat.availableAgents ?? [],
     terminalPort: heartbeat.terminalPort,
   });
 

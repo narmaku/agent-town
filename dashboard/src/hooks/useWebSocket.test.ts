@@ -12,6 +12,7 @@ function makeMachine(overrides: Partial<MachineInfo> = {}): MachineInfo {
     sessions: [],
     multiplexers: ["zellij"],
     multiplexerSessions: [],
+    availableAgents: ["claude-code"],
     ...overrides,
   };
 }

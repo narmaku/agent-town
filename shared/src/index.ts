@@ -38,6 +38,7 @@ export interface SessionInfo {
   currentTool?: string; // tool currently being executed (from hooks)
   totalInputTokens?: number; // aggregated input tokens across all messages
   totalOutputTokens?: number; // aggregated output tokens across all messages
+  contextTokens?: number; // current context window size (from last API response)
 }
 
 export interface MultiplexerSessionInfo {
@@ -54,6 +55,7 @@ export interface MachineInfo {
   sessions: SessionInfo[];
   multiplexers: TerminalMultiplexer[];
   multiplexerSessions: MultiplexerSessionInfo[];
+  availableAgents: AgentType[]; // agent binaries installed on the machine
   terminalPort?: number; // port for terminal WebSocket on the agent
   agentAddress?: string; // agent's reachable address (IP or hostname)
 }
@@ -65,6 +67,7 @@ export interface Heartbeat {
   sessions: SessionInfo[];
   multiplexers: TerminalMultiplexer[];
   multiplexerSessions: MultiplexerSessionInfo[];
+  availableAgents: AgentType[]; // agent binaries installed on the machine
   terminalPort: number;
   timestamp: string;
 }

@@ -179,8 +179,21 @@ async function parseGeminiSession(
     const lastMessage = summarizeLastMessage(sessionData.messages);
     const lastUpdatedMs = sessionData.lastUpdated ? new Date(sessionData.lastUpdated).getTime() : mtimeMs;
 
-    // Find model from last gemini message
+    // Find model and aggregate tokens from last gemini message
     const lastGeminiMsg = [...sessionData.messages].reverse().find((m) => m.type === "gemini" && m.model);
+
+    // Aggregate token usage and find last context size
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let contextTokens = 0;
+    for (const msg of sessionData.messages) {
+      if (msg.tokens) {
+        totalInputTokens += msg.tokens.input ?? 0;
+        totalOutputTokens += msg.tokens.output ?? 0;
+        const ctx = (msg.tokens.input ?? 0) + (msg.tokens.cached ?? 0);
+        if (ctx > 0) contextTokens = ctx;
+      }
+    }
 
     return {
       sessionId: sessionData.sessionId,
@@ -194,6 +207,9 @@ async function parseGeminiSession(
       lastMessage,
       cwd: projectPath,
       model: lastGeminiMsg?.model,
+      totalInputTokens: totalInputTokens > 0 ? totalInputTokens : undefined,
+      totalOutputTokens: totalOutputTokens > 0 ? totalOutputTokens : undefined,
+      contextTokens: contextTokens > 0 ? contextTokens : undefined,
     };
   } catch (err) {
     log.debug(`parseGeminiSession: ${err instanceof Error ? err.message : String(err)}`);

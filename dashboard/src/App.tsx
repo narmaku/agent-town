@@ -343,11 +343,8 @@ export function App(): React.JSX.Element {
   });
 
   // Derive live session for fullscreen from machines array (real-time updates)
-  const fullscreenSession = fullscreen
-    ? machines
-        .find((m) => m.machineId === fullscreen.machineId)
-        ?.sessions.find((s) => s.sessionId === fullscreen.sessionId)
-    : null;
+  const fullscreenMachine = fullscreen ? machines.find((m) => m.machineId === fullscreen.machineId) : null;
+  const fullscreenSession = fullscreenMachine?.sessions.find((s) => s.sessionId === fullscreen?.sessionId) ?? null;
 
   const totalSessions = machines.reduce((sum, m) => sum + m.sessions.length, 0);
   const totalAttention = machines.reduce(
@@ -646,23 +643,21 @@ export function App(): React.JSX.Element {
           ))}
         </main>
       ) : (
-        <>
-          <ExplorerLayout
-            machines={filteredMachines}
-            allMachines={machines}
-            groupMode={groupMode}
-            sortMode={sortMode}
-            hideIdle={hideIdle}
-            timeFilter={timeFilter}
-            autoDeleteOnClose={autoDeleteOnClose}
-            sidebarOpen={sidebarOpen}
-            onSidebarClose={() => setSidebarOpen(false)}
-            onOpenTerminal={handleOpenTerminal}
-            onResume={(machineId, sessionId, projectDir, agentType) =>
-              setResumeTarget({ machineId, sessionId, projectDir, agentType })
-            }
-          />
-        </>
+        <ExplorerLayout
+          machines={filteredMachines}
+          allMachines={machines}
+          groupMode={groupMode}
+          sortMode={sortMode}
+          hideIdle={hideIdle}
+          timeFilter={timeFilter}
+          autoDeleteOnClose={autoDeleteOnClose}
+          sidebarOpen={sidebarOpen}
+          onSidebarClose={() => setSidebarOpen(false)}
+          onOpenTerminal={handleOpenTerminal}
+          onResume={(machineId, sessionId, projectDir, agentType) =>
+            setResumeTarget({ machineId, sessionId, projectDir, agentType })
+          }
+        />
       )}
 
       {terminal && (
@@ -678,6 +673,7 @@ export function App(): React.JSX.Element {
         <SessionFullscreen
           session={fullscreenSession}
           machineId={fullscreen.machineId}
+          machineName={fullscreenMachine?.hostname}
           onClose={() => setFullscreen(null)}
           onOpenTerminal={(sessionName, multiplexer) => {
             setFullscreen(null);
