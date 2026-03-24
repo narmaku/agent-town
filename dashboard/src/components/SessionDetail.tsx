@@ -498,7 +498,7 @@ export function SessionDetail({
             aria-label={infoPaneVisible ? "Hide session info" : "Show session info"}
             title={infoPaneVisible ? "Hide info" : "Show info"}
           >
-            &#9432;
+            Info
           </button>
           {onClose && (
             <button type="button" className="modal-close" onClick={onClose}>
