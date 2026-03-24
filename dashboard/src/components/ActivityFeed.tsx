@@ -10,6 +10,7 @@ interface ActivityFeedProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigateToSession: (machineId: string, sessionId: string) => void;
+  onClearAll?: () => void;
 }
 
 const STATUS_ICONS: Record<SessionStatus, string> = {
@@ -28,6 +29,7 @@ export function ActivityFeed({
   isOpen,
   onClose,
   onNavigateToSession,
+  onClearAll,
 }: ActivityFeedProps): React.JSX.Element | null {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -75,9 +77,21 @@ export function ActivityFeed({
     <div className="activity-feed-dropdown" ref={panelRef}>
       <div className="activity-feed-header">
         <span className="activity-feed-title">Activity</span>
-        <span className="activity-feed-count">
-          {events.length} event{events.length !== 1 ? "s" : ""}
-        </span>
+        <div className="activity-feed-header-right">
+          {events.length > 0 && onClearAll && (
+            <button
+              type="button"
+              className="activity-feed-clear-btn"
+              onClick={onClearAll}
+              aria-label="Clear all activity"
+            >
+              Clear All
+            </button>
+          )}
+          <span className="activity-feed-count">
+            {events.length} event{events.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
       <div className="activity-feed-list">
         {events.length === 0 ? (

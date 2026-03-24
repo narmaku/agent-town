@@ -121,7 +121,7 @@ function filterMachinesBySearch(
 }
 
 export function App(): React.JSX.Element {
-  const { machines, connected, activityFeed, unreadActivityCount, markActivityRead } = useWebSocket();
+  const { machines, connected, activityFeed, unreadActivityCount, markActivityRead, clearActivity } = useWebSocket();
   const [activityOpen, setActivityOpen] = useState(false);
   const [terminal, setTerminal] = useState<TerminalTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -150,6 +150,7 @@ export function App(): React.JSX.Element {
   });
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [explorerSelection, setExplorerSelection] = useState<FullscreenTarget | null>(null);
 
   // Persist layout and group preferences
   useEffect(() => {
@@ -552,12 +553,12 @@ export function App(): React.JSX.Element {
                   events={activityFeed}
                   isOpen={activityOpen}
                   onClose={() => setActivityOpen(false)}
+                  onClearAll={clearActivity}
                   onNavigateToSession={(machineId, sessionId) => {
                     if (layoutMode === "cards") {
                       setFullscreen({ machineId, sessionId });
                     } else {
-                      // In explorer mode, we cannot programmatically select — open fullscreen
-                      setFullscreen({ machineId, sessionId });
+                      setExplorerSelection({ machineId, sessionId });
                     }
                   }}
                 />
@@ -631,6 +632,8 @@ export function App(): React.JSX.Element {
           onResume={(machineId, sessionId, projectDir, agentType) =>
             setResumeTarget({ machineId, sessionId, projectDir, agentType })
           }
+          initialSelection={explorerSelection}
+          onInitialSelectionConsumed={() => setExplorerSelection(null)}
         />
       )}
 
