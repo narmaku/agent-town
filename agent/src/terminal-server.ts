@@ -5,6 +5,7 @@ import { type AgentType, buildShellCommand, createLogger, truncateId } from "@ag
 import type { Server, Subprocess } from "bun";
 import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
 import { clearHookSession, updateHookState } from "./hook-store";
+import { listDirectories, validateListDirsPath } from "./list-dirs";
 import { getAllProviders, getProvider } from "./providers/registry";
 import { getSessionMessages, searchSessionMessages } from "./session-messages";
 
@@ -408,6 +409,33 @@ export function startTerminalServer(port: number, machineId: string): Server {
           }
           const message = err instanceof Error ? err.message : "Unknown error";
           log.error(`git-diff: failed for dir=${dir}: ${message}`);
+          return Response.json({ error: message }, { status: 500 });
+        }
+      }
+
+      // HTTP endpoint: list directories in a path
+      if (url.pathname === "/api/list-dirs" && req.method === "GET") {
+        const dir = url.searchParams.get("dir");
+
+        const dirErr = validateListDirsPath(dir || "");
+        if (dirErr) {
+          return Response.json({ error: dirErr }, { status: 400 });
+        }
+
+        try {
+          const result = await listDirectories(dir ?? "");
+          return Response.json(result);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          const isNotFound = message.includes("ENOENT") || message.includes("no such file");
+          const isPermission = message.includes("EACCES") || message.includes("permission denied");
+          if (isNotFound) {
+            return Response.json({ error: `Directory not found: ${dir}` }, { status: 404 });
+          }
+          if (isPermission) {
+            return Response.json({ error: `Permission denied: ${dir}` }, { status: 403 });
+          }
+          log.error(`list-dirs: failed for dir=${dir}: ${message}`);
           return Response.json({ error: message }, { status: 500 });
         }
       }
