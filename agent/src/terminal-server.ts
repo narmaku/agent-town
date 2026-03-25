@@ -926,16 +926,16 @@ export function startTerminalServer(port: number, machineId: string): Server {
               return Response.json({ error: "Failed to kill session" }, { status: 500 });
             }
           } else {
-            // kill-session terminates running processes inside the session.
-            // The session stays as EXITED — user can resurrect via
-            // `zellij attach` or Resume from the dashboard.
-            // delete-session is intentionally NOT called here.
-            const kill = Bun.spawn(["zellij", "kill-session", body.session], {
+            // delete-session kills running processes and removes the session.
+            // The Claude session can be resumed in a new zellij session via
+            // the Resume button (which uses cleanupBeforeZellijCreate + --resume).
+            // --force ensures it works even if the session is active.
+            const del = Bun.spawn(["zellij", "delete-session", body.session, "--force"], {
               env: cleanEnv,
               stdout: "ignore",
               stderr: "ignore",
             });
-            await kill.exited;
+            await del.exited;
           }
 
           return Response.json({ ok: true });

@@ -110,7 +110,8 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     }
     // Auto-populate from multiplexer session name and persist it so the
     // name survives even when the multiplexer session is killed/closed.
-    if (s.multiplexerSession) {
+    // Skip pending-* placeholder sessions — their IDs are temporary.
+    if (s.multiplexerSession && !s.sessionId.startsWith("pending-")) {
       sessionNames.set(s.sessionId, s.multiplexerSession);
       didPersist = true;
       return { ...s, customName: s.multiplexerSession };

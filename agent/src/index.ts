@@ -181,9 +181,8 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
   const claimedMuxNames = new Set(sessions.filter((s) => s.multiplexerSession).map((s) => s.multiplexerSession));
 
   // Build lookup for unclaimed mux sessions (both active AND EXITED).
-  // EXITED sessions are included because Close Agent uses kill-session
-  // which leaves the session as EXITED — it should still show as "exited"
-  // in the dashboard so the user can Resume.
+  // EXITED sessions are included so the dashboard can detect when an
+  // agent process exits but the mux session still exists.
   const allMuxNames = new Set(multiplexerSessions.map((s) => s.name));
   const unclaimedMuxLookup = new Map<string, TerminalMultiplexer>();
   for (const muxSession of multiplexerSessions) {
@@ -196,14 +195,16 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
 
   for (const session of sessions) {
     if (session.multiplexerSession) continue; // Has a running Claude process
-    if (session.status === "done") continue; // Cleanly finished — don't override with "exited"
 
     // Detection path 1: lastKnownMux (historical tracking)
     const lastMux = lastKnownMux.get(session.sessionId);
     if (lastMux && unclaimedMuxLookup.has(lastMux.session) && !claimedMuxNames.has(lastMux.session)) {
       session.multiplexer = lastMux.multiplexer;
       session.multiplexerSession = lastMux.session;
-      session.status = "exited";
+      // Only set "exited" if session isn't already "done" (hook-based done takes priority)
+      if (session.status !== "done") {
+        session.status = "exited";
+      }
       claimedMuxNames.add(lastMux.session);
       log.info(`exited (tracked): session=${truncateId(session.sessionId)} mux=${lastMux.session}`);
       continue;
@@ -218,7 +219,9 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
     if (matchedName && muxType) {
       session.multiplexer = muxType;
       session.multiplexerSession = matchedName;
-      session.status = "exited";
+      if (session.status !== "done") {
+        session.status = "exited";
+      }
       claimedMuxNames.add(matchedName);
       unclaimedMuxLookup.delete(matchedName);
       // Also record for future tracking
