@@ -115,6 +115,11 @@ export function upsertMachine(heartbeat: Heartbeat): void {
       didPersist = true;
       return { ...s, customName: s.multiplexerSession };
     }
+    // Fallback: use project name + short ID for sessions without multiplexer
+    // This is computed on the fly and NOT persisted to session-names.json
+    if (s.projectName && !s.customName) {
+      return { ...s, customName: `${s.projectName} (${s.sessionId.slice(0, 8)})` };
+    }
     return s;
   });
   if (didPersist) saveSessionNames();

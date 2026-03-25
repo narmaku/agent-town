@@ -161,6 +161,14 @@ export function SessionCard({
               {session.hookEnabled ? "LIVE" : "EST"}
             </span>
           )}
+          {!session.multiplexerSession && session.status !== "starting" && (
+            <span
+              className="tracking-badge standalone"
+              title="No terminal multiplexer detected — session was started outside Agent Town or directly in a terminal"
+            >
+              standalone
+            </span>
+          )}
         </div>
         <span className="session-time">{timeAgo(session.lastActivity)}</span>
       </div>

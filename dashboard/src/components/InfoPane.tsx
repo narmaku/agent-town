@@ -46,6 +46,14 @@ export function InfoPane({
         >
           {session.hookEnabled ? "LIVE" : "EST"}
         </span>
+        {!session.multiplexerSession && (
+          <span
+            className="tracking-badge standalone"
+            title="No terminal multiplexer detected — session was started outside Agent Town or directly in a terminal"
+          >
+            standalone
+          </span>
+        )}
         {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
       </div>
 
@@ -97,6 +105,17 @@ export function InfoPane({
               <ContextIcon />
             </span>
             <span className="detail-value mono">{formatCompactTokens(session.contextTokens)} context</span>
+          </div>
+        )}
+        {!session.multiplexerSession && (
+          <div
+            className="info-pane-detail-row"
+            title="No terminal multiplexer detected — session was started outside Agent Town or directly in a terminal"
+          >
+            <span className="info-pane-detail-icon" aria-hidden="true">
+              <CwdIcon />
+            </span>
+            <span className="detail-value mono info-pane-standalone-hint">No terminal multiplexer</span>
           </div>
         )}
       </div>
