@@ -40,6 +40,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     theme: "dark",
     enableKeyboardNavigation: true,
     keyboardShortcuts: { ...DEFAULT_KEYBOARD_SHORTCUTS },
+    openTerminalFullscreen: true,
   });
   const [saving, setSaving] = useState(false);
 
@@ -447,6 +448,20 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                   placeholder="~ (home directory)"
                 />
                 <span className="form-hint">Pre-fills the project directory when launching new agents</span>
+              </div>
+              <div className="form-group">
+                <label className="form-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={settings.openTerminalFullscreen}
+                    onChange={(e) => setSettings({ ...settings, openTerminalFullscreen: e.target.checked })}
+                    aria-label="Open terminal fullscreen on new session"
+                  />
+                  <span className="form-toggle-label">Open terminal fullscreen on new session</span>
+                </label>
+                <span className="form-hint">
+                  Explorer layout only. When disabled, new sessions open in the detail pane instead.
+                </span>
               </div>
               <div className="form-group">
                 <label className="form-toggle-row">

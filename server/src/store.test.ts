@@ -5,6 +5,7 @@ import {
   getAllMachines,
   getMachine,
   getSavedSessionName,
+  getSettings,
   renameSession,
   upsertMachine,
 } from "./store";
@@ -370,5 +371,10 @@ describe("store", () => {
     const machines = getAllMachines();
     const expired = machines.find((m) => m.machineId === "expired-machine");
     expect(expired).toBeUndefined();
+  });
+
+  test("default settings include openTerminalFullscreen as true", () => {
+    const settings = getSettings();
+    expect(settings.openTerminalFullscreen).toBe(true);
   });
 });

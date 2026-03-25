@@ -278,6 +278,7 @@ let settings: Settings = {
   theme: "dark",
   enableKeyboardNavigation: true,
   keyboardShortcuts: { ...DEFAULT_KEYBOARD_SHORTCUTS },
+  openTerminalFullscreen: true,
 };
 
 function loadSettings(): void {

@@ -133,6 +133,7 @@ export function App(): React.JSX.Element {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("24h");
   const [autoDeleteOnClose, setAutoDeleteOnClose] = useState(false);
+  const [openTerminalFullscreen, setOpenTerminalFullscreen] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light">(() => loadLocalStorage(STORAGE_KEYS.THEME, "dark"));
   const [fontSize, setFontSize] = useState<"small" | "medium" | "large">(() =>
     loadLocalStorage(STORAGE_KEYS.FONT_SIZE, "small"),
@@ -172,6 +173,7 @@ export function App(): React.JSX.Element {
       .then((r) => r.json())
       .then((s: Settings) => {
         setAutoDeleteOnClose(s.autoDeleteOnClose);
+        setOpenTerminalFullscreen(s.openTerminalFullscreen);
         setTheme(s.theme);
         setFontSize(s.fontSize);
         setEnableKeyboardNav(s.enableKeyboardNavigation);
@@ -686,7 +688,13 @@ export function App(): React.JSX.Element {
           setLaunchMachineId(undefined);
         }}
         machines={machines}
-        onLaunched={(machineId, sessionName, multiplexer) => handleOpenTerminal(machineId, sessionName, multiplexer)}
+        onLaunched={(machineId, sessionName, multiplexer) => {
+          if (layoutMode === "explorer" && !openTerminalFullscreen) {
+            setExplorerSelection({ machineId, sessionId: `pending-${sessionName}` });
+          } else {
+            handleOpenTerminal(machineId, sessionName, multiplexer);
+          }
+        }}
         initialMachineId={launchMachineId}
       />
       <ResumeAgentModal
