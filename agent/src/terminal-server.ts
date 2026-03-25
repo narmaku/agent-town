@@ -89,8 +89,8 @@ async function cleanupBeforeZellijCreate(name: string, env: Record<string, strin
   // Remove EXITED zellij session remnant
   const del = Bun.spawn(["zellij", "delete-session", name, "--force"], {
     env,
-    stdout: "pipe",
-    stderr: "pipe",
+    stdout: "ignore",
+    stderr: "ignore",
   });
   await del.exited;
 
@@ -98,17 +98,17 @@ async function cleanupBeforeZellijCreate(name: string, env: Record<string, strin
   if (systemdRunAvailable) {
     const list = Bun.spawn(["systemctl", "--user", "list-units", "--type=scope", "--plain", "--no-legend"], {
       stdout: "pipe",
-      stderr: "pipe",
+      stderr: "ignore",
     });
-    const output = await new Response(list.stdout).text();
+    const output = await Bun.readableStreamToText(list.stdout);
     await list.exited;
 
     for (const line of output.split("\n")) {
       const unit = line.trim().split(/\s+/)[0];
       if (unit?.startsWith(`agent-town-mux-${name}`)) {
         const stop = Bun.spawn(["systemctl", "--user", "stop", unit], {
-          stdout: "pipe",
-          stderr: "pipe",
+          stdout: "ignore",
+          stderr: "ignore",
         });
         await stop.exited;
         log.debug(`cleanup: stopped lingering scope ${unit}`);
@@ -143,8 +143,8 @@ async function checkSystemdRun(): Promise<boolean> {
     // --version succeeds even when the user session isn't available
     // (e.g., agent started via SSH nohup without a login session).
     const proc = Bun.spawn(["systemd-run", "--user", "--scope", "--unit=agent-town-test-scope", "true"], {
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: "ignore",
+      stderr: "ignore",
     });
     await proc.exited;
     systemdRunAvailable = proc.exitCode === 0;
@@ -311,15 +311,15 @@ async function sendBackupEnter(
   if (multiplexer === "zellij") {
     const enter = Bun.spawn(["zellij", "--session", session, "action", "write", "13"], {
       env: cleanEnv,
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: "ignore",
+      stderr: "ignore",
     });
     await enter.exited;
   } else {
     const enter = Bun.spawn(["tmux", "send-keys", "-t", session, "Enter"], {
       env: cleanEnv,
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: "ignore",
+      stderr: "ignore",
     });
     await enter.exited;
   }
@@ -494,12 +494,12 @@ export function startTerminalServer(port: number, machineId: string): Server {
             ]);
             const newSession = Bun.spawn(tmuxCmd, {
               env: cleanEnv,
-              stdout: "pipe",
+              stdout: "ignore",
               stderr: "pipe",
             });
             await newSession.exited;
             if (newSession.exitCode !== 0) {
-              const stderr = await new Response(newSession.stderr).text();
+              const stderr = await Bun.readableStreamToText(newSession.stderr);
               log.error(`tmux new-session failed: ${stderr}`);
               return Response.json({ error: "Failed to create multiplexer session" }, { status: 500 });
             }
@@ -508,8 +508,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
             const agentCmd = buildShellCommand(agentParts);
             const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
             });
             await sendKeys.exited;
 
@@ -520,24 +520,24 @@ export function startTerminalServer(port: number, machineId: string): Server {
               await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
               Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                 env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
+                stdout: "ignore",
+                stderr: "ignore",
               });
 
               if (body.autonomous) {
                 await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
                 Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                   env: cleanEnv,
-                  stdout: "pipe",
-                  stderr: "pipe",
+                  stdout: "ignore",
+                  stderr: "ignore",
                 });
               }
 
               await new Promise((r) => setTimeout(r, INITIAL_MESSAGE_DELAY_MS));
               Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "hi", "Enter"], {
                 env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
+                stdout: "ignore",
+                stderr: "ignore",
               });
             }
 
@@ -555,8 +555,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
             if (layout) args.push("-n", layout);
             Bun.spawn(buildScopeCommand(body.sessionName, args), {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
               cwd: body.projectDir,
             });
             let elapsed = 0;
@@ -566,9 +566,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
               const listProc = Bun.spawn(["zellij", "list-sessions", "--short"], {
                 env: cleanEnv,
                 stdout: "pipe",
-                stderr: "pipe",
+                stderr: "ignore",
               });
-              const listOutput = await new Response(listProc.stdout).text();
+              const listOutput = await Bun.readableStreamToText(listProc.stdout);
               await listProc.exited;
               if (listOutput.split("\n").some((l) => l.trim() === body.sessionName)) return true;
             }
@@ -593,8 +593,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
           const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
           const writeChars = Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
-            stdout: "pipe",
-            stderr: "pipe",
+            stdout: "ignore",
+            stderr: "ignore",
           });
           await writeChars.exited;
 
@@ -604,24 +604,24 @@ export function startTerminalServer(port: number, machineId: string): Server {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
             });
 
             if (body.autonomous) {
               await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
               Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
                 env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
+                stdout: "ignore",
+                stderr: "ignore",
               });
             }
 
             await new Promise((r) => setTimeout(r, INITIAL_MESSAGE_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "hi\n"], {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
             });
           }
 
@@ -692,12 +692,12 @@ export function startTerminalServer(port: number, machineId: string): Server {
             ]);
             const newSession = Bun.spawn(tmuxCmd, {
               env: cleanEnv,
-              stdout: "pipe",
+              stdout: "ignore",
               stderr: "pipe",
             });
             await newSession.exited;
             if (newSession.exitCode !== 0) {
-              const stderr = await new Response(newSession.stderr).text();
+              const stderr = await Bun.readableStreamToText(newSession.stderr);
               log.error(`tmux new-session failed: ${stderr}`);
               return Response.json({ error: "Failed to create multiplexer session" }, { status: 500 });
             }
@@ -705,24 +705,24 @@ export function startTerminalServer(port: number, machineId: string): Server {
             const agentCmd = buildShellCommand(agentParts);
             Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
             });
 
             if (agentType === "claude-code" || agentType === "gemini-cli") {
               await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
               Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                 env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
+                stdout: "ignore",
+                stderr: "ignore",
               });
 
               if (body.autonomous) {
                 await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
                 Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                   env: cleanEnv,
-                  stdout: "pipe",
-                  stderr: "pipe",
+                  stdout: "ignore",
+                  stderr: "ignore",
                 });
               }
             }
@@ -739,8 +739,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
             if (layout) args.push("-n", layout);
             Bun.spawn(buildScopeCommand(body.sessionName, args), {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
               cwd: body.projectDir,
             });
             let el = 0;
@@ -750,9 +750,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
               const listProc = Bun.spawn(["zellij", "list-sessions", "--short"], {
                 env: cleanEnv,
                 stdout: "pipe",
-                stderr: "pipe",
+                stderr: "ignore",
               });
-              const listOutput = await new Response(listProc.stdout).text();
+              const listOutput = await Bun.readableStreamToText(listProc.stdout);
               await listProc.exited;
               if (listOutput.split("\n").some((l) => l.trim() === body.sessionName)) return true;
             }
@@ -776,24 +776,24 @@ export function startTerminalServer(port: number, machineId: string): Server {
           const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
           Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
-            stdout: "pipe",
-            stderr: "pipe",
+            stdout: "ignore",
+            stderr: "ignore",
           });
 
           if (agentType === "claude-code" || agentType === "gemini-cli") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
             });
 
             if (body.autonomous) {
               await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
               Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
                 env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
+                stdout: "ignore",
+                stderr: "ignore",
               });
             }
           }
@@ -849,23 +849,23 @@ export function startTerminalServer(port: number, machineId: string): Server {
           if (body.multiplexer === "tmux") {
             const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.session, agentCmd, "Enter"], {
               env: cleanEnv,
-              stdout: "pipe",
+              stdout: "ignore",
               stderr: "pipe",
             });
             await sendKeys.exited;
             if (sendKeys.exitCode !== 0) {
-              const stderr = await new Response(sendKeys.stderr).text();
+              const stderr = await Bun.readableStreamToText(sendKeys.stderr);
               log.error(`tmux send-keys failed: ${stderr}`);
               return Response.json({ error: "Failed to send command to session" }, { status: 500 });
             }
           } else {
             const writeChars = Bun.spawn(
               ["zellij", "--session", body.session, "action", "write-chars", `${agentCmd}\n`],
-              { env: cleanEnv, stdout: "pipe", stderr: "pipe" },
+              { env: cleanEnv, stdout: "ignore", stderr: "pipe" },
             );
             await writeChars.exited;
             if (writeChars.exitCode !== 0) {
-              const stderr = await new Response(writeChars.stderr).text();
+              const stderr = await Bun.readableStreamToText(writeChars.stderr);
               log.error(`zellij write-chars failed: ${stderr}`);
               return Response.json({ error: "Failed to send command to session" }, { status: 500 });
             }
@@ -877,14 +877,14 @@ export function startTerminalServer(port: number, machineId: string): Server {
             if (body.multiplexer === "tmux") {
               Bun.spawn(["tmux", "send-keys", "-t", body.session, "Enter"], {
                 env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
+                stdout: "ignore",
+                stderr: "ignore",
               });
             } else {
               Bun.spawn(["zellij", "--session", body.session, "action", "write-chars", "\n"], {
                 env: cleanEnv,
-                stdout: "pipe",
-                stderr: "pipe",
+                stdout: "ignore",
+                stderr: "ignore",
               });
             }
           }
@@ -916,12 +916,12 @@ export function startTerminalServer(port: number, machineId: string): Server {
           if (body.multiplexer === "tmux") {
             const proc = Bun.spawn(["tmux", "kill-session", "-t", body.session], {
               env: cleanEnv,
-              stdout: "pipe",
+              stdout: "ignore",
               stderr: "pipe",
             });
             await proc.exited;
             if (proc.exitCode !== 0) {
-              const stderr = await new Response(proc.stderr).text();
+              const stderr = await Bun.readableStreamToText(proc.stderr);
               log.error(`kill failed: tmux kill-session exit=${proc.exitCode} ${stderr}`);
               return Response.json({ error: "Failed to kill session" }, { status: 500 });
             }
@@ -932,8 +932,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
             // delete-session is intentionally NOT called here.
             const kill = Bun.spawn(["zellij", "kill-session", body.session], {
               env: cleanEnv,
-              stdout: "pipe",
-              stderr: "pipe",
+              stdout: "ignore",
+              stderr: "ignore",
             });
             await kill.exited;
           }
@@ -1049,12 +1049,12 @@ export function startTerminalServer(port: number, machineId: string): Server {
           if (body.multiplexer === "tmux") {
             const proc = Bun.spawn(["tmux", "rename-session", "-t", body.currentName, body.newName], {
               env: cleanEnv,
-              stdout: "pipe",
+              stdout: "ignore",
               stderr: "pipe",
             });
             await proc.exited;
             if (proc.exitCode !== 0) {
-              const stderr = await new Response(proc.stderr).text();
+              const stderr = await Bun.readableStreamToText(proc.stderr);
               log.error(`tmux rename failed: ${stderr}`);
               return Response.json({ error: "Failed to rename session" }, { status: 500 });
             }
@@ -1062,11 +1062,11 @@ export function startTerminalServer(port: number, machineId: string): Server {
             // zellij: rename-session action requires targeting the session
             const proc = Bun.spawn(
               ["zellij", "--session", body.currentName, "action", "rename-session", body.newName],
-              { env: cleanEnv, stdout: "pipe", stderr: "pipe" },
+              { env: cleanEnv, stdout: "ignore", stderr: "pipe" },
             );
             await proc.exited;
             if (proc.exitCode !== 0) {
-              const stderr = await new Response(proc.stderr).text();
+              const stderr = await Bun.readableStreamToText(proc.stderr);
               log.error(`zellij rename failed: ${stderr}`);
               return Response.json({ error: "Failed to rename session" }, { status: 500 });
             }
