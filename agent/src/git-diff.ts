@@ -26,7 +26,10 @@ async function runGit(args: string[], cwd: string): Promise<string> {
     stdout: "pipe",
     stderr: "pipe",
   });
-  const [stdout, stderr] = await Promise.all([Bun.readableStreamToText(proc.stdout), Bun.readableStreamToText(proc.stderr)]);
+  const [stdout, stderr] = await Promise.all([
+    Bun.readableStreamToText(proc.stdout),
+    Bun.readableStreamToText(proc.stderr),
+  ]);
   await proc.exited;
 
   if (proc.exitCode !== 0) {
