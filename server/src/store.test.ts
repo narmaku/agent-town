@@ -371,4 +371,187 @@ describe("store", () => {
     const expired = machines.find((m) => m.machineId === "expired-machine");
     expect(expired).toBeUndefined();
   });
+
+  test("pending session name transfers to agent-side placeholder via heartbeat", () => {
+    // Step 1: Machine registers
+    upsertMachine(makeHeartbeat({ machineId: "transfer-test", hostname: "transfer-host" }));
+
+    // Step 2: User launches agent — pending session created with name
+    addPendingSession("transfer-test", "my-agent", "/home/user/project", "zellij");
+
+    // Step 3: Agent discovers process and sends heartbeat with pending-* placeholder
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "transfer-test",
+        hostname: "transfer-host",
+        sessions: [
+          {
+            sessionId: "pending-my-agent",
+            slug: "my-agent",
+            projectPath: "/home/user/project",
+            projectName: "project",
+            gitBranch: "",
+            status: "starting",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "Starting up...",
+            cwd: "/home/user/project",
+            multiplexerSession: "my-agent",
+            multiplexer: "zellij",
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("transfer-test");
+    // Should show "my-agent", NOT "project (pending-)"
+    expect(machine?.sessions[0].customName).toBe("my-agent");
+  });
+
+  test("pending session name transfers to real session (UUID) via heartbeat", () => {
+    // Step 1: Machine registers
+    upsertMachine(makeHeartbeat({ machineId: "transfer-uuid", hostname: "transfer-uuid-host" }));
+
+    // Step 2: User launches agent — pending session created
+    addPendingSession("transfer-uuid", "my-real-agent", "/home/user/project", "tmux");
+
+    // Step 3: Agent sends heartbeat with real UUID session matching same mux name
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "transfer-uuid",
+        hostname: "transfer-uuid-host",
+        sessions: [
+          {
+            sessionId: "550e8400-e29b-41d4-a716-446655440000",
+            slug: "my-real-agent",
+            projectPath: "/home/user/project",
+            projectName: "project",
+            gitBranch: "main",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "Working...",
+            cwd: "/home/user/project",
+            multiplexerSession: "my-real-agent",
+            multiplexer: "tmux",
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("transfer-uuid");
+    expect(machine?.sessions[0].customName).toBe("my-real-agent");
+    // Name should be persisted under the real session ID
+    expect(getSavedSessionName("550e8400-e29b-41d4-a716-446655440000")).toBe("my-real-agent");
+  });
+
+  test("pending-* fallback uses meaningful short ID, not empty string", () => {
+    // A pending-* session with no matching pending entry and no multiplexerSession
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "fallback-test",
+        hostname: "fallback-host",
+        sessions: [
+          {
+            sessionId: "pending-some-session",
+            slug: "some-session",
+            projectPath: "/home/user/myproject",
+            projectName: "myproject",
+            gitBranch: "",
+            status: "starting",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "Starting...",
+            cwd: "/home/user/myproject",
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("fallback-test");
+    // Should use characters after "pending-" for the short ID, not produce "(pending-)"
+    expect(machine?.sessions[0].customName).toBe("myproject (some-ses)");
+    expect(machine?.sessions[0].customName).not.toContain("(pending-)");
+  });
+
+  test("pending name does not overwrite an explicit user rename", () => {
+    upsertMachine(makeHeartbeat({ machineId: "no-overwrite-pending", hostname: "no-overwrite-pending-host" }));
+    addPendingSession("no-overwrite-pending", "agent-x", "/project", "zellij");
+
+    // First heartbeat picks up pending name
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "no-overwrite-pending",
+        hostname: "no-overwrite-pending-host",
+        sessions: [
+          {
+            sessionId: "uuid-123",
+            slug: "agent-x",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project",
+            multiplexerSession: "agent-x",
+            multiplexer: "zellij",
+          },
+        ],
+      }),
+    );
+
+    // User explicitly renames the session
+    renameSession("no-overwrite-pending", "uuid-123", "My Custom Name");
+
+    // Next heartbeat should keep the user's custom name
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "no-overwrite-pending",
+        hostname: "no-overwrite-pending-host",
+        sessions: [
+          {
+            sessionId: "uuid-123",
+            slug: "agent-x",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project",
+            multiplexerSession: "agent-x",
+            multiplexer: "zellij",
+          },
+        ],
+      }),
+    );
+
+    expect(getSavedSessionName("uuid-123")).toBe("My Custom Name");
+    const machine = getMachine("no-overwrite-pending");
+    expect(machine?.sessions[0].customName).toBe("My Custom Name");
+  });
+
+  test("sessions without pending or multiplexer still get fallback name", () => {
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "no-mux-test",
+        hostname: "no-mux-host",
+        sessions: [
+          {
+            sessionId: "abcdef12-3456-7890-abcd-ef1234567890",
+            slug: "test",
+            projectPath: "/home/user/myapp",
+            projectName: "myapp",
+            gitBranch: "main",
+            status: "idle",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/home/user/myapp",
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("no-mux-test");
+    // Should use standard 8-char prefix of session ID
+    expect(machine?.sessions[0].customName).toBe("myapp (abcdef12)");
+  });
 });
