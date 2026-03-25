@@ -554,4 +554,129 @@ describe("store", () => {
     // Should use standard 8-char prefix of session ID
     expect(machine?.sessions[0].customName).toBe("myapp (abcdef12)");
   });
+
+  test("pending-* placeholder name is NOT persisted to sessionNames", () => {
+    upsertMachine(makeHeartbeat({ machineId: "no-persist-pending", hostname: "no-persist-pending-host" }));
+    addPendingSession("no-persist-pending", "temp-agent", "/project", "zellij");
+
+    // Heartbeat with pending-* placeholder matching the pending session
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "no-persist-pending",
+        hostname: "no-persist-pending-host",
+        sessions: [
+          {
+            sessionId: "pending-temp-agent",
+            slug: "temp-agent",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "",
+            status: "starting",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project",
+            multiplexerSession: "temp-agent",
+            multiplexer: "zellij",
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("no-persist-pending");
+    // customName should be set in memory
+    expect(machine?.sessions[0].customName).toBe("temp-agent");
+    // But it should NOT be persisted under the temporary pending-* ID
+    expect(getSavedSessionName("pending-temp-agent")).toBeUndefined();
+  });
+
+  test("pending name from another machine does not leak to current machine", () => {
+    // Machine A has a pending session named "shared-name"
+    upsertMachine(makeHeartbeat({ machineId: "machine-a", hostname: "host-a" }));
+    addPendingSession("machine-a", "shared-name", "/project-a", "zellij");
+
+    // Machine B has a session with multiplexerSession="shared-name" but NO pending entry
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "machine-b",
+        hostname: "host-b",
+        sessions: [
+          {
+            sessionId: "uuid-machine-b",
+            slug: "shared-name",
+            projectPath: "/project-b",
+            projectName: "project-b",
+            gitBranch: "",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project-b",
+            multiplexerSession: "shared-name",
+            multiplexer: "zellij",
+          },
+        ],
+      }),
+    );
+
+    const machineB = getMachine("machine-b");
+    // Machine B should NOT pick up Machine A's pending name — it should use
+    // the standard multiplexer session auto-populate instead
+    expect(machineB?.sessions[0].customName).toBe("shared-name");
+    // The persisted name should come from auto-populate, not from pending transfer
+    expect(getSavedSessionName("uuid-machine-b")).toBe("shared-name");
+  });
+
+  test("transferred pending name persists across heartbeats after pending is removed", () => {
+    upsertMachine(makeHeartbeat({ machineId: "persist-transfer", hostname: "persist-transfer-host" }));
+    addPendingSession("persist-transfer", "my-session", "/project", "tmux");
+
+    // First heartbeat: real session arrives, pending name is transferred and persisted
+    const session = {
+      sessionId: "uuid-persist-transfer",
+      slug: "my-session",
+      projectPath: "/project",
+      projectName: "project",
+      gitBranch: "main",
+      status: "working" as const,
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/project",
+      multiplexerSession: "my-session",
+      multiplexer: "tmux" as const,
+    };
+    upsertMachine(makeHeartbeat({ machineId: "persist-transfer", hostname: "persist-transfer-host", sessions: [session] }));
+
+    expect(getMachine("persist-transfer")?.sessions[0].customName).toBe("my-session");
+
+    // Second heartbeat: pending is already removed, name should survive via saved names
+    upsertMachine(makeHeartbeat({ machineId: "persist-transfer", hostname: "persist-transfer-host", sessions: [session] }));
+
+    expect(getMachine("persist-transfer")?.sessions[0].customName).toBe("my-session");
+    expect(getSavedSessionName("uuid-persist-transfer")).toBe("my-session");
+  });
+
+  test("pending-* fallback with very short name after prefix", () => {
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "short-pending-test",
+        hostname: "short-pending-host",
+        sessions: [
+          {
+            sessionId: "pending-ab",
+            slug: "ab",
+            projectPath: "/home/user/proj",
+            projectName: "proj",
+            gitBranch: "",
+            status: "starting",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/home/user/proj",
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("short-pending-test");
+    // slice(8, 16) on "pending-ab" (length 10) yields "ab"
+    expect(machine?.sessions[0].customName).toBe("proj (ab)");
+  });
 });
