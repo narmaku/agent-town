@@ -18,6 +18,7 @@ export interface ProcessMapping {
   session: string; // multiplexer session name
   sessionId?: string; // agent session ID
   hasActiveChildren: boolean;
+  agentType?: AgentType; // agent type that owns this process
 }
 
 export interface LaunchOptions {

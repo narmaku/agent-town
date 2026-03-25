@@ -19,15 +19,16 @@ export interface SessionCandidate {
 const BIRTHTIME_MATCH_WINDOW_MS = 120_000; // 2 minutes
 
 /** Get file creation time using statx syscall via Bun's native stat.
- * Falls back to mtimeMs if birthtimeMs is unavailable (returns 0 on some Linux filesystems). */
+ * Returns 0 if birthtimeMs is unavailable — callers must handle this
+ * (matchSessionByBirthTime naturally skips candidates with birthtimeMs=0
+ * since the diff from any real process start time exceeds the match window). */
 async function getBirthtimeMs(filePath: string): Promise<number> {
   try {
     const fileStat = await stat(filePath);
     // Bun's stat returns birthtimeMs via statx on Linux (kernel 4.11+).
-    // Falls back to 0 on older kernels or unsupported filesystems.
-    if (fileStat.birthtimeMs > 0) return fileStat.birthtimeMs;
-    // Fallback: use mtimeMs as approximation (less accurate but no subprocess)
-    return fileStat.mtimeMs;
+    // Returns 0 on older kernels or unsupported filesystems — do NOT fall
+    // back to mtimeMs as it causes false matches (session kidnapping).
+    return fileStat.birthtimeMs;
   } catch (err) {
     log.debug(`getBirthtimeMs: failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     return 0;

@@ -236,4 +236,36 @@ describe("matchSessionByBirthTime", () => {
     const result = matchSessionByBirthTime(candidates, processStartMs, claimed);
     expect(result).toBe("s3");
   });
+
+  test("does not match candidates with birthtimeMs of 0", () => {
+    // When birthtimeMs is 0 (unavailable on some filesystems), the diff from any
+    // real process start time will far exceed BIRTHTIME_MATCH_WINDOW_MS
+    const candidates: SessionCandidate[] = [{ id: "no-birthtime", birthtimeMs: 0 }];
+    const processStartMs = now - 5_000;
+
+    const result = matchSessionByBirthTime(candidates, processStartMs, new Set());
+    expect(result).toBeUndefined();
+  });
+
+  test("skips candidates with birthtimeMs of 0 and matches valid ones", () => {
+    const candidates: SessionCandidate[] = [
+      { id: "zero-birthtime", birthtimeMs: 0 },
+      { id: "valid-session", birthtimeMs: now - 5_000 },
+    ];
+    const processStartMs = now - 6_000;
+
+    const result = matchSessionByBirthTime(candidates, processStartMs, new Set());
+    expect(result).toBe("valid-session");
+  });
+
+  test("returns undefined when all candidates have birthtimeMs of 0", () => {
+    const candidates: SessionCandidate[] = [
+      { id: "zero-a", birthtimeMs: 0 },
+      { id: "zero-b", birthtimeMs: 0 },
+    ];
+    const processStartMs = now - 10_000;
+
+    const result = matchSessionByBirthTime(candidates, processStartMs, new Set());
+    expect(result).toBeUndefined();
+  });
 });

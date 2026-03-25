@@ -1,6 +1,27 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+import { join } from "node:path";
+
 import { handleClaudeHookEvent } from "./hook-handler";
-import { ClaudeCodeProvider } from "./index";
+
+// Mock process-mapper to control findSessionCandidates in matchProcessToSessionId tests
+const PROCESS_MAPPER_PATH = join(import.meta.dir, "process-mapper.ts");
+
+// Keep the real matchSessionByBirthTime and extractClaudeSessionIdFromArgs,
+// only mock findSessionCandidates so we can control what candidates are returned.
+const { extractClaudeSessionIdFromArgs: realExtract, matchSessionByBirthTime: realMatchByBirthTime } = await import(
+  "./process-mapper"
+);
+
+let mockCandidates: { id: string; birthtimeMs: number }[] = [];
+
+mock.module(PROCESS_MAPPER_PATH, () => ({
+  extractClaudeSessionIdFromArgs: realExtract,
+  matchSessionByBirthTime: realMatchByBirthTime,
+  findSessionCandidates: async () => mockCandidates,
+}));
+
+// Import ClaudeCodeProvider AFTER mocking so it picks up our mock
+const { ClaudeCodeProvider } = await import("./index");
 
 describe("ClaudeCodeProvider", () => {
   const provider = new ClaudeCodeProvider();
@@ -73,6 +94,40 @@ describe("ClaudeCodeProvider", () => {
 
   test("extractSessionIdFromArgs returns undefined without --resume", () => {
     expect(provider.extractSessionIdFromArgs("claude")).toBeUndefined();
+  });
+
+  test("matchProcessToSessionId returns undefined when no birth time match exists (no kidnapping fallback)", async () => {
+    const now = Date.now();
+    // Candidate was created 1 hour ago — far outside the 2-minute match window
+    // for a process that started 5 seconds ago
+    mockCandidates = [{ id: "existing-session", birthtimeMs: now - 3_600_000 }];
+    const processStartMs = now - 5_000;
+
+    const result = await provider.matchProcessToSessionId("/some/project", processStartMs, new Set());
+    // Must return undefined — NOT "existing-session" (which would be session kidnapping)
+    expect(result).toBeUndefined();
+  });
+
+  test("matchProcessToSessionId returns undefined when all candidates are claimed", async () => {
+    const now = Date.now();
+    mockCandidates = [{ id: "claimed-session", birthtimeMs: now - 5_000 }];
+    const processStartMs = now - 6_000;
+
+    const result = await provider.matchProcessToSessionId(
+      "/some/project",
+      processStartMs,
+      new Set(["claimed-session"]),
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test("matchProcessToSessionId matches by birth time when within window", async () => {
+    const now = Date.now();
+    mockCandidates = [{ id: "matching-session", birthtimeMs: now - 5_000 }];
+    const processStartMs = now - 6_000;
+
+    const result = await provider.matchProcessToSessionId("/some/project", processStartMs, new Set());
+    expect(result).toBe("matching-session");
   });
 });
 

@@ -1,5 +1,5 @@
 import { readFile, readlink } from "node:fs/promises";
-import { createLogger, type TerminalMultiplexer } from "@agent-town/shared";
+import { type AgentType, createLogger, type TerminalMultiplexer } from "@agent-town/shared";
 import {
   extractClaudeSessionIdFromArgs,
   matchSessionByBirthTime,
@@ -16,6 +16,7 @@ export interface ProcessMapping {
   session: string; // multiplexer session name
   sessionId?: string; // agent session ID
   hasActiveChildren: boolean;
+  agentType?: AgentType; // agent type that owns this process
 }
 
 // Re-export for tests
@@ -160,6 +161,7 @@ export async function discoverProcessMappings(): Promise<Map<string, ProcessMapp
           multiplexer: muxInfo.multiplexer,
           session: muxInfo.session,
           hasActiveChildren,
+          agentType: provider.type,
         };
 
         // Determine session ID
