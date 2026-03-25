@@ -147,7 +147,7 @@ function adjustSessionStatuses(sessions: SessionInfo[], processMappings: Map<str
 
       if (mapping?.hasActiveChildren) {
         session.status = "working";
-      } else if (session.status === "idle" || session.status === "done") {
+      } else if (session.status === "idle") {
         session.status = "awaiting_input";
       }
     } else {
