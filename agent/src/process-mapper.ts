@@ -65,7 +65,7 @@ export async function runPs(): Promise<AgentProcess[]> {
     stdout: "pipe",
     stderr: "ignore",
   });
-  const output = await new Response(proc.stdout).text();
+  const output = await Bun.readableStreamToText(proc.stdout);
   await proc.exited;
 
   return output
@@ -106,7 +106,7 @@ async function resolveMultiplexerSession(
         stdout: "pipe",
         stderr: "ignore",
       });
-      const tmuxOutput = await new Response(tmuxProc.stdout).text();
+      const tmuxOutput = await Bun.readableStreamToText(tmuxProc.stdout);
       await tmuxProc.exited;
 
       for (const line of tmuxOutput.trim().split("\n")) {
