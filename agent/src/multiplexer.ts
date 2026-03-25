@@ -7,14 +7,14 @@ async function runCommand(cmd: string[]): Promise<string> {
     stdout: "pipe",
     stderr: "ignore",
   });
-  const output = await new Response(proc.stdout).text();
+  const output = await Bun.readableStreamToText(proc.stdout);
   await proc.exited;
   return output.trim();
 }
 
 async function isAvailable(binary: string): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["which", binary], { stdout: "pipe", stderr: "ignore" });
+    const proc = Bun.spawn(["which", binary], { stdout: "ignore", stderr: "ignore" });
     await proc.exited;
     return proc.exitCode === 0;
   } catch (err) {
