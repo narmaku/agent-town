@@ -343,6 +343,12 @@ body {
   border: 1px solid rgba(107, 114, 128, 0.3);
 }
 
+.tracking-badge.standalone {
+  background: #374151;
+  color: #9ca3af;
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
 .current-tool-badge {
   font-size: 10px;
   font-family: "SF Mono", "Fira Code", monospace;
@@ -1588,6 +1594,11 @@ body {
   word-break: break-all;
 }
 
+.info-pane-standalone-hint {
+  color: var(--text-muted) !important;
+  font-style: italic;
+}
+
 .info-pane-toggles {
   display: flex;
   flex-wrap: wrap;
@@ -2814,6 +2825,12 @@ body {
 }
 
 .app.theme-light .tracking-badge.heuristic {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+  border-color: rgba(107, 114, 128, 0.3);
+}
+
+.app.theme-light .tracking-badge.standalone {
   background: rgba(107, 114, 128, 0.1);
   color: #6b7280;
   border-color: rgba(107, 114, 128, 0.3);
