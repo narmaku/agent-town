@@ -246,7 +246,7 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
  * process but discoverSessions() has nothing to report. Creates synthetic
  * sessions so the dashboard shows agents immediately.
  */
-function createPlaceholderSessions(
+export function createPlaceholderSessions(
   sessions: SessionInfo[],
   processMappings: Map<string, ProcessMapping>,
   activeMuxNames: Set<string>,
@@ -262,13 +262,14 @@ function createPlaceholderSessions(
 
     const placeholder: SessionInfo = {
       sessionId: `pending-${mapping.session}`,
+      agentType: mapping.agentType ?? "claude-code",
       slug: mapping.session,
       projectPath: cwd,
       projectName: basename(cwd),
       gitBranch: "",
-      status: "awaiting_input",
+      status: "starting",
       lastActivity: new Date().toISOString(),
-      lastMessage: "New session — send a message to get started",
+      lastMessage: "Starting up\u2026",
       cwd,
       multiplexer: mapping.multiplexer,
       multiplexerSession: mapping.session,
