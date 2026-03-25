@@ -105,7 +105,7 @@ async function deployAgent(node: RemoteNode): Promise<void> {
   });
   await mkdirProc.exited;
   if (mkdirProc.exitCode !== 0) {
-    const stderr = await new Response(mkdirProc.stderr).text();
+    const stderr = await Bun.readableStreamToText(mkdirProc.stderr);
     throw new Error(`SSH mkdir failed: ${stderr.trim()}`);
   }
 
@@ -129,7 +129,7 @@ async function deployAgent(node: RemoteNode): Promise<void> {
     );
     await syncDir.exited;
     if (syncDir.exitCode !== 0) {
-      const stderr = await new Response(syncDir.stderr).text();
+      const stderr = await Bun.readableStreamToText(syncDir.stderr);
       throw new Error(`rsync ${dir}/ failed: ${stderr.trim()}`);
     }
     log.debug(`deploy: [${node.name}] rsync ${dir}/ completed`);
@@ -165,11 +165,11 @@ async function deployAgent(node: RemoteNode): Promise<void> {
     stdout: "pipe",
     stderr: "pipe",
   });
-  const deployOut = await new Response(deployProc.stdout).text();
+  const deployOut = await Bun.readableStreamToText(deployProc.stdout);
   await deployProc.exited;
 
   if (deployProc.exitCode !== 0) {
-    const stderr = await new Response(deployProc.stderr).text();
+    const stderr = await Bun.readableStreamToText(deployProc.stderr);
     throw new Error(`Deploy script failed: ${stderr.trim()}`);
   }
 
@@ -227,11 +227,11 @@ print("HOOKS: configured")
     stdout: "pipe",
     stderr: "pipe",
   });
-  const output = await new Response(proc.stdout).text();
+  const output = await Bun.readableStreamToText(proc.stdout);
   await proc.exited;
 
   if (proc.exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
+    const stderr = await Bun.readableStreamToText(proc.stderr);
     log.warn(`hooks: failed to configure on ${sshTarget}: ${stderr.trim()}`);
   } else {
     log.info(`hooks: ${output.trim()}`);
@@ -282,7 +282,7 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
     stdout: "pipe",
     stderr: "pipe",
   });
-  const startOut = await new Response(startProc.stdout).text();
+  const startOut = await Bun.readableStreamToText(startProc.stdout);
   await startProc.exited;
   log.info(`tunnel: remote agent start: ${startOut.trim() || "(no output)"} exit=${startProc.exitCode}`);
 
@@ -381,11 +381,11 @@ export async function connectNode(nodeId: string): Promise<void> {
       ["ssh", ...buildSshOpts(node, ["-o", "BatchMode=yes"]), `${node.user}@${node.host}`, "echo ok"],
       { stdout: "pipe", stderr: "pipe" },
     );
-    const testOut = await new Response(testProc.stdout).text();
+    const testOut = await Bun.readableStreamToText(testProc.stdout);
     await testProc.exited;
 
     if (testProc.exitCode !== 0 || testOut.trim() !== "ok") {
-      const stderr = await new Response(testProc.stderr).text();
+      const stderr = await Bun.readableStreamToText(testProc.stderr);
       throw new Error(`SSH connection failed: ${stderr.trim() || "unknown error"}`);
     }
 
@@ -411,7 +411,7 @@ export async function connectNode(nodeId: string): Promise<void> {
       ["ssh", ...buildSshOpts(node, ["-o", "BatchMode=yes"]), `${node.user}@${node.host}`, "hostname"],
       { stdout: "pipe", stderr: "pipe" },
     );
-    const remoteHostname = (await new Response(hostnameProc.stdout).text()).trim();
+    const remoteHostname = (await Bun.readableStreamToText(hostnameProc.stdout)).trim();
     await hostnameProc.exited;
     if (remoteHostname) {
       hostToTunnelPort.set(remoteHostname, conn.localPort);
@@ -473,11 +473,11 @@ export async function testNodeConnection(node: {
       ],
       { stdout: "pipe", stderr: "pipe" },
     );
-    const stdout = await new Response(testProc.stdout).text();
+    const stdout = await Bun.readableStreamToText(testProc.stdout);
     await testProc.exited;
 
     if (testProc.exitCode !== 0) {
-      const stderr = await new Response(testProc.stderr).text();
+      const stderr = await Bun.readableStreamToText(testProc.stderr);
       log.warn(`test: SSH connection to ${node.user}@${node.host} failed: ${stderr.trim() || "unknown error"}`);
       return { ok: false, error: stderr.trim() || "Connection failed" };
     }
