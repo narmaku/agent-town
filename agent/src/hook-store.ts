@@ -7,8 +7,8 @@ const log = createLogger("hook-store");
 // After this, we fall back to JSONL heuristics.
 const STALE_THRESHOLD_MS = 60_000;
 
-/** How long a "done" session is retained before automatic cleanup (5 minutes). */
-export const DONE_EXPIRY_MS = 5 * 60 * 1000;
+/** How long a "done" session is retained before automatic cleanup (10 minutes). */
+export const DONE_EXPIRY_MS = 10 * 60 * 1000;
 
 /** How long any session (regardless of status) is retained without events (10 minutes). */
 export const MAX_STALE_MS = 10 * 60 * 1000;

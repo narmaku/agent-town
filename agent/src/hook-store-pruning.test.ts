@@ -47,15 +47,15 @@ describe("pruneExpiredSessions — edge cases", () => {
     expect(getHookState("s1")).toBeUndefined();
   });
 
-  test("working session between DONE_EXPIRY_MS and MAX_STALE_MS is not pruned", () => {
+  test("working session within MAX_STALE_MS is not pruned", () => {
     processHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
     expect(getHookState("s1")?.status).toBe("working");
 
     const sessions = getAllHookSessions();
     const entry = sessions.get("s1");
     if (entry) {
-      // Set time to be past DONE_EXPIRY_MS but within MAX_STALE_MS
-      entry.lastEventTime = Date.now() - DONE_EXPIRY_MS - 1;
+      // Set time to be within MAX_STALE_MS (but past STALE_THRESHOLD for getHookState)
+      entry.lastEventTime = Date.now() - MAX_STALE_MS + 1000;
     }
 
     pruneExpiredSessions();
@@ -128,16 +128,15 @@ describe("pruneExpiredSessions — edge cases", () => {
     expect(sessions.has("s2")).toBe(true);
   });
 
-  test("awaiting_input session between DONE_EXPIRY_MS and MAX_STALE_MS is not pruned", () => {
+  test("awaiting_input session within MAX_STALE_MS is not pruned", () => {
     processHookEvent({ session_id: "s1", hook_event_name: "Stop" });
     expect(getHookState("s1")?.status).toBe("awaiting_input");
 
     const sessions = getAllHookSessions();
     const entry = sessions.get("s1");
     if (entry) {
-      // Past DONE_EXPIRY_MS but within MAX_STALE_MS — should survive
-      // because done-expiry only applies to "done" status
-      entry.lastEventTime = Date.now() - DONE_EXPIRY_MS - 1;
+      // Within MAX_STALE_MS — should survive
+      entry.lastEventTime = Date.now() - MAX_STALE_MS + 1000;
     }
 
     pruneExpiredSessions();

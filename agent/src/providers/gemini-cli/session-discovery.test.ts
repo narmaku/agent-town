@@ -205,8 +205,8 @@ describe("Gemini session cache status recomputation", () => {
     expect(Number.isNaN(lastUpdatedMs)).toBe(false);
   });
 
-  test("cached session with old lastActivity would map to done status", () => {
-    // lastActivity = 15 minutes ago  =>  age > 10min  =>  "done"
+  test("cached session with old lastActivity would map to idle status (never done)", () => {
+    // lastActivity = 15 minutes ago  =>  age > 60s  =>  "idle" (done is hook-only)
     const oldTime = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const session = makeSessionInfo({ status: "working", lastActivity: oldTime });
     setCachedGeminiSession("/chats/a.json", { mtimeMs: 1000, session });
@@ -216,7 +216,7 @@ describe("Gemini session cache status recomputation", () => {
 
     const lastUpdatedMs = new Date(cached?.session.lastActivity).getTime();
     const age = Date.now() - lastUpdatedMs;
-    expect(age).toBeGreaterThan(10 * 60 * 1000);
+    expect(age).toBeGreaterThan(60_000);
 
     // Verify the lastActivity timestamp parses correctly
     expect(Number.isNaN(lastUpdatedMs)).toBe(false);

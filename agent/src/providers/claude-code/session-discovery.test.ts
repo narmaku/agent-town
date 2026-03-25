@@ -259,14 +259,14 @@ describe("parseClaudeSession", () => {
     expect(session?.status).toBe("idle");
   });
 
-  test("detects done status when mtime is more than 10 minutes ago", async () => {
+  test("detects idle status when mtime is more than 10 minutes ago (never returns done)", async () => {
     const entry = makeJsonlEntry();
     const filePath = await writeTempJsonl(tempDir, "done.jsonl", toJsonl([entry]));
     const mtimeMs = Date.now() - 15 * 60 * 1000; // 15 minutes ago
 
     const session = await parseClaudeSession(filePath, mtimeMs);
     expect(session).not.toBeNull();
-    expect(session?.status).toBe("done");
+    expect(session?.status).toBe("idle");
   });
 
   // -- summarizeLastMessage --
@@ -606,22 +606,22 @@ describe("session cache", () => {
 
     // Second call with same mtime but now time has passed -> "working" still
     // because mtime hasn't changed, the cached session gets status recomputed
-    // Let's use an old mtime that would map to "done" (> 10 min)
+    // Let's use an old mtime that would map to "idle" (> 60s, done is never returned)
     const oldMtime = Date.now() - 15 * 60 * 1000;
-    const entry2 = makeJsonlEntry({ sessionId: "status-done" });
-    const filePath2 = await writeTempJsonl(projectDir, "status-done.jsonl", toJsonl([entry2]));
+    const entry2 = makeJsonlEntry({ sessionId: "status-idle-old" });
+    const filePath2 = await writeTempJsonl(projectDir, "status-idle-old.jsonl", toJsonl([entry2]));
 
     // Parse once with the old mtime to populate cache
     const resultA = await parseClaudeSession(filePath2, oldMtime);
     expect(resultA).not.toBeNull();
-    expect(resultA?.status).toBe("done");
+    expect(resultA?.status).toBe("idle");
 
-    // Call again with same mtime -> cache hit, status should still be "done"
+    // Call again with same mtime -> cache hit, status should still be "idle"
     const resultB = await parseClaudeSession(filePath2, oldMtime);
     expect(resultB).not.toBeNull();
-    expect(resultB?.status).toBe("done");
+    expect(resultB?.status).toBe("idle");
     // Confirm it's actually a cache hit by checking sessionId is preserved
-    expect(resultB?.sessionId).toBe("status-done");
+    expect(resultB?.sessionId).toBe("status-idle-old");
   });
 
   test("cache does not store null results (empty or malformed files)", async () => {
