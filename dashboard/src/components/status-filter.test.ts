@@ -164,6 +164,14 @@ describe("loadStatusFilters and saveStatusFilters", () => {
     expect(result.size).toBe(0);
   });
 
+  test("ignores invalid status values in stored array", () => {
+    store[storageKey] = JSON.stringify(["working", "bogus", 42, "error", null]);
+    const result = loadStatusFilters();
+    expect(result.size).toBe(2);
+    expect(result.has("working")).toBe(true);
+    expect(result.has("error")).toBe(true);
+  });
+
   test("loads saved filters", () => {
     store[storageKey] = JSON.stringify(["working", "error"]);
     const result = loadStatusFilters();

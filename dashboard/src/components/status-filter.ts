@@ -2,6 +2,17 @@ import type { SessionInfo, SessionStatus } from "@agent-town/shared";
 
 const STATUS_FILTER_STORAGE_KEY = "agentTown:explorerStatusFilters";
 
+const VALID_STATUSES: ReadonlySet<string> = new Set<string>([
+  "starting",
+  "working",
+  "awaiting_input",
+  "action_required",
+  "idle",
+  "done",
+  "error",
+  "exited",
+]);
+
 /**
  * Toggle a status in the filter set. Returns a new set.
  * If the status is already in the set, remove it; otherwise add it.
@@ -47,7 +58,8 @@ export function loadStatusFilters(): Set<SessionStatus> {
     if (stored) {
       const parsed: unknown = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        return new Set(parsed as SessionStatus[]);
+        const valid = parsed.filter((v): v is SessionStatus => typeof v === "string" && VALID_STATUSES.has(v));
+        return new Set(valid);
       }
     }
   } catch (_err) {
