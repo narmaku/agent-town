@@ -68,8 +68,7 @@ function detectClaudeStatus(lastModifiedMs: number): SessionStatus {
 
   if (age < 30_000) return "working";
   if (age < 60_000) return "awaiting_input";
-  if (age < 10 * 60 * 1000) return "idle";
-  return "done";
+  return "idle";
 }
 
 /** Discover Claude Code sessions by scanning JSONL files in ~/.claude/projects/. */
