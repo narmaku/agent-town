@@ -121,8 +121,12 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     // (works for both pending-* placeholders and real UUID sessions)
     if (s.multiplexerSession && pendingNameByMux.has(s.multiplexerSession)) {
       const pendingName = pendingNameByMux.get(s.multiplexerSession) as string;
-      sessionNames.set(s.sessionId, pendingName);
-      didPersist = true;
+      // Only persist for real session IDs — pending-* IDs are temporary
+      // and would pollute session-names.json with dead entries
+      if (!s.sessionId.startsWith("pending-")) {
+        sessionNames.set(s.sessionId, pendingName);
+        didPersist = true;
+      }
       return { ...s, customName: pendingName };
     }
     // Auto-populate from multiplexer session name and persist it so the
