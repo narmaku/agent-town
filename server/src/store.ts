@@ -99,14 +99,35 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     }
   }
 
+  // Build a lookup from multiplexer session name → pending session name
+  // so user-provided names transfer from pending sessions to real/placeholder ones
+  const pendingNameByMux = new Map<string, string>();
+  for (const [, pending] of pendingSessions) {
+    if (pending.machineId !== heartbeat.machineId) continue;
+    pendingNameByMux.set(pending.sessionName, pending.sessionName);
+  }
+
   // Apply custom names to incoming sessions:
   // 1. Use saved custom name if available (persisted across restarts)
-  // 2. Fall back to multiplexer session name (auto-populate + persist)
+  // 2. Transfer name from matching pending session (user-provided name)
+  // 3. Fall back to multiplexer session name (auto-populate + persist)
   let didPersist = false;
   const sessions = heartbeat.sessions.map((s) => {
     const saved = sessionNames.get(s.sessionId);
     if (saved) {
       return { ...s, customName: saved };
+    }
+    // Transfer user-provided name from pending session to incoming session
+    // (works for both pending-* placeholders and real UUID sessions)
+    if (s.multiplexerSession && pendingNameByMux.has(s.multiplexerSession)) {
+      const pendingName = pendingNameByMux.get(s.multiplexerSession) as string;
+      // Only persist for real session IDs — pending-* IDs are temporary
+      // and would pollute session-names.json with dead entries
+      if (!s.sessionId.startsWith("pending-")) {
+        sessionNames.set(s.sessionId, pendingName);
+        didPersist = true;
+      }
+      return { ...s, customName: pendingName };
     }
     // Auto-populate from multiplexer session name and persist it so the
     // name survives even when the multiplexer session is killed/closed.
@@ -119,7 +140,8 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     // Fallback: use project name + short ID for sessions without multiplexer
     // This is computed on the fly and NOT persisted to session-names.json
     if (s.projectName && !s.customName) {
-      return { ...s, customName: `${s.projectName} (${s.sessionId.slice(0, 8)})` };
+      const shortId = s.sessionId.startsWith("pending-") ? s.sessionId.slice(8, 16) : s.sessionId.slice(0, 8);
+      return { ...s, customName: `${s.projectName} (${shortId})` };
     }
     return s;
   });
