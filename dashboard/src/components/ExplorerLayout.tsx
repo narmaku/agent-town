@@ -384,13 +384,30 @@ export function ExplorerLayout({
   const selectedMachine = selected ? machines.find((m) => m.machineId === selected.machineId) : null;
   const activeSession = selectedMachine?.sessions.find((s) => s.sessionId === selected?.sessionId) ?? null;
 
-  // Clear selection when the selected session disappears
+  // Clear selection when the selected session disappears, but follow
+  // pending-* → real session transitions instead of clearing
   useEffect(() => {
     if (!selected) return;
     const found = machines.some(
       (m) => m.machineId === selected.machineId && m.sessions.some((s) => s.sessionId === selected.sessionId),
     );
-    if (!found) setSelected(null);
+    if (found) return;
+
+    // If the selected session was a pending-* placeholder, look for the
+    // real session that replaced it (matched by multiplexerSession name)
+    if (selected.sessionId.startsWith("pending-")) {
+      const muxName = selected.sessionId.slice(8); // "pending-<muxName>" → "<muxName>"
+      const machine = machines.find((m) => m.machineId === selected.machineId);
+      const replacement = machine?.sessions.find(
+        (s) => s.multiplexerSession === muxName && !s.sessionId.startsWith("pending-"),
+      );
+      if (replacement) {
+        setSelected({ machineId: selected.machineId, sessionId: replacement.sessionId });
+        return;
+      }
+    }
+
+    setSelected(null);
   }, [selected, machines]);
 
   // Sync initialSelection from parent (e.g. activity feed navigation)
