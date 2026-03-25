@@ -1,6 +1,5 @@
-import { join } from "node:path";
-
 import { describe, expect, mock, test } from "bun:test";
+import { join } from "node:path";
 
 import { handleClaudeHookEvent } from "./hook-handler";
 
@@ -9,10 +8,9 @@ const PROCESS_MAPPER_PATH = join(import.meta.dir, "process-mapper.ts");
 
 // Keep the real matchSessionByBirthTime and extractClaudeSessionIdFromArgs,
 // only mock findSessionCandidates so we can control what candidates are returned.
-const {
-  extractClaudeSessionIdFromArgs: realExtract,
-  matchSessionByBirthTime: realMatchByBirthTime,
-} = await import("./process-mapper");
+const { extractClaudeSessionIdFromArgs: realExtract, matchSessionByBirthTime: realMatchByBirthTime } = await import(
+  "./process-mapper"
+);
 
 let mockCandidates: { id: string; birthtimeMs: number }[] = [];
 
@@ -115,7 +113,11 @@ describe("ClaudeCodeProvider", () => {
     mockCandidates = [{ id: "claimed-session", birthtimeMs: now - 5_000 }];
     const processStartMs = now - 6_000;
 
-    const result = await provider.matchProcessToSessionId("/some/project", processStartMs, new Set(["claimed-session"]));
+    const result = await provider.matchProcessToSessionId(
+      "/some/project",
+      processStartMs,
+      new Set(["claimed-session"]),
+    );
     expect(result).toBeUndefined();
   });
 

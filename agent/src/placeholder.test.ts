@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { SessionInfo } from "@agent-town/shared";
 
-import { createPlaceholderSessions } from "./index";
+import { createPlaceholderSessions } from "./placeholder-sessions";
 import type { ProcessMapping } from "./process-mapper";
 
 function makeMapping(overrides: Partial<ProcessMapping> = {}): ProcessMapping {

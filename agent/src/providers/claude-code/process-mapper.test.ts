@@ -240,9 +240,7 @@ describe("matchSessionByBirthTime", () => {
   test("does not match candidates with birthtimeMs of 0", () => {
     // When birthtimeMs is 0 (unavailable on some filesystems), the diff from any
     // real process start time will far exceed BIRTHTIME_MATCH_WINDOW_MS
-    const candidates: SessionCandidate[] = [
-      { id: "no-birthtime", birthtimeMs: 0 },
-    ];
+    const candidates: SessionCandidate[] = [{ id: "no-birthtime", birthtimeMs: 0 }];
     const processStartMs = now - 5_000;
 
     const result = matchSessionByBirthTime(candidates, processStartMs, new Set());

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, hostname, platform } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import {
   createLogger,
   type Heartbeat,
@@ -12,6 +12,7 @@ import {
 } from "@agent-town/shared";
 import { getHookState, updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
+import { createPlaceholderSessions } from "./placeholder-sessions";
 import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
@@ -238,44 +239,6 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
   }
 
   if (muxAssocChanged) saveLastKnownMux();
-}
-
-/**
- * Create placeholder sessions for running agents that haven't exchanged
- * any messages yet (no JSONL file). The process mapper finds the agent
- * process but discoverSessions() has nothing to report. Creates synthetic
- * sessions so the dashboard shows agents immediately.
- */
-export function createPlaceholderSessions(
-  sessions: SessionInfo[],
-  processMappings: Map<string, ProcessMapping>,
-  activeMuxNames: Set<string>,
-): void {
-  const mappedMuxSessions = new Set(sessions.filter((s) => s.multiplexerSession).map((s) => s.multiplexerSession));
-
-  for (const [key, mapping] of processMappings) {
-    if (mappedMuxSessions.has(mapping.session)) continue; // already mapped
-    if (!activeMuxNames.has(mapping.session)) continue; // multiplexer session doesn't exist
-
-    const cwd = key.startsWith("cwd:") ? key.slice(4) : "";
-    if (!cwd) continue; // session ID-based key but no matching session — skip
-
-    const placeholder: SessionInfo = {
-      sessionId: `pending-${mapping.session}`,
-      agentType: mapping.agentType ?? "claude-code",
-      slug: mapping.session,
-      projectPath: cwd,
-      projectName: basename(cwd),
-      gitBranch: "",
-      status: "starting",
-      lastActivity: new Date().toISOString(),
-      lastMessage: "Starting up\u2026",
-      cwd,
-      multiplexer: mapping.multiplexer,
-      multiplexerSession: mapping.session,
-    };
-    sessions.push(placeholder);
-  }
 }
 
 async function sendHeartbeat(): Promise<void> {
