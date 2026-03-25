@@ -121,8 +121,7 @@ function detectGeminiStatus(lastUpdatedMs: number): SessionStatus {
 
   if (age < 30_000) return "working";
   if (age < 60_000) return "awaiting_input";
-  if (age < 10 * 60 * 1000) return "idle";
-  return "done";
+  return "idle";
 }
 
 /** Load the projects.json mapping file. Returns a reverse map: hash -> path. */
