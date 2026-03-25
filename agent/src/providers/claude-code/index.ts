@@ -55,15 +55,7 @@ export class ClaudeCodeProvider implements AgentProvider {
     claimedIds: Set<string>,
   ): Promise<string | undefined> {
     const candidates = await findSessionCandidates(cwd);
-    let sessionId = matchSessionByBirthTime(candidates, processStartMs, claimedIds);
-
-    // Fallback: newest unclaimed JSONL in the exact directory
-    if (!sessionId && candidates.length > 0) {
-      const sorted = [...candidates].sort((a, b) => b.birthtimeMs - a.birthtimeMs);
-      sessionId = sorted.find((c) => !claimedIds.has(c.id))?.id;
-    }
-
-    return sessionId;
+    return matchSessionByBirthTime(candidates, processStartMs, claimedIds);
   }
 
   async deleteSessionData(sessionId: string): Promise<boolean> {
