@@ -21,6 +21,12 @@ function processHookEvent(event: {
   if (result) updateHookState(result);
 }
 
+describe("hook-store constants", () => {
+  test("DONE_EXPIRY_MS is 10 minutes", () => {
+    expect(DONE_EXPIRY_MS).toBe(10 * 60 * 1000);
+  });
+});
+
 describe("hook-store", () => {
   beforeEach(() => {
     clearHookSessions();
