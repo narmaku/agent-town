@@ -5,7 +5,8 @@ const log = createLogger("hook-store");
 
 // How long before a hook session is considered stale (no events received).
 // After this, we fall back to JSONL heuristics.
-const STALE_THRESHOLD_MS = 60_000;
+// 5 minutes covers long-running tools (npm install, large builds, heavy thinking).
+const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
 /** How long a "done" session is retained before automatic cleanup (10 minutes). */
 export const DONE_EXPIRY_MS = 10 * 60 * 1000;
@@ -16,12 +17,22 @@ export const MAX_STALE_MS = 10 * 60 * 1000;
 /** How often the periodic cleanup runs (1 minute). */
 const CLEANUP_INTERVAL_MS = 60_000;
 
+/**
+ * Grace period for working → awaiting_input transitions.
+ * Claude fires Stop (awaiting_input) then PreToolUse (working) in rapid
+ * succession during multi-tool chains. Without a grace period, the dashboard
+ * flickers and triggers spurious notifications.
+ */
+const WORKING_GRACE_MS = 5_000;
+
 export interface HookSessionState {
   sessionId: string;
   status: SessionStatus;
   lastEvent: string;
   lastEventTime: number;
   currentTool?: string;
+  /** Timestamp of the last "working" status, used for grace period debouncing. */
+  lastWorkingTime?: number;
 }
 
 // In-memory store: session_id → latest state (provider-agnostic)
@@ -35,12 +46,16 @@ export function updateHookState(result: HookEventResult): void {
   const { sessionId, status, currentTool } = result;
   if (!sessionId) return;
 
+  const prev = sessions.get(sessionId);
+  const now = Date.now();
+
   sessions.set(sessionId, {
     sessionId,
     status,
     lastEvent: status,
-    lastEventTime: Date.now(),
+    lastEventTime: now,
     currentTool,
+    lastWorkingTime: status === "working" ? now : prev?.lastWorkingTime,
   });
 
   log.debug(`hook: session=${truncateId(sessionId)} status=${status}${currentTool ? ` tool=${currentTool}` : ""}`);
@@ -53,11 +68,18 @@ export function updateHookState(result: HookEventResult): void {
 export function getHookState(sessionId: string): HookSessionState | undefined {
   const state = sessions.get(sessionId);
   if (!state) return undefined;
-  const elapsed = Date.now() - state.lastEventTime;
-  // Expire transient states (working) after 60s without events.
+  const now = Date.now();
+  const elapsed = now - state.lastEventTime;
+  // Expire transient states (working) after threshold without events.
   // "done" persists here (periodic pruneExpiredSessions handles
   // long-term cleanup after DONE_EXPIRY_MS).
   if (elapsed > STALE_THRESHOLD_MS && state.status === "working") return undefined;
+  // Grace period: brief "awaiting_input" right after "working" is likely
+  // a tool transition (Stop → PreToolUse), not a real pause. Keep
+  // reporting "working" for a few seconds to absorb the flicker.
+  if (state.status === "awaiting_input" && state.lastWorkingTime && now - state.lastWorkingTime < WORKING_GRACE_MS) {
+    return { ...state, status: "working", currentTool: undefined };
+  }
   return state;
 }
 

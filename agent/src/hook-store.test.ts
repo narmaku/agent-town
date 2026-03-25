@@ -75,9 +75,31 @@ describe("hook-store", () => {
     expect(state?.currentTool).toBeUndefined();
   });
 
-  test("Stop sets awaiting_input", () => {
+  test("Stop after working reports working during grace period", () => {
     processHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
     processHookEvent({ session_id: "s1", hook_event_name: "Stop" });
+    // Within the 5s grace period, should still report "working"
+    expect(getHookState("s1")?.status).toBe("working");
+  });
+
+  test("Stop after working reports awaiting_input after grace period", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
+    processHookEvent({ session_id: "s1", hook_event_name: "Stop" });
+
+    // Simulate grace period expiring by backdating lastWorkingTime
+    const sessions = getAllHookSessions();
+    const entry = sessions.get("s1");
+    if (entry) {
+      entry.lastWorkingTime = Date.now() - 10_000; // 10s ago, past 5s grace
+    }
+
+    expect(getHookState("s1")?.status).toBe("awaiting_input");
+  });
+
+  test("Stop without prior working sets awaiting_input immediately", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "SessionStart" });
+    processHookEvent({ session_id: "s1", hook_event_name: "Stop" });
+    // No prior "working" → no grace period → immediate awaiting_input
     expect(getHookState("s1")?.status).toBe("awaiting_input");
   });
 
@@ -119,27 +141,42 @@ describe("hook-store", () => {
     expect(getHookState("s1")?.currentTool).toBeUndefined();
 
     processHookEvent({ session_id: "s1", hook_event_name: "Stop" });
-    expect(getHookState("s1")?.status).toBe("awaiting_input");
+    // Within grace period after working → still "working"
+    expect(getHookState("s1")?.status).toBe("working");
   });
 
   test("tracks multiple sessions independently", () => {
     processHookEvent({ session_id: "a", hook_event_name: "UserPromptSubmit" });
+    // Session b: Stop without prior working → no grace period
+    processHookEvent({ session_id: "b", hook_event_name: "SessionStart" });
     processHookEvent({ session_id: "b", hook_event_name: "Stop" });
     expect(getHookState("a")?.status).toBe("working");
     expect(getHookState("b")?.status).toBe("awaiting_input");
   });
 
-  test("stale working sessions return undefined", () => {
+  test("stale working sessions return undefined after 5 minutes", () => {
     processHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
     expect(getHookState("s1")?.status).toBe("working");
 
     const sessions = getAllHookSessions();
     const entry = sessions.get("s1");
     if (entry) {
-      entry.lastEventTime = Date.now() - 120_000; // 2 minutes ago
+      entry.lastEventTime = Date.now() - 6 * 60 * 1000; // 6 minutes ago
     }
 
     expect(getHookState("s1")).toBeUndefined();
+  });
+
+  test("working sessions within 5 minutes are not stale", () => {
+    processHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
+
+    const sessions = getAllHookSessions();
+    const entry = sessions.get("s1");
+    if (entry) {
+      entry.lastEventTime = Date.now() - 3 * 60 * 1000; // 3 minutes ago
+    }
+
+    expect(getHookState("s1")?.status).toBe("working");
   });
 
   test("stale awaiting_input sessions still return state", () => {
