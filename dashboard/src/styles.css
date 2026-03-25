@@ -3938,6 +3938,33 @@ body {
   padding: 12px 16px;
   min-width: 100px;
   border-left: 3px solid;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  user-select: none;
+}
+
+.dashboard-status-card:hover {
+  background: var(--bg-elevated);
+  border-color: var(--text-muted);
+}
+
+.dashboard-status-card:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.dashboard-status-card.active {
+  background: var(--bg-elevated);
+  border-color: var(--text-secondary);
+  box-shadow: 0 0 0 1px var(--text-muted);
+}
+
+.dashboard-status-card.muted {
+  opacity: 0.4;
+}
+
+.dashboard-status-card.muted:hover {
+  opacity: 0.7;
 }
 
 .dashboard-status-count {

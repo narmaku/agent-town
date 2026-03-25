@@ -8,6 +8,13 @@ import { AGENT_TYPE_LABELS, API, STATUS_CONFIG, shortenPath, timeAgo } from "../
 import { DashboardIcon } from "./icons";
 import { buildGroups, filterSessionsByTime, sortSessions } from "./MachineGroup";
 import { SessionDetail } from "./SessionDetail";
+import {
+  filterRawSessionsByStatus,
+  filterSessionsByStatus,
+  loadStatusFilters,
+  saveStatusFilters,
+  toggleStatusFilter,
+} from "./status-filter";
 
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 200;
@@ -171,10 +178,14 @@ function ExplorerDashboard({
   allMachines,
   onSelect,
   onLaunchAgent,
+  activeStatusFilters,
+  onToggleStatusFilter,
 }: {
   allMachines: MachineInfo[];
   onSelect: (machineId: string, sessionId: string) => void;
   onLaunchAgent?: (machineId: string) => void;
+  activeStatusFilters: Set<SessionStatus>;
+  onToggleStatusFilter: (status: SessionStatus) => void;
 }) {
   const allSessions: { machineId: string; session: SessionInfo }[] = [];
   for (const m of allMachines) {
@@ -183,7 +194,7 @@ function ExplorerDashboard({
     }
   }
 
-  // Status summary counts
+  // Status summary counts (always from unfiltered sessions)
   const statusCounts: Partial<Record<SessionStatus, number>> = {};
   for (const { session } of allSessions) {
     statusCounts[session.status] = (statusCounts[session.status] || 0) + 1;
@@ -200,18 +211,29 @@ function ExplorerDashboard({
     "error",
   ];
 
-  // Sessions needing attention
-  const attentionSessions = allSessions
-    .filter(
+  const hasActiveFilter = activeStatusFilters.size > 0;
+
+  // Sessions needing attention (filtered by status filter)
+  const attentionSessions = filterSessionsByStatus(
+    allSessions.filter(
       ({ session }) =>
         session.status === "awaiting_input" || session.status === "action_required" || session.status === "exited",
-    )
-    .sort((a, b) => new Date(b.session.lastActivity).getTime() - new Date(a.session.lastActivity).getTime());
+    ),
+    activeStatusFilters,
+  ).sort((a, b) => new Date(b.session.lastActivity).getTime() - new Date(a.session.lastActivity).getTime());
 
-  // Recent activity - last 5
-  const recentSessions = [...allSessions]
+  // Recent activity - last 5 (filtered by status filter)
+  const filteredSessions = filterSessionsByStatus(allSessions, activeStatusFilters);
+  const recentSessions = [...filteredSessions]
     .sort((a, b) => new Date(b.session.lastActivity).getTime() - new Date(a.session.lastActivity).getTime())
     .slice(0, 5);
+
+  function handleCardKeyDown(e: React.KeyboardEvent, status: SessionStatus) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onToggleStatusFilter(status);
+    }
+  }
 
   return (
     <div className="explorer-dashboard">
@@ -223,26 +245,45 @@ function ExplorerDashboard({
           {/* Status summary cards */}
           <div className="dashboard-status-cards">
             {statusOrder
-              .filter((status) => (statusCounts[status] || 0) > 0)
-              .map((status) => (
-                <div
-                  key={status}
-                  className="dashboard-status-card"
-                  style={{ borderLeftColor: STATUS_CONFIG[status].color }}
-                >
-                  <div className="dashboard-status-count" style={{ color: STATUS_CONFIG[status].color }}>
-                    {statusCounts[status]}
+              .filter((status) => (statusCounts[status] || 0) > 0 || activeStatusFilters.has(status))
+              .map((status) => {
+                const isActive = activeStatusFilters.has(status);
+                const isMuted = hasActiveFilter && !isActive;
+                const cardClasses = ["dashboard-status-card", isActive ? "active" : "", isMuted ? "muted" : ""]
+                  .filter(Boolean)
+                  .join(" ");
+
+                return (
+                  // biome-ignore lint/a11y/useSemanticElements: status card acts as toggle button
+                  <div
+                    key={status}
+                    className={cardClasses}
+                    style={{ borderLeftColor: STATUS_CONFIG[status].color }}
+                    onClick={() => onToggleStatusFilter(status)}
+                    onKeyDown={(e) => handleCardKeyDown(e, status)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Filter by ${STATUS_CONFIG[status].label}: ${statusCounts[status] || 0} sessions`}
+                    aria-pressed={isActive}
+                  >
+                    <div className="dashboard-status-count" style={{ color: STATUS_CONFIG[status].color }}>
+                      {statusCounts[status] || 0}
+                    </div>
+                    <div className="dashboard-status-label">{STATUS_CONFIG[status].label}</div>
                   </div>
-                  <div className="dashboard-status-label">{STATUS_CONFIG[status].label}</div>
-                </div>
-              ))}
+                );
+              })}
           </div>
 
           {/* Sessions needing attention */}
           <h3>Needs Attention</h3>
           <div className="dashboard-session-list">
             {attentionSessions.length === 0 ? (
-              <div className="dashboard-all-clear">All clear — no sessions need attention</div>
+              <div className="dashboard-all-clear">
+                {hasActiveFilter
+                  ? "No attention sessions match the active filter"
+                  : "All clear \u2014 no sessions need attention"}
+              </div>
             ) : (
               attentionSessions.map(({ machineId, session }) => (
                 <SessionEntry key={session.sessionId} session={session} machineId={machineId} onSelect={onSelect} />
@@ -254,7 +295,9 @@ function ExplorerDashboard({
           <h3>Recent Activity</h3>
           <div className="dashboard-session-list">
             {recentSessions.length === 0 ? (
-              <div className="dashboard-all-clear">No sessions</div>
+              <div className="dashboard-all-clear">
+                {hasActiveFilter ? "No sessions match the active filter" : "No sessions"}
+              </div>
             ) : (
               recentSessions.map(({ machineId, session }) => (
                 <SessionEntry
@@ -305,6 +348,16 @@ export function ExplorerLayout({
   const [renaming, setRenaming] = useState<{ machineId: string; sessionId: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [activeStatusFilters, setActiveStatusFilters] = useState<Set<SessionStatus>>(loadStatusFilters);
+
+  function handleToggleStatusFilter(status: SessionStatus) {
+    setActiveStatusFilters((prev) => {
+      const next = toggleStatusFilter(prev, status);
+      saveStatusFilters(next);
+      return next;
+    });
+  }
+
   const [sidebarVisible, setSidebarVisible] = useState(() => {
     try {
       const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
@@ -505,9 +558,10 @@ export function ExplorerLayout({
 
               {!machineCollapsed &&
                 groups.map(([groupLabel, sessions]) => {
-                  const filtered = hideIdle
+                  const hiddenByIdle = hideIdle
                     ? sessions.filter((s) => s.status !== "idle" && s.status !== "done")
                     : sessions;
+                  const filtered = filterRawSessionsByStatus(hiddenByIdle, activeStatusFilters);
                   const sorted = sortSessions(filtered, sortMode);
                   if (sorted.length === 0) return null;
 
@@ -688,6 +742,8 @@ export function ExplorerLayout({
             allMachines={allMachines}
             onSelect={(machineId, sessionId) => selectSession(machineId, sessionId)}
             onLaunchAgent={onLaunchAgent}
+            activeStatusFilters={activeStatusFilters}
+            onToggleStatusFilter={handleToggleStatusFilter}
           />
         )}
       </div>
