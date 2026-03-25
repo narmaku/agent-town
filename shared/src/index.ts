@@ -95,6 +95,7 @@ export interface Settings {
   theme: "dark" | "light";
   enableKeyboardNavigation: boolean;
   keyboardShortcuts: Record<string, string>;
+  openTerminalFullscreen: boolean;
 }
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: Record<string, string> = {

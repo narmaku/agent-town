@@ -5,7 +5,9 @@ import {
   getAllMachines,
   getMachine,
   getSavedSessionName,
+  getSettings,
   renameSession,
+  updateSettings,
   upsertMachine,
 } from "./store";
 
@@ -372,6 +374,36 @@ describe("store", () => {
     expect(expired).toBeUndefined();
   });
 
+  test("default settings include openTerminalFullscreen as true", () => {
+    const settings = getSettings();
+    expect(settings.openTerminalFullscreen).toBe(true);
+  });
+
+  test("updateSettings toggles openTerminalFullscreen", () => {
+    const updated = updateSettings({ openTerminalFullscreen: false });
+    expect(updated.openTerminalFullscreen).toBe(false);
+
+    const retrieved = getSettings();
+    expect(retrieved.openTerminalFullscreen).toBe(false);
+
+    // Restore to default for other tests
+    updateSettings({ openTerminalFullscreen: true });
+  });
+
+  test("updateSettings preserves other settings when patching openTerminalFullscreen", () => {
+    const before = getSettings();
+    updateSettings({ openTerminalFullscreen: false });
+    const after = getSettings();
+
+    expect(after.openTerminalFullscreen).toBe(false);
+    expect(after.defaultMultiplexer).toBe(before.defaultMultiplexer);
+    expect(after.theme).toBe(before.theme);
+    expect(after.fontSize).toBe(before.fontSize);
+    expect(after.enableKeyboardNavigation).toBe(before.enableKeyboardNavigation);
+
+    // Restore
+    updateSettings({ openTerminalFullscreen: true });
+  });
   test("pending session name transfers to agent-side placeholder via heartbeat", () => {
     // Step 1: Machine registers
     upsertMachine(makeHeartbeat({ machineId: "transfer-test", hostname: "transfer-host" }));
