@@ -59,6 +59,15 @@ describe("toggleStatusFilter", () => {
     expect(original.size).toBe(1);
     expect(original.has("working")).toBe(true);
   });
+
+  test("toggling the same status twice returns to original state", () => {
+    const original = new Set(["idle"] as SessionStatus[]);
+    const afterAdd = toggleStatusFilter(original, "working");
+    const afterRemove = toggleStatusFilter(afterAdd, "working");
+    expect(afterRemove.size).toBe(1);
+    expect(afterRemove.has("idle")).toBe(true);
+    expect(afterRemove.has("working")).toBe(false);
+  });
 });
 
 describe("filterSessionsByStatus", () => {
@@ -97,6 +106,16 @@ describe("filterSessionsByStatus", () => {
     expect(result[0].session.sessionId).toBe("s1");
     expect(result[1].session.sessionId).toBe("s4");
   });
+
+  test("returns empty array when input is empty", () => {
+    const result = filterSessionsByStatus([], new Set(["working"] as SessionStatus[]));
+    expect(result.length).toBe(0);
+  });
+
+  test("returns empty array when input is empty and filter is empty", () => {
+    const result = filterSessionsByStatus([], new Set());
+    expect(result.length).toBe(0);
+  });
 });
 
 describe("filterRawSessionsByStatus", () => {
@@ -120,6 +139,22 @@ describe("filterRawSessionsByStatus", () => {
 
   test("returns empty array when no sessions match", () => {
     const result = filterRawSessionsByStatus(sessions, new Set(["done"] as SessionStatus[]));
+    expect(result.length).toBe(0);
+  });
+
+  test("filters to a single status", () => {
+    const result = filterRawSessionsByStatus(sessions, new Set(["idle"] as SessionStatus[]));
+    expect(result.length).toBe(1);
+    expect(result[0].sessionId).toBe("s2");
+  });
+
+  test("returns empty array when input is empty", () => {
+    const result = filterRawSessionsByStatus([], new Set(["working"] as SessionStatus[]));
+    expect(result.length).toBe(0);
+  });
+
+  test("returns empty array when input is empty and filter is empty", () => {
+    const result = filterRawSessionsByStatus([], new Set());
     expect(result.length).toBe(0);
   });
 });
@@ -206,5 +241,62 @@ describe("loadStatusFilters and saveStatusFilters", () => {
     saveStatusFilters(new Set());
     const loaded = loadStatusFilters();
     expect(loaded.size).toBe(0);
+  });
+
+  test("returns empty set when stored array is empty", () => {
+    store[storageKey] = JSON.stringify([]);
+    const result = loadStatusFilters();
+    expect(result.size).toBe(0);
+  });
+
+  test("deduplicates stored values", () => {
+    store[storageKey] = JSON.stringify(["working", "working", "error"]);
+    const result = loadStatusFilters();
+    expect(result.size).toBe(2);
+    expect(result.has("working")).toBe(true);
+    expect(result.has("error")).toBe(true);
+  });
+
+  test("loads all valid status types", () => {
+    const allStatuses: SessionStatus[] = [
+      "starting",
+      "working",
+      "awaiting_input",
+      "action_required",
+      "idle",
+      "done",
+      "error",
+      "exited",
+    ];
+    saveStatusFilters(new Set(allStatuses));
+    const loaded = loadStatusFilters();
+    expect(loaded.size).toBe(8);
+    for (const status of allStatuses) {
+      expect(loaded.has(status)).toBe(true);
+    }
+  });
+
+  test("saveStatusFilters handles localStorage setItem throwing", () => {
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+      removeItem: () => {},
+    };
+    // Should not throw
+    expect(() => saveStatusFilters(new Set(["working"] as SessionStatus[]))).not.toThrow();
+  });
+
+  test("loadStatusFilters handles localStorage getItem throwing", () => {
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      setItem: () => {},
+      removeItem: () => {},
+    };
+    const result = loadStatusFilters();
+    expect(result.size).toBe(0);
   });
 });
