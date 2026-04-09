@@ -675,12 +675,16 @@ describe("store", () => {
       multiplexerSession: "my-session",
       multiplexer: "tmux" as const,
     };
-    upsertMachine(makeHeartbeat({ machineId: "persist-transfer", hostname: "persist-transfer-host", sessions: [session] }));
+    upsertMachine(
+      makeHeartbeat({ machineId: "persist-transfer", hostname: "persist-transfer-host", sessions: [session] }),
+    );
 
     expect(getMachine("persist-transfer")?.sessions[0].customName).toBe("my-session");
 
     // Second heartbeat: pending is already removed, name should survive via saved names
-    upsertMachine(makeHeartbeat({ machineId: "persist-transfer", hostname: "persist-transfer-host", sessions: [session] }));
+    upsertMachine(
+      makeHeartbeat({ machineId: "persist-transfer", hostname: "persist-transfer-host", sessions: [session] }),
+    );
 
     expect(getMachine("persist-transfer")?.sessions[0].customName).toBe("my-session");
     expect(getSavedSessionName("uuid-persist-transfer")).toBe("my-session");
