@@ -645,9 +645,10 @@ export function SessionDetail({
                   <button
                     type="button"
                     className="action-btn terminal-btn"
-                    onClick={() =>
-                      onOpenTerminalFullscreen(session.multiplexerSession ?? "", session.multiplexer ?? "zellij")
-                    }
+                    onClick={() => {
+                      setActiveTab("chat");
+                      onOpenTerminalFullscreen(session.multiplexerSession ?? "", session.multiplexer ?? "zellij");
+                    }}
                     aria-label="Open terminal in fullscreen"
                   >
                     Fullscreen
