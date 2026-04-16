@@ -10,6 +10,7 @@ import {
   type TerminalMultiplexer,
   truncateId,
 } from "@agent-town/shared";
+import { configureLocalHooks } from "./hook-setup";
 import { getHookState, updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
 import { createPlaceholderSessions } from "./placeholder-sessions";
@@ -299,6 +300,9 @@ async function main(): Promise<void> {
 
   // Initialize agent providers (Claude Code, OpenCode, etc.)
   await initializeProviders();
+
+  // Configure local Claude Code hooks to point to this agent
+  configureLocalHooks(TERMINAL_PORT);
 
   // Start OpenCode SSE event subscription for real-time status
   const openCodeProvider = getProvider("opencode") as OpenCodeProvider | undefined;

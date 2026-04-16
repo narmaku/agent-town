@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
 import type { Server, Subprocess } from "bun";
 import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
+import { configureLocalHooks } from "./hook-setup";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { listDirectories, validateListDirsPath } from "./list-dirs";
 import { getAllProviders, getProvider } from "./providers/registry";
@@ -1100,6 +1101,17 @@ export function startTerminalServer(port: number, machineId: string): Server {
         } catch (err) {
           log.error(`rename failed: ${err instanceof Error ? err.message : String(err)}`);
           return Response.json({ error: "Failed to rename session" }, { status: 500 });
+        }
+      }
+
+      // HTTP endpoint: (re)configure local Claude Code hooks
+      if (url.pathname === "/api/setup-hooks" && req.method === "POST") {
+        try {
+          configureLocalHooks(port);
+          return Response.json({ ok: true, message: "Hooks configured" });
+        } catch (err) {
+          log.error(`setup-hooks: ${err instanceof Error ? err.message : String(err)}`);
+          return Response.json({ error: "Failed to configure hooks" }, { status: 500 });
         }
       }
 
