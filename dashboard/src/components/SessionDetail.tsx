@@ -112,6 +112,7 @@ interface Props {
   autoDeleteOnClose?: boolean;
   onClose?: () => void;
   extraActions?: React.ReactNode;
+  initialTab?: SessionTab;
 }
 
 export function SessionDetail({
@@ -123,6 +124,7 @@ export function SessionDetail({
   autoDeleteOnClose,
   onClose,
   extraActions,
+  initialTab,
 }: Props) {
   const config = STATUS_CONFIG[session.status];
   const hasTerminal = session.multiplexer && session.multiplexerSession;
@@ -154,7 +156,7 @@ export function SessionDetail({
   const [showDiff, setShowDiff] = useState(false);
   const [infoPaneVisible, setInfoPaneVisible] = useState(loadInfoPaneVisible);
   const [infoPaneOverlay, setInfoPaneOverlay] = useState(false);
-  const [activeTab, setActiveTab] = useState<SessionTab>("chat");
+  const [activeTab, setActiveTab] = useState<SessionTab>(initialTab ?? "chat");
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [pendingTerminalSwitch, setPendingTerminalSwitch] = useState(false);

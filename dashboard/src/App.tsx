@@ -153,6 +153,7 @@ export function App(): React.JSX.Element {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [explorerSelection, setExplorerSelection] = useState<FullscreenTarget | null>(null);
+  const [explorerInitialTab, setExplorerInitialTab] = useState<"chat" | "terminal" | undefined>(undefined);
 
   // Persist layout and group preferences
   useEffect(() => {
@@ -643,7 +644,11 @@ export function App(): React.JSX.Element {
           }
           onLaunchAgent={handleLaunchOnMachine}
           initialSelection={explorerSelection}
-          onInitialSelectionConsumed={() => setExplorerSelection(null)}
+          onInitialSelectionConsumed={() => {
+            setExplorerSelection(null);
+            setExplorerInitialTab(undefined);
+          }}
+          initialTab={explorerInitialTab}
         />
       )}
 
@@ -691,6 +696,7 @@ export function App(): React.JSX.Element {
         onLaunched={(machineId, sessionName, multiplexer) => {
           if (layoutMode === "explorer" && !openTerminalFullscreen) {
             setExplorerSelection({ machineId, sessionId: `pending-${sessionName}` });
+            setExplorerInitialTab("terminal");
           } else {
             handleOpenTerminal(machineId, sessionName, multiplexer);
           }

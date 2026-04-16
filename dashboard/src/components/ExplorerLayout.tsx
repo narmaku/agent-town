@@ -37,6 +37,7 @@ interface Props {
   onLaunchAgent?: (machineId: string) => void;
   initialSelection?: { machineId: string; sessionId: string } | null;
   onInitialSelectionConsumed?: () => void;
+  initialTab?: "chat" | "terminal";
 }
 
 interface SelectedSession {
@@ -341,8 +342,10 @@ export function ExplorerLayout({
   onLaunchAgent,
   initialSelection,
   onInitialSelectionConsumed,
+  initialTab,
 }: Props): React.JSX.Element {
   const [selected, setSelected] = useState<SelectedSession | null>(null);
+  const [pendingTab, setPendingTab] = useState<"chat" | "terminal" | undefined>(undefined);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [collapsedMachines, setCollapsedMachines] = useState<Set<string>>(new Set());
   const [renaming, setRenaming] = useState<{ machineId: string; sessionId: string } | null>(null);
@@ -391,6 +394,7 @@ export function ExplorerLayout({
 
   function selectSession(machineId: string, sessionId: string) {
     setSelected({ machineId, sessionId });
+    setPendingTab(undefined);
     onSidebarClose();
   }
 
@@ -463,13 +467,14 @@ export function ExplorerLayout({
     setSelected(null);
   }, [selected, machines]);
 
-  // Sync initialSelection from parent (e.g. activity feed navigation)
+  // Sync initialSelection from parent (e.g. activity feed navigation or launch)
   useEffect(() => {
     if (initialSelection) {
       setSelected({ machineId: initialSelection.machineId, sessionId: initialSelection.sessionId });
+      setPendingTab(initialTab);
       onInitialSelectionConsumed?.();
     }
-  }, [initialSelection, onInitialSelectionConsumed]);
+  }, [initialSelection, initialTab, onInitialSelectionConsumed]);
 
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => {
@@ -705,6 +710,7 @@ export function ExplorerLayout({
                 onResume(selected.machineId, sessionId, projectDir, agentType)
               }
               autoDeleteOnClose={autoDeleteOnClose}
+              initialTab={pendingTab}
               extraActions={
                 <button
                   type="button"
