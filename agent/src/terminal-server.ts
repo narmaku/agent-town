@@ -287,14 +287,23 @@ async function sendViaPTY(
     // handles the entire paste as one event instead of individual keystrokes.
     // \x1b[200~ = paste start, \x1b[201~ = paste end
     proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
+    proc.stdin.flush();
     await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
     proc.stdin.write("\r");
+    proc.stdin.flush();
   } else {
-    // Claude Code: direct write to readline CLI prompt
-    proc.stdin.write(`${text}\r`);
+    // Claude Code: write text then Enter separately so the TUI
+    // processes them as distinct events (not a single paste).
+    proc.stdin.write(text);
+    proc.stdin.flush();
+    await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
+    proc.stdin.write("\r");
+    proc.stdin.flush();
   }
 
   await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
+  proc.stdin.end();
+  await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
   proc.kill();
 }
 
@@ -309,12 +318,17 @@ async function sendBackupEnter(
 ): Promise<void> {
   await new Promise((r) => setTimeout(r, BACKUP_ENTER_DELAY_MS));
   if (multiplexer === "zellij") {
-    const enter = Bun.spawn(["zellij", "--session", session, "action", "write", "13"], {
+    // Use write-chars (input pipeline) instead of write (raw bytes)
+    // to match how the launch flow sends Enter (lines 605, 621).
+    const enter = Bun.spawn(["zellij", "--session", session, "action", "write-chars", "\n"], {
       env: cleanEnv,
       stdout: "ignore",
       stderr: "ignore",
     });
     await enter.exited;
+    if (enter.exitCode !== 0) {
+      log.debug(`sendBackupEnter: zellij write-chars failed with exit code ${enter.exitCode}`);
+    }
   } else {
     const enter = Bun.spawn(["tmux", "send-keys", "-t", session, "Enter"], {
       env: cleanEnv,
@@ -322,6 +336,9 @@ async function sendBackupEnter(
       stderr: "ignore",
     });
     await enter.exited;
+    if (enter.exitCode !== 0) {
+      log.debug(`sendBackupEnter: tmux send-keys failed with exit code ${enter.exitCode}`);
+    }
   }
 }
 

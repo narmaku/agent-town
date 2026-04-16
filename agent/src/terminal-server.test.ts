@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import type { Server } from "bun";
 import {
   addRenameMapping,
   clearRenameMappings,
   resolveSessionName,
+  startTerminalServer,
   validateModel,
   validateProjectDir,
   validateSessionId,
@@ -134,5 +136,54 @@ describe("validateSessionId", () => {
     expect(validateSessionId("test;injection")).not.toBeNull();
     expect(validateSessionId("../../../etc")).not.toBeNull();
     expect(validateSessionId("id$(whoami)")).not.toBeNull();
+  });
+});
+
+describe("/api/send endpoint", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeAll(() => {
+    // Use a random high port to avoid conflicts
+    const port = 14680 + Math.floor(Math.random() * 1000);
+    server = startTerminalServer(port, "test-machine");
+    baseUrl = `http://localhost:${port}`;
+  });
+
+  afterAll(() => {
+    server.stop(true);
+  });
+
+  test("rejects missing session", async () => {
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "hello" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("Missing session or text");
+  });
+
+  test("rejects missing text", async () => {
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: "test-session" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("Missing session or text");
+  });
+
+  test("rejects empty session and text", async () => {
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session: "", text: "" }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("Missing session or text");
   });
 });
