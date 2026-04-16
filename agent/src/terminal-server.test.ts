@@ -186,4 +186,83 @@ describe("/api/send endpoint", () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain("Missing session or text");
   });
+
+  test("accepts valid send for zellij with default agent type (claude-code path)", async () => {
+    // Exercises sendViaPTY's Claude Code branch (text then Enter separately)
+    // and sendBackupEnter's zellij write-chars path.
+    // Session doesn't exist, but the PTY helper exits cleanly.
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        multiplexer: "zellij",
+        session: "nonexistent-test-session",
+        text: "hello world",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  }, 15000);
+
+  test("accepts valid send for tmux multiplexer", async () => {
+    // Exercises sendBackupEnter's tmux send-keys path.
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        multiplexer: "tmux",
+        session: "nonexistent-tmux-session",
+        text: "test message",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  }, 15000);
+
+  test("accepts valid send with opencode agent type (bracketed paste path)", async () => {
+    // Exercises sendViaPTY's bracketed paste branch for TUI apps.
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        multiplexer: "zellij",
+        session: "nonexistent-opencode-session",
+        text: "test opencode",
+        agentType: "opencode",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  }, 15000);
+
+  test("accepts valid send with gemini-cli agent type (bracketed paste path)", async () => {
+    // Exercises sendViaPTY's bracketed paste branch for Gemini CLI.
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        multiplexer: "zellij",
+        session: "nonexistent-gemini-session",
+        text: "test gemini",
+        agentType: "gemini-cli",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  }, 15000);
+
+  test("handles malformed JSON body", async () => {
+    const res = await fetch(`${baseUrl}/api/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not-json",
+    });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBeDefined();
+  });
 });
