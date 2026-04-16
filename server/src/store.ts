@@ -112,6 +112,11 @@ export function upsertMachine(heartbeat: Heartbeat): void {
   // 2. Transfer name from matching pending session (user-provided name)
   // 3. Fall back to multiplexer session name (auto-populate + persist)
   let didPersist = false;
+  // Track which multiplexer sessions have been claimed for auto-naming.
+  // Only one session per multiplexer name gets auto-populated — prevents
+  // sub-agents (which may inherit the parent's mux session) from all
+  // getting the same name.
+  const claimedMuxNames = new Set<string>();
   const sessions = heartbeat.sessions.map((s) => {
     const saved = sessionNames.get(s.sessionId);
     if (saved) {
@@ -119,7 +124,12 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     }
     // Transfer user-provided name from pending session to incoming session
     // (works for both pending-* placeholders and real UUID sessions)
-    if (s.multiplexerSession && pendingNameByMux.has(s.multiplexerSession)) {
+    if (
+      s.multiplexerSession &&
+      pendingNameByMux.has(s.multiplexerSession) &&
+      !claimedMuxNames.has(s.multiplexerSession)
+    ) {
+      claimedMuxNames.add(s.multiplexerSession);
       const pendingName = pendingNameByMux.get(s.multiplexerSession) as string;
       // Only persist for real session IDs — pending-* IDs are temporary
       // and would pollute session-names.json with dead entries
@@ -132,7 +142,10 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     // Auto-populate from multiplexer session name and persist it so the
     // name survives even when the multiplexer session is killed/closed.
     // Skip pending-* placeholder sessions — their IDs are temporary.
-    if (s.multiplexerSession && !s.sessionId.startsWith("pending-")) {
+    // Only claim each multiplexer name once to avoid naming collisions
+    // when multiple sessions (e.g. parent + sub-agents) share a mux session.
+    if (s.multiplexerSession && !s.sessionId.startsWith("pending-") && !claimedMuxNames.has(s.multiplexerSession)) {
+      claimedMuxNames.add(s.multiplexerSession);
       sessionNames.set(s.sessionId, s.multiplexerSession);
       didPersist = true;
       return { ...s, customName: s.multiplexerSession };

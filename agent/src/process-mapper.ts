@@ -140,6 +140,17 @@ export async function discoverProcessMappings(): Promise<Map<string, ProcessMapp
     const allProcesses = await runPs();
     const providers = getAllProviders();
 
+    // Collect all agent PIDs across providers so we can detect sub-agents
+    // (processes whose parent is another agent process, e.g. Claude Code
+    // Agent tool spawns). Sub-agents inherit ZELLIJ_SESSION_NAME from their
+    // parent but should not be independently mapped to multiplexer sessions.
+    const allAgentPids = new Set<number>();
+    for (const provider of providers) {
+      for (const proc of provider.filterAgentProcesses(allProcesses)) {
+        allAgentPids.add(proc.pid);
+      }
+    }
+
     for (const provider of providers) {
       const agentProcs = provider.filterAgentProcesses(allProcesses);
       // Sort by etimes ascending (newest first)
@@ -148,6 +159,12 @@ export async function discoverProcessMappings(): Promise<Map<string, ProcessMapp
       const claimedIds = new Set<string>();
 
       for (const proc of agentProcs) {
+        // Skip sub-agents: if the parent process is also an agent, this is
+        // a child spawned via the Agent tool and should not be tracked independently
+        if (allAgentPids.has(proc.ppid)) {
+          log.debug(`skipping sub-agent: pid=${proc.pid} ppid=${proc.ppid} agent=${provider.type}`);
+          continue;
+        }
         const cwd = await getCwd(proc.pid);
         if (!cwd) continue;
 
