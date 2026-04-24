@@ -29,7 +29,7 @@ describe("proxyFetch", () => {
       return new Promise<Response>((_resolve, reject) => {
         if (init?.signal) {
           init.signal.addEventListener("abort", () => {
-            reject(new DOMException("The operation was aborted.", "AbortError"));
+            reject(new DOMException("The operation timed out.", "TimeoutError"));
           });
         }
       });

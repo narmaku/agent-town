@@ -50,7 +50,7 @@ export async function proxyFetch(
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
 
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
       log.warn(`proxy timeout after ${timeoutMs}ms: ${url}`);
       return {
         ok: false,
