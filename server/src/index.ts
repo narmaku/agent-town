@@ -33,6 +33,11 @@ import {
 const log = createLogger("server");
 
 const PORT = Number(process.env.AGENT_TOWN_PORT || "4680");
+
+// Timeout for proxied HTTP requests to agents.
+// When a remote machine disconnects or an SSH tunnel drops, fetch() calls
+// without a timeout hang indefinitely, causing the server to become unresponsive.
+const AGENT_PROXY_TIMEOUT_MS = 15_000;
 const DASHBOARD_DIR = join(import.meta.dir, "../../dashboard/dist");
 
 // Track connected dashboard WebSocket clients
@@ -64,12 +69,16 @@ function getAgentUrl(
 
 function broadcastToClients(message: WebSocketMessage): void {
   const data = JSON.stringify(message);
+  const failed: { ws: unknown; send: (data: string) => void }[] = [];
   for (const client of wsClients) {
     try {
       client.send(data);
     } catch (_err) {
-      wsClients.delete(client);
+      failed.push(client);
     }
+  }
+  for (const client of failed) {
+    wsClients.delete(client);
   }
 }
 
@@ -198,7 +207,7 @@ async function routeRequest(
       `?sessionId=${encodeURIComponent(sessionId)}&agentType=${agentType}&offset=${offset}&limit=${limit}`;
 
     try {
-      const agentResp = await fetch(agentUrl);
+      const agentResp = await fetch(agentUrl, { signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS) });
       const data = await agentResp.json();
       return Response.json(data, { status: agentResp.status });
     } catch (err) {
@@ -227,7 +236,7 @@ async function routeRequest(
       `?query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`;
 
     try {
-      const agentResp = await fetch(agentUrl);
+      const agentResp = await fetch(agentUrl, { signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS) });
       const data = await agentResp.json();
       return Response.json(data, { status: agentResp.status });
     } catch (err) {
@@ -253,7 +262,7 @@ async function routeRequest(
     const agentUrl = `${getAgentUrl(machine, "/api/git-diff")}?dir=${encodeURIComponent(dir)}`;
 
     try {
-      const agentResp = await fetch(agentUrl);
+      const agentResp = await fetch(agentUrl, { signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS) });
       const data = await agentResp.json();
       return Response.json(data, { status: agentResp.status });
     } catch (err) {
@@ -279,7 +288,7 @@ async function routeRequest(
     const agentUrl = `${getAgentUrl(machine, "/api/list-dirs")}?dir=${encodeURIComponent(dir)}`;
 
     try {
-      const agentResp = await fetch(agentUrl);
+      const agentResp = await fetch(agentUrl, { signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS) });
       const data = await agentResp.json();
       return Response.json(data, { status: agentResp.status });
     } catch (err) {
@@ -320,6 +329,7 @@ async function routeRequest(
                   currentName: currentMuxName,
                   newName: newMuxName,
                 }),
+                signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
               });
               if (!agentResp.ok) {
                 const errText = await agentResp.text();
@@ -377,6 +387,7 @@ async function routeRequest(
           multiplexer: body.multiplexer,
           session: body.session,
         }),
+        signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
       });
 
       if (!agentResp.ok) {
@@ -416,6 +427,7 @@ async function routeRequest(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ multiplexer: muxType, session: muxSession }),
+            signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
           });
         } catch (err) {
           log.debug("best-effort mux kill failed", { error: String(err) });
@@ -428,6 +440,7 @@ async function routeRequest(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: body.sessionId }),
+        signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
       });
 
       if (!agentResp.ok) {
@@ -472,6 +485,7 @@ async function routeRequest(
           session: body.session,
           text: body.text,
         }),
+        signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
       });
 
       if (!agentResp.ok) {
@@ -514,6 +528,7 @@ async function routeRequest(
           agentType: body.agentType || settings.defaultAgentType,
           model: settings.defaultModel,
         }),
+        signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
       });
 
       if (!agentResp.ok) {
@@ -570,6 +585,7 @@ async function routeRequest(
           model: settings.defaultModel,
           autonomous: body.autonomous,
         }),
+        signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
       });
 
       if (!agentResp.ok) {
@@ -631,6 +647,7 @@ async function routeRequest(
           model: settings.defaultModel,
           autonomous: body.autonomous,
         }),
+        signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
       });
 
       if (!agentResp.ok) {
@@ -829,21 +846,23 @@ const _server = Bun.serve({
               ws.send(event.data);
             }
           } catch (_err) {
+            terminalProxies.delete(ws);
             agentWs.close();
           }
         };
 
         agentWs.onclose = () => {
+          terminalProxies.delete(ws);
           try {
             ws.close();
           } catch (_err) {
             // already closed
           }
-          terminalProxies.delete(ws);
         };
 
         agentWs.onerror = () => {
           log.warn(`ws: terminal proxy error for session=${session} agent=${agentHost}:${agentPort}`);
+          terminalProxies.delete(ws);
           try {
             ws.send("\r\n\x1b[31mFailed to connect to agent terminal server\x1b[0m\r\n");
             ws.close();
@@ -860,10 +879,11 @@ const _server = Bun.serve({
       // Forward terminal data from browser to agent
       const agentWs = terminalProxies.get(ws);
       if (agentWs && agentWs.readyState === WebSocket.OPEN) {
-        if (typeof message === "string") {
-          agentWs.send(message);
-        } else {
-          agentWs.send(message);
+        try {
+          agentWs.send(typeof message === "string" ? message : message);
+        } catch (_err) {
+          terminalProxies.delete(ws);
+          agentWs.close();
         }
       }
     },
