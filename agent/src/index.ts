@@ -13,7 +13,7 @@ import {
 import { configureLocalHooks } from "./hook-setup";
 import { getHookState, updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
-import { createPlaceholderSessions } from "./placeholder-sessions";
+import { createPlaceholderSessions, deduplicateSessions, expirePlaceholders } from "./placeholder-sessions";
 import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
@@ -257,6 +257,10 @@ async function sendHeartbeat(): Promise<void> {
     trackMultiplexerAssociations(sessions, multiplexerSessions);
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
 
+    // Deduplicate: when a real session and placeholder share the same mux session,
+    // keep only the real session. Then expire stale placeholders (older than TTL).
+    const dedupedSessions = deduplicateSessions(expirePlaceholders(sessions));
+
     // Only include active (non-exited) multiplexer sessions
     const activeMuxSessions = multiplexerSessions.filter((s) => s.attached);
 
@@ -264,7 +268,7 @@ async function sendHeartbeat(): Promise<void> {
       machineId: MACHINE_ID,
       hostname: machineHostname,
       platform: machinePlatform,
-      sessions,
+      sessions: dedupedSessions,
       multiplexers,
       multiplexerSessions: activeMuxSessions,
       availableAgents: getAllProviders().map((p) => p.type),
@@ -279,10 +283,10 @@ async function sendHeartbeat(): Promise<void> {
     });
 
     // Log heartbeat summary at debug level (runs every 5s)
-    const mapped = sessions.filter((s) => s.multiplexerSession).length;
+    const mapped = dedupedSessions.filter((s) => s.multiplexerSession).length;
     const rejected = processMappings.size - mapped;
     log.debug(
-      `heartbeat: ${sessions.length} sessions, ${processMappings.size} processes, ${mapped} mapped, ${rejected} unmatched`,
+      `heartbeat: ${dedupedSessions.length} sessions, ${processMappings.size} processes, ${mapped} mapped, ${rejected} unmatched`,
     );
 
     if (!response.ok) {

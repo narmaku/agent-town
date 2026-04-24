@@ -160,12 +160,30 @@ export function upsertMachine(heartbeat: Heartbeat): void {
   });
   if (didPersist) saveSessionNames();
 
+  // Defense-in-depth: deduplicate sessions by multiplexerSession.
+  // If a real session (non-pending-*) and a placeholder share the same
+  // multiplexerSession, keep only the real session.
+  const realMuxSessions = new Set(
+    sessions
+      .filter((s) => !s.sessionId.startsWith("pending-"))
+      .filter((s) => s.multiplexerSession)
+      .map((s) => s.multiplexerSession),
+  );
+
+  const deduplicatedSessions = sessions.filter((s) => {
+    if (s.sessionId.startsWith("pending-") && s.multiplexerSession && realMuxSessions.has(s.multiplexerSession)) {
+      log.warn(`dedup: removed placeholder ${s.sessionId} (real session already claims mux=${s.multiplexerSession})`);
+      return false;
+    }
+    return true;
+  });
+
   machines.set(heartbeat.machineId, {
     machineId: heartbeat.machineId,
     hostname: heartbeat.hostname,
     platform: heartbeat.platform,
     lastHeartbeat: heartbeat.timestamp,
-    sessions,
+    sessions: deduplicatedSessions,
     multiplexers: heartbeat.multiplexers,
     multiplexerSessions: heartbeat.multiplexerSessions,
     availableAgents: heartbeat.availableAgents ?? [],
@@ -174,7 +192,7 @@ export function upsertMachine(heartbeat: Heartbeat): void {
 
   // Remove pending sessions that now appear in heartbeat data
   // (matched by multiplexer session name on this machine)
-  const muxNames = new Set(sessions.map((s) => s.multiplexerSession).filter(Boolean));
+  const muxNames = new Set(deduplicatedSessions.map((s) => s.multiplexerSession).filter(Boolean));
   for (const [key, pending] of pendingSessions) {
     if (pending.machineId !== heartbeat.machineId) continue;
     if (muxNames.has(pending.sessionName)) {
