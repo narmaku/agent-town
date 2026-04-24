@@ -347,3 +347,112 @@ describe("cleanupRecoveryBySessionId", () => {
     expect(() => cleanupRecoveryBySessionId("nonexistent", "/tmp/does-not-exist")).not.toThrow();
   });
 });
+
+describe("writeWrapperScript", () => {
+  // Import the async version
+  const { writeWrapperScript } = require("./session-recovery") as typeof import("./session-recovery");
+
+  test("writes an executable script file to disk", async () => {
+    const scriptPath = await writeWrapperScript(
+      "test-session",
+      {
+        muxSessionName: "test-session",
+        projectDir: "/home/user/project",
+        baseDir: TEST_BASE_DIR,
+      },
+      TEST_BASE_DIR,
+    );
+
+    expect(existsSync(scriptPath)).toBe(true);
+    expect(scriptPath).toContain("test-session.sh");
+
+    const content = readFileSync(scriptPath, "utf-8");
+    expect(content).toContain("#!/usr/bin/env bash");
+    expect(content).toContain("exec claude");
+  });
+});
+
+describe("end-to-end recovery flow", () => {
+  test("wrapper script can resume a session after metadata is written", () => {
+    // 1. Simulate: session is discovered and metadata is written
+    const metadata: SessionMetadata = {
+      sessionId: "550e8400-e29b-41d4-a716-446655440000",
+      agentType: "claude-code",
+      projectDir: "/home/user/project",
+      autonomous: true,
+      model: "claude-opus-4-6",
+      createdAt: "2026-04-24T10:00:00.000Z",
+    };
+    writeSessionMetadata("recovery-session", metadata, TEST_BASE_DIR);
+
+    // 2. Verify: metadata can be read back
+    const readBack = readSessionMetadata("recovery-session", TEST_BASE_DIR);
+    expect(readBack).not.toBeNull();
+    expect(readBack!.sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
+
+    // 3. Verify: wrapper script references the metadata file
+    const script = buildWrapperScript({
+      muxSessionName: "recovery-session",
+      projectDir: "/home/user/project",
+      model: "claude-opus-4-6",
+      autonomous: true,
+      baseDir: TEST_BASE_DIR,
+    });
+    const metadataPath = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME, "recovery-session.json");
+    expect(script).toContain(metadataPath);
+    expect(script).toContain("--resume");
+    expect(script).toContain("--dangerously-skip-permissions");
+    expect(script).toContain("--model claude-opus-4-6");
+  });
+
+  test("cleanup removes both metadata and script after session delete", () => {
+    // 1. Write metadata and script
+    const metadata: SessionMetadata = {
+      sessionId: "session-to-delete",
+      agentType: "claude-code",
+      projectDir: "/tmp",
+      autonomous: false,
+      createdAt: new Date().toISOString(),
+    };
+    writeSessionMetadata("delete-test", metadata, TEST_BASE_DIR);
+
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    writeFileSync(join(metadataDir, "delete-test.sh"), "#!/bin/bash");
+
+    // 2. Verify files exist
+    expect(existsSync(join(metadataDir, "delete-test.json"))).toBe(true);
+    expect(existsSync(join(metadataDir, "delete-test.sh"))).toBe(true);
+
+    // 3. Clean up by session ID (as delete endpoint would)
+    cleanupRecoveryBySessionId("session-to-delete", TEST_BASE_DIR);
+
+    // 4. Verify files are removed
+    expect(existsSync(join(metadataDir, "delete-test.json"))).toBe(false);
+    expect(existsSync(join(metadataDir, "delete-test.sh"))).toBe(false);
+  });
+
+  test("stale metadata without matching session does not affect new launches", () => {
+    // Write stale metadata from a previous session
+    const staleMetadata: SessionMetadata = {
+      sessionId: "old-session-id",
+      agentType: "claude-code",
+      projectDir: "/tmp",
+      autonomous: false,
+      createdAt: "2025-01-01T00:00:00.000Z",
+    };
+    writeSessionMetadata("stale-session", staleMetadata, TEST_BASE_DIR);
+
+    // Read it back - it's still valid (wrapper will try to resume)
+    const readBack = readSessionMetadata("stale-session", TEST_BASE_DIR);
+    expect(readBack).not.toBeNull();
+    expect(readBack!.sessionId).toBe("old-session-id");
+
+    // Fresh wrapper for a different session works independently
+    const script = buildWrapperScript({
+      muxSessionName: "new-session",
+      projectDir: "/tmp",
+      baseDir: TEST_BASE_DIR,
+    });
+    expect(script).not.toContain("old-session-id");
+  });
+});
