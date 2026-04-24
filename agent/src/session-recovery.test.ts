@@ -132,6 +132,60 @@ describe("buildWrapperScript", () => {
     // shellEscape wraps paths with special chars in single quotes
     expect(script).toContain("'/home/user/my project'");
   });
+
+  test("escapes model names containing special characters", () => {
+    const script = buildWrapperScript({
+      muxSessionName: "my-session",
+      projectDir: "/home/user/project",
+      model: "model with spaces",
+      baseDir: TEST_BASE_DIR,
+    });
+
+    // shellEscape should wrap the model name in single quotes
+    expect(script).toContain("--model 'model with spaces'");
+  });
+
+  test("escapes project dir containing single quotes", () => {
+    const script = buildWrapperScript({
+      muxSessionName: "my-session",
+      projectDir: "/home/user/it's a project",
+      baseDir: TEST_BASE_DIR,
+    });
+
+    // shellEscape replaces ' with '\'' for safe embedding
+    expect(script).toContain("'/home/user/it'\\''s a project'");
+  });
+
+  test("handles empty string project dir", () => {
+    const script = buildWrapperScript({
+      muxSessionName: "my-session",
+      projectDir: "",
+      baseDir: TEST_BASE_DIR,
+    });
+
+    // shellEscape converts empty string to ''
+    expect(script).toContain("cd ''");
+  });
+
+  test("includes set -euo pipefail for safety", () => {
+    const script = buildWrapperScript({
+      muxSessionName: "my-session",
+      projectDir: "/tmp",
+      baseDir: TEST_BASE_DIR,
+    });
+
+    expect(script).toContain("set -euo pipefail");
+  });
+
+  test("includes mux session name as a comment for debugging", () => {
+    const script = buildWrapperScript({
+      muxSessionName: "debug-session-42",
+      projectDir: "/tmp",
+      baseDir: TEST_BASE_DIR,
+    });
+
+    expect(script).toContain("# Mux session: debug-session-42");
+  });
 });
 
 describe("writeSessionMetadata", () => {
@@ -255,6 +309,33 @@ describe("readSessionMetadata", () => {
     const result = readSessionMetadata("incomplete", TEST_BASE_DIR);
     expect(result).toBeNull();
   });
+
+  test("returns null when sessionId is not a string", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+    writeFileSync(join(metadataDir, "numeric-id.json"), JSON.stringify({ sessionId: 12345 }));
+
+    const result = readSessionMetadata("numeric-id", TEST_BASE_DIR);
+    expect(result).toBeNull();
+  });
+
+  test("returns null when sessionId is an empty string", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+    writeFileSync(join(metadataDir, "empty-id.json"), JSON.stringify({ sessionId: "" }));
+
+    const result = readSessionMetadata("empty-id", TEST_BASE_DIR);
+    expect(result).toBeNull();
+  });
+
+  test("returns null when file is empty", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+    writeFileSync(join(metadataDir, "empty.json"), "");
+
+    const result = readSessionMetadata("empty", TEST_BASE_DIR);
+    expect(result).toBeNull();
+  });
 });
 
 describe("cleanupSessionRecoveryFiles", () => {
@@ -292,6 +373,28 @@ describe("cleanupSessionRecoveryFiles", () => {
 
     expect(existsSync(join(metadataDir, "other-session.json"))).toBe(true);
     expect(existsSync(join(metadataDir, "my-session.json"))).toBe(false);
+  });
+
+  test("handles case where only metadata file exists (no script)", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+
+    writeFileSync(join(metadataDir, "partial.json"), "{}");
+    // No .sh file
+
+    expect(() => cleanupSessionRecoveryFiles("partial", TEST_BASE_DIR)).not.toThrow();
+    expect(existsSync(join(metadataDir, "partial.json"))).toBe(false);
+  });
+
+  test("handles case where only script file exists (no metadata)", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+
+    writeFileSync(join(metadataDir, "script-only.sh"), "#!/bin/bash");
+    // No .json file
+
+    expect(() => cleanupSessionRecoveryFiles("script-only", TEST_BASE_DIR)).not.toThrow();
+    expect(existsSync(join(metadataDir, "script-only.sh"))).toBe(false);
   });
 });
 
@@ -346,6 +449,50 @@ describe("cleanupRecoveryBySessionId", () => {
   test("does not throw when directory does not exist", () => {
     expect(() => cleanupRecoveryBySessionId("nonexistent", "/tmp/does-not-exist")).not.toThrow();
   });
+
+  test("skips corrupted JSON files without crashing", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+
+    // Write a corrupt JSON file
+    writeFileSync(join(metadataDir, "corrupt.json"), "not valid json {{{");
+    // Write a valid one after it
+    const validMetadata: SessionMetadata = {
+      sessionId: "valid-session",
+      agentType: "claude-code",
+      projectDir: "/tmp",
+      autonomous: false,
+      createdAt: new Date().toISOString(),
+    };
+    writeFileSync(join(metadataDir, "valid.json"), JSON.stringify(validMetadata));
+
+    // Should not throw despite the corrupt file
+    expect(() => cleanupRecoveryBySessionId("valid-session", TEST_BASE_DIR)).not.toThrow();
+    // The valid matching file should be cleaned up
+    expect(existsSync(join(metadataDir, "valid.json"))).toBe(false);
+    // The corrupt file should remain (not matching, not deleted)
+    expect(existsSync(join(metadataDir, "corrupt.json"))).toBe(true);
+  });
+
+  test("does not remove non-JSON files during scan", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+
+    writeFileSync(join(metadataDir, "script.sh"), "#!/bin/bash");
+    writeFileSync(join(metadataDir, "notes.txt"), "some notes");
+
+    expect(() => cleanupRecoveryBySessionId("any-id", TEST_BASE_DIR)).not.toThrow();
+    // Non-JSON files should be untouched
+    expect(existsSync(join(metadataDir, "script.sh"))).toBe(true);
+    expect(existsSync(join(metadataDir, "notes.txt"))).toBe(true);
+  });
+
+  test("handles empty directory gracefully", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+
+    expect(() => cleanupRecoveryBySessionId("any-id", TEST_BASE_DIR)).not.toThrow();
+  });
 });
 
 describe("writeWrapperScript", () => {
@@ -369,6 +516,39 @@ describe("writeWrapperScript", () => {
     const content = readFileSync(scriptPath, "utf-8");
     expect(content).toContain("#!/usr/bin/env bash");
     expect(content).toContain("exec claude");
+  });
+
+  test("creates the script with executable permissions", async () => {
+    const scriptPath = await writeWrapperScript(
+      "exec-test",
+      {
+        muxSessionName: "exec-test",
+        projectDir: "/tmp",
+        baseDir: TEST_BASE_DIR,
+      },
+      TEST_BASE_DIR,
+    );
+
+    const { statSync } = await import("node:fs");
+    const stats = statSync(scriptPath);
+    // Check that at least the owner execute bit is set (0o100)
+    expect(stats.mode & 0o100).toBe(0o100);
+  });
+
+  test("creates the directory if it does not exist", async () => {
+    const nestedDir = join(TEST_BASE_DIR, "deep", "nested");
+
+    const scriptPath = await writeWrapperScript(
+      "nested-session",
+      {
+        muxSessionName: "nested-session",
+        projectDir: "/tmp",
+        baseDir: nestedDir,
+      },
+      nestedDir,
+    );
+
+    expect(existsSync(scriptPath)).toBe(true);
   });
 });
 
