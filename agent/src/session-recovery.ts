@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentType } from "@agent-town/shared";
@@ -90,9 +90,8 @@ export function writeSessionMetadata(
   try {
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, `${muxSessionName}.json`);
-    // Use writeFileSync for atomic-ish writes (Bun.write is async)
     const content = JSON.stringify(metadata, null, 2);
-    Bun.write(filePath, content);
+    writeFileSync(filePath, content);
   } catch (err) {
     log.warn(
       `failed to write session metadata for mux=${muxSessionName}: ${err instanceof Error ? err.message : String(err)}`,
