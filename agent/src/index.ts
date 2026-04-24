@@ -17,8 +17,8 @@ import { createPlaceholderSessions } from "./placeholder-sessions";
 import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
-import { writeSessionMetadata } from "./session-recovery";
 import { discoverSessions } from "./session-parser";
+import { writeSessionMetadata } from "./session-recovery";
 import { startTerminalServer } from "./terminal-server";
 
 const log = createLogger("agent");

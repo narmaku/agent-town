@@ -8,8 +8,8 @@ import { configureLocalHooks } from "./hook-setup";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { listDirectories, validateListDirsPath } from "./list-dirs";
 import { getAllProviders, getProvider } from "./providers/registry";
-import { cleanupRecoveryBySessionId, writeWrapperScript } from "./session-recovery";
 import { getSessionMessages, searchSessionMessages } from "./session-messages";
+import { cleanupRecoveryBySessionId, writeWrapperScript } from "./session-recovery";
 
 const log = createLogger("terminal");
 

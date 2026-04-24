@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   buildWrapperScript,
   cleanupRecoveryBySessionId,
   cleanupSessionRecoveryFiles,
   readSessionMetadata,
-  writeSessionMetadata,
-  type SessionMetadata,
   SESSION_RECOVERY_DIR_NAME,
+  type SessionMetadata,
+  writeSessionMetadata,
 } from "./session-recovery";
 
 // Use a temp directory to avoid touching real state
@@ -50,7 +50,7 @@ describe("buildWrapperScript", () => {
     // Should appear in both the resume and fresh launch paths
     const matches = script.match(/--dangerously-skip-permissions/g);
     expect(matches).not.toBeNull();
-    expect(matches!.length).toBeGreaterThanOrEqual(2);
+    expect(matches?.length).toBeGreaterThanOrEqual(2);
   });
 
   test("includes --model flag when model is specified", () => {
@@ -119,7 +119,7 @@ describe("buildWrapperScript", () => {
     // Both resume and fresh paths should use exec
     const execMatches = script.match(/exec claude/g);
     expect(execMatches).not.toBeNull();
-    expect(execMatches!.length).toBe(2);
+    expect(execMatches?.length).toBe(2);
   });
 
   test("escapes project dir with single quotes for safety", () => {
@@ -229,8 +229,8 @@ describe("readSessionMetadata", () => {
 
     const result = readSessionMetadata("my-session", TEST_BASE_DIR);
     expect(result).not.toBeNull();
-    expect(result!.sessionId).toBe("abc-123");
-    expect(result!.agentType).toBe("claude-code");
+    expect(result?.sessionId).toBe("abc-123");
+    expect(result?.agentType).toBe("claude-code");
   });
 
   test("returns null when file does not exist", () => {
@@ -388,7 +388,7 @@ describe("end-to-end recovery flow", () => {
     // 2. Verify: metadata can be read back
     const readBack = readSessionMetadata("recovery-session", TEST_BASE_DIR);
     expect(readBack).not.toBeNull();
-    expect(readBack!.sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
+    expect(readBack?.sessionId).toBe("550e8400-e29b-41d4-a716-446655440000");
 
     // 3. Verify: wrapper script references the metadata file
     const script = buildWrapperScript({
@@ -445,7 +445,7 @@ describe("end-to-end recovery flow", () => {
     // Read it back - it's still valid (wrapper will try to resume)
     const readBack = readSessionMetadata("stale-session", TEST_BASE_DIR);
     expect(readBack).not.toBeNull();
-    expect(readBack!.sessionId).toBe("old-session-id");
+    expect(readBack?.sessionId).toBe("old-session-id");
 
     // Fresh wrapper for a different session works independently
     const script = buildWrapperScript({

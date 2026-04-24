@@ -125,10 +125,7 @@ export function readSessionMetadata(
  * Remove session metadata and wrapper script for a multiplexer session.
  * Called when a session is deleted.
  */
-export function cleanupSessionRecoveryFiles(
-  muxSessionName: string,
-  baseDir: string = DEFAULT_BASE_DIR,
-): void {
+export function cleanupSessionRecoveryFiles(muxSessionName: string, baseDir: string = DEFAULT_BASE_DIR): void {
   const dir = join(baseDir, SESSION_RECOVERY_DIR_NAME);
   const metadataPath = join(dir, `${muxSessionName}.json`);
   const scriptPath = join(dir, `${muxSessionName}.sh`);
@@ -146,10 +143,7 @@ export function cleanupSessionRecoveryFiles(
  * Find and clean up recovery files for a given session ID.
  * Scans all metadata files to find which mux session name maps to this sessionId.
  */
-export function cleanupRecoveryBySessionId(
-  sessionId: string,
-  baseDir: string = DEFAULT_BASE_DIR,
-): void {
+export function cleanupRecoveryBySessionId(sessionId: string, baseDir: string = DEFAULT_BASE_DIR): void {
   const dir = join(baseDir, SESSION_RECOVERY_DIR_NAME);
   try {
     const files = readdirSync(dir);
