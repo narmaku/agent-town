@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { SessionInfo } from "@agent-town/shared";
 import {
   createPlaceholderSessions,
+  deduplicateSessions,
   expirePlaceholders,
   resetPlaceholderTimestamps,
   setPlaceholderCreatedAt,
@@ -174,9 +175,6 @@ describe("agent-side deduplication", () => {
   });
 
   test("real session and placeholder with same mux session: only real is kept after dedup", () => {
-    // Simulate the scenario: a real session was discovered, then a placeholder
-    // was also created for the same mux session (race condition).
-    // We test the dedup logic that would run in index.ts
     const realSession = makeSession({
       sessionId: "uuid-real",
       multiplexerSession: "my-mux",
@@ -188,23 +186,7 @@ describe("agent-side deduplication", () => {
       multiplexerSession: "my-mux",
     });
 
-    const sessions = [realSession, placeholderSession];
-
-    // Dedup: build set of mux sessions claimed by real (non-pending) sessions,
-    // then filter out placeholders whose mux session is already claimed
-    const realMuxSessions = new Set(
-      sessions
-        .filter((s) => !s.sessionId.startsWith("pending-"))
-        .filter((s) => s.multiplexerSession)
-        .map((s) => s.multiplexerSession),
-    );
-
-    const deduped = sessions.filter((s) => {
-      if (s.sessionId.startsWith("pending-") && s.multiplexerSession && realMuxSessions.has(s.multiplexerSession)) {
-        return false;
-      }
-      return true;
-    });
+    const deduped = deduplicateSessions([realSession, placeholderSession]);
 
     expect(deduped).toHaveLength(1);
     expect(deduped[0].sessionId).toBe("uuid-real");
@@ -217,21 +199,7 @@ describe("agent-side deduplication", () => {
       multiplexerSession: "solo-mux",
     });
 
-    const sessions = [placeholderSession];
-
-    const realMuxSessions = new Set(
-      sessions
-        .filter((s) => !s.sessionId.startsWith("pending-"))
-        .filter((s) => s.multiplexerSession)
-        .map((s) => s.multiplexerSession),
-    );
-
-    const deduped = sessions.filter((s) => {
-      if (s.sessionId.startsWith("pending-") && s.multiplexerSession && realMuxSessions.has(s.multiplexerSession)) {
-        return false;
-      }
-      return true;
-    });
+    const deduped = deduplicateSessions([placeholderSession]);
 
     expect(deduped).toHaveLength(1);
     expect(deduped[0].sessionId).toBe("pending-solo-mux");
@@ -253,21 +221,7 @@ describe("agent-side deduplication", () => {
       multiplexerSession: "mux-c",
     });
 
-    const sessions = [real1, placeholder1, placeholder2];
-
-    const realMuxSessions = new Set(
-      sessions
-        .filter((s) => !s.sessionId.startsWith("pending-"))
-        .filter((s) => s.multiplexerSession)
-        .map((s) => s.multiplexerSession),
-    );
-
-    const deduped = sessions.filter((s) => {
-      if (s.sessionId.startsWith("pending-") && s.multiplexerSession && realMuxSessions.has(s.multiplexerSession)) {
-        return false;
-      }
-      return true;
-    });
+    const deduped = deduplicateSessions([real1, placeholder1, placeholder2]);
 
     // real1 for mux-a, placeholder for mux-b, placeholder for mux-c — all kept
     expect(deduped).toHaveLength(3);

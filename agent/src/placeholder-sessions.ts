@@ -26,7 +26,11 @@ export function createPlaceholderSessions(
   const mappedMuxSessions = new Set(sessions.filter((s) => s.multiplexerSession).map((s) => s.multiplexerSession));
 
   for (const [key, mapping] of processMappings) {
-    if (mappedMuxSessions.has(mapping.session)) continue; // already mapped
+    if (mappedMuxSessions.has(mapping.session)) {
+      // Real session now claims this mux session — clean up any stale timestamp
+      placeholderCreatedAt.delete(`pending-${mapping.session}`);
+      continue;
+    }
     if (!activeMuxNames.has(mapping.session)) continue; // multiplexer session doesn't exist
 
     const cwd = key.startsWith("cwd:") ? key.slice(4) : "";
