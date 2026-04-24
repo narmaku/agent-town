@@ -1,7 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
+import { type AgentType, buildShellCommand, createLogger, shellEscape, truncateId } from "@agent-town/shared";
 import type { Server, Subprocess } from "bun";
 import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
 import { configureLocalHooks } from "./hook-setup";
@@ -115,6 +115,91 @@ async function cleanupBeforeZellijCreate(name: string, env: Record<string, strin
         log.debug(`cleanup: stopped lingering scope ${unit}`);
       }
     }
+  }
+}
+
+// --- Session recovery scripts ---
+//
+// Each zellij session gets a wrapper script stored in
+// ~/.agent-town/sessions/<name>/run.sh. This script is used as the pane
+// command via a generated layout file. When zellij resurrects a session
+// after a reboot, it re-runs the pane command — the wrapper script checks
+// for a persisted session ID and uses --resume to continue the original
+// session instead of starting fresh.
+const SESSIONS_DIR = join(homedir(), ".agent-town", "sessions");
+
+/**
+ * Create the session wrapper script and layout file for a zellij session.
+ * The wrapper script runs the agent command, and on recovery checks for
+ * a persisted session-id file to use --resume automatically.
+ *
+ * Returns the path to the generated layout file.
+ */
+export function createSessionRecoveryFiles(
+  sessionName: string,
+  projectDir: string,
+  launchParts: string[],
+  resumeParts: string[],
+): string {
+  const sessionDir = join(SESSIONS_DIR, sessionName);
+  mkdirSync(sessionDir, { recursive: true });
+
+  const sessionIdPath = join(sessionDir, "session-id");
+  const scriptPath = join(sessionDir, "run.sh");
+  const layoutPath = join(sessionDir, "layout.kdl");
+
+  // Build shell-safe command strings
+  const launchCmd = launchParts.map(shellEscape).join(" ");
+  const resumeCmd = resumeParts.map(shellEscape).join(" ");
+
+  const script = [
+    "#!/bin/bash",
+    `cd ${shellEscape(projectDir)}`,
+    `SID_FILE=${shellEscape(sessionIdPath)}`,
+    `if [ -f "$SID_FILE" ]; then`,
+    `  SESSION_ID=$(cat "$SID_FILE")`,
+    // Replace the __SESSION_ID__ placeholder with the actual session ID
+    `  exec ${resumeCmd.replace(shellEscape("__SESSION_ID__"), '"$SESSION_ID"')}`,
+    "fi",
+    `exec ${launchCmd}`,
+    "",
+  ].join("\n");
+
+  writeFileSync(scriptPath, script);
+  chmodSync(scriptPath, 0o755);
+
+  // Generate a minimal KDL layout that runs the wrapper script as the pane command.
+  // Zellij stores this as the pane's command, so on session resurrection it re-runs
+  // the script (which checks for session-id and resumes if possible).
+  const layout = [
+    "layout {",
+    `    pane command="bash" {`,
+    `        args ${JSON.stringify(scriptPath)}`,
+    "    }",
+    "}",
+    "",
+  ].join("\n");
+
+  writeFileSync(layoutPath, layout);
+
+  log.info(`recovery: created session files for ${sessionName} at ${sessionDir}`);
+  return layoutPath;
+}
+
+/**
+ * Persist the session ID for a multiplexer session, enabling --resume on recovery.
+ * Called from the heartbeat loop when a JSONL session is mapped to a mux session.
+ */
+export function persistSessionId(multiplexerSession: string, sessionId: string): void {
+  const sessionDir = join(SESSIONS_DIR, multiplexerSession);
+  const sessionIdPath = join(sessionDir, "session-id");
+  try {
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(sessionIdPath, sessionId);
+  } catch (err) {
+    log.warn(
+      `recovery: failed to persist session-id for ${multiplexerSession}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 
@@ -565,6 +650,22 @@ export function startTerminalServer(port: number, machineId: string): Server {
           // Clean up EXITED sessions and lingering scope units
           await cleanupBeforeZellijCreate(body.sessionName, cleanEnv);
 
+          // Create a wrapper script for session recovery. On zellij session
+          // resurrection after a reboot, zellij re-runs the pane command.
+          // The wrapper script checks for a persisted session-id and uses
+          // --resume to continue the original session instead of starting fresh.
+          const resumeParts = provider.buildResumeCommand({
+            sessionId: "__SESSION_ID__",
+            model: body.model,
+            autonomous: body.autonomous,
+          });
+          const recoveryLayoutPath = createSessionRecoveryFiles(
+            body.sessionName,
+            body.projectDir,
+            agentParts,
+            resumeParts,
+          );
+
           // Zellij: create session in its own cgroup scope (survives agent restarts)
           // Note: zellij -s panics with ENOTTY when spawned without a TTY,
           // but it still creates the session successfully.
@@ -593,8 +694,13 @@ export function startTerminalServer(port: number, machineId: string): Server {
             return false;
           }
 
-          // Try with layout first, then without (layout may not exist on remote machines)
-          let sessionReady = await tryCreateZellijSession(body.zellijLayout);
+          // Use the generated recovery layout so zellij stores the wrapper script
+          // as the pane command. Falls back to user layout, then no layout.
+          let sessionReady = await tryCreateZellijSession(recoveryLayoutPath);
+          if (!sessionReady) {
+            log.warn("launch: recovery layout failed, retrying with user layout");
+            sessionReady = await tryCreateZellijSession(body.zellijLayout);
+          }
           if (!sessionReady && body.zellijLayout) {
             log.warn(`launch: layout "${body.zellijLayout}" failed, retrying without layout`);
             sessionReady = await tryCreateZellijSession();
@@ -607,17 +713,10 @@ export function startTerminalServer(port: number, machineId: string): Server {
             );
           }
 
-          // Send cd + agent command via write-chars (include \n to execute)
-          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
-          const writeChars = Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
-            env: cleanEnv,
-            stdout: "ignore",
-            stderr: "ignore",
-          });
-          await writeChars.exited;
-
           // CLI agent post-launch: auto-accept trust prompt,
           // autonomous disclaimer, and send initial "hi" to trigger session file.
+          // The agent command is already running via the recovery layout script,
+          // so we only need to handle interactive prompts via write-chars.
           if (agentType === "claude-code" || agentType === "gemini-cli") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
@@ -751,7 +850,17 @@ export function startTerminalServer(port: number, machineId: string): Server {
           // Clean up EXITED sessions and lingering scope units
           await cleanupBeforeZellijCreate(body.sessionName, cleanEnv);
 
-          // Create zellij session — try with layout, fallback without
+          // Create recovery files. For resume, the session-id is already
+          // known so we write it immediately for reboot resilience.
+          const recoveryLayoutPath2 = createSessionRecoveryFiles(
+            body.sessionName,
+            body.projectDir,
+            agentParts, // launch cmd (fallback)
+            agentParts, // resume cmd (already includes --resume)
+          );
+          persistSessionId(body.sessionName, body.sessionId);
+
+          // Create zellij session — try recovery layout, user layout, then none
           async function tryCreateZellijSession2(layout?: string): Promise<boolean> {
             const args = ["zellij", "-s", body.sessionName];
             if (layout) args.push("-n", layout);
@@ -777,7 +886,11 @@ export function startTerminalServer(port: number, machineId: string): Server {
             return false;
           }
 
-          let sessionReady = await tryCreateZellijSession2(body.zellijLayout);
+          let sessionReady = await tryCreateZellijSession2(recoveryLayoutPath2);
+          if (!sessionReady) {
+            log.warn("resume: recovery layout failed, retrying with user layout");
+            sessionReady = await tryCreateZellijSession2(body.zellijLayout);
+          }
           if (!sessionReady && body.zellijLayout) {
             log.warn(`resume: layout "${body.zellijLayout}" failed, retrying without layout`);
             sessionReady = await tryCreateZellijSession2();
@@ -790,14 +903,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
             );
           }
 
-          // Send resume command
-          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
-          Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
-            env: cleanEnv,
-            stdout: "ignore",
-            stderr: "ignore",
-          });
-
+          // The agent command is already running via the recovery layout script.
+          // Auto-accept trust prompt for CLI agents.
           if (agentType === "claude-code" || agentType === "gemini-cli") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
