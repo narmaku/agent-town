@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentType } from "@agent-town/shared";
@@ -139,6 +139,32 @@ export function cleanupSessionRecoveryFiles(
     } catch (_err) {
       // File may not exist — that's fine
     }
+  }
+}
+
+/**
+ * Find and clean up recovery files for a given session ID.
+ * Scans all metadata files to find which mux session name maps to this sessionId.
+ */
+export function cleanupRecoveryBySessionId(
+  sessionId: string,
+  baseDir: string = DEFAULT_BASE_DIR,
+): void {
+  const dir = join(baseDir, SESSION_RECOVERY_DIR_NAME);
+  try {
+    const files = readdirSync(dir);
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      const muxName = file.slice(0, -5); // Remove .json
+      const metadata = readSessionMetadata(muxName, baseDir);
+      if (metadata?.sessionId === sessionId) {
+        cleanupSessionRecoveryFiles(muxName, baseDir);
+        log.info(`cleaned up recovery files for session=${sessionId} mux=${muxName}`);
+        return;
+      }
+    }
+  } catch (_err) {
+    // Directory may not exist — that's fine
   }
 }
 

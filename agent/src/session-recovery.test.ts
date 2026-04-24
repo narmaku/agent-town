@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 
 import {
   buildWrapperScript,
+  cleanupRecoveryBySessionId,
   cleanupSessionRecoveryFiles,
   readSessionMetadata,
   writeSessionMetadata,
@@ -291,5 +292,58 @@ describe("cleanupSessionRecoveryFiles", () => {
 
     expect(existsSync(join(metadataDir, "other-session.json"))).toBe(true);
     expect(existsSync(join(metadataDir, "my-session.json"))).toBe(false);
+  });
+});
+
+describe("cleanupRecoveryBySessionId", () => {
+  test("finds and removes recovery files matching the session ID", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+
+    const metadata: SessionMetadata = {
+      sessionId: "target-session-id",
+      agentType: "claude-code",
+      projectDir: "/tmp",
+      autonomous: false,
+      createdAt: new Date().toISOString(),
+    };
+    writeFileSync(join(metadataDir, "mux-name.json"), JSON.stringify(metadata));
+    writeFileSync(join(metadataDir, "mux-name.sh"), "#!/bin/bash");
+
+    cleanupRecoveryBySessionId("target-session-id", TEST_BASE_DIR);
+
+    expect(existsSync(join(metadataDir, "mux-name.json"))).toBe(false);
+    expect(existsSync(join(metadataDir, "mux-name.sh"))).toBe(false);
+  });
+
+  test("does not remove files for other session IDs", () => {
+    const metadataDir = join(TEST_BASE_DIR, SESSION_RECOVERY_DIR_NAME);
+    mkdirSync(metadataDir, { recursive: true });
+
+    const metadata1: SessionMetadata = {
+      sessionId: "session-a",
+      agentType: "claude-code",
+      projectDir: "/tmp",
+      autonomous: false,
+      createdAt: new Date().toISOString(),
+    };
+    const metadata2: SessionMetadata = {
+      sessionId: "session-b",
+      agentType: "claude-code",
+      projectDir: "/tmp",
+      autonomous: false,
+      createdAt: new Date().toISOString(),
+    };
+    writeFileSync(join(metadataDir, "mux-a.json"), JSON.stringify(metadata1));
+    writeFileSync(join(metadataDir, "mux-b.json"), JSON.stringify(metadata2));
+
+    cleanupRecoveryBySessionId("session-a", TEST_BASE_DIR);
+
+    expect(existsSync(join(metadataDir, "mux-a.json"))).toBe(false);
+    expect(existsSync(join(metadataDir, "mux-b.json"))).toBe(true);
+  });
+
+  test("does not throw when directory does not exist", () => {
+    expect(() => cleanupRecoveryBySessionId("nonexistent", "/tmp/does-not-exist")).not.toThrow();
   });
 });

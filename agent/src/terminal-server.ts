@@ -8,6 +8,7 @@ import { configureLocalHooks } from "./hook-setup";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { listDirectories, validateListDirsPath } from "./list-dirs";
 import { getAllProviders, getProvider } from "./providers/registry";
+import { cleanupRecoveryBySessionId, writeWrapperScript } from "./session-recovery";
 import { getSessionMessages, searchSessionMessages } from "./session-messages";
 
 const log = createLogger("terminal");
@@ -494,10 +495,27 @@ export function startTerminalServer(port: number, machineId: string): Server {
 
           const cleanEnv = cleanMultiplexerEnv();
 
-          const agentParts = provider.buildLaunchCommand({
-            model: body.model,
-            autonomous: body.autonomous,
-          });
+          // For Claude Code, generate a wrapper script so that multiplexer
+          // session recovery after reboot automatically resumes the session
+          // instead of starting fresh.
+          const useWrapper = agentType === "claude-code";
+          let launchCmd: string;
+
+          if (useWrapper) {
+            const scriptPath = await writeWrapperScript(body.sessionName, {
+              muxSessionName: body.sessionName,
+              projectDir: body.projectDir,
+              model: body.model,
+              autonomous: body.autonomous,
+            });
+            launchCmd = scriptPath;
+          } else {
+            const agentParts = provider.buildLaunchCommand({
+              model: body.model,
+              autonomous: body.autonomous,
+            });
+            launchCmd = buildShellCommand(agentParts, body.projectDir);
+          }
 
           if (body.multiplexer === "tmux") {
             // Create tmux session in its own cgroup scope (survives agent restarts)
@@ -522,9 +540,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
               return Response.json({ error: "Failed to create multiplexer session" }, { status: 500 });
             }
 
-            // Send agent command
-            const agentCmd = buildShellCommand(agentParts);
-            const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
+            // Send agent command (wrapper script path or raw command)
+            const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, launchCmd, "Enter"], {
               env: cleanEnv,
               stdout: "ignore",
               stderr: "ignore",
@@ -607,8 +624,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
             );
           }
 
-          // Send cd + agent command via write-chars (include \n to execute)
-          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
+          // Send the launch command (wrapper script path or cd + agent command)
+          const fullCmd = useWrapper ? `${launchCmd}\n` : `${launchCmd}\n`;
           const writeChars = Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
             stdout: "ignore",
@@ -1000,6 +1017,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
           }
 
           clearHookSession(body.sessionId);
+
+          // Clean up session recovery wrapper script and metadata
+          cleanupRecoveryBySessionId(body.sessionId);
 
           return Response.json({ ok: true });
         } catch (err) {
