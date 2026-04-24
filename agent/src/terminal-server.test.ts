@@ -1,8 +1,12 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import type { Server } from "bun";
 import {
   addRenameMapping,
   clearRenameMappings,
+  createSessionRecoveryFiles,
+  persistSessionId,
   resolveSessionName,
   startTerminalServer,
   validateModel,
@@ -136,6 +140,90 @@ describe("validateSessionId", () => {
     expect(validateSessionId("test;injection")).not.toBeNull();
     expect(validateSessionId("../../../etc")).not.toBeNull();
     expect(validateSessionId("id$(whoami)")).not.toBeNull();
+  });
+});
+
+describe("createSessionRecoveryFiles", () => {
+  // Use the real SESSIONS_DIR (~/.agent-town/sessions/) since the function
+  // writes there. Tests use unique session names to avoid collisions.
+  const testPrefix = `test-recovery-${Date.now()}`;
+
+  afterAll(() => {
+    // Clean up test session directories
+    const sessionsDir = join(process.env.HOME || "/tmp", ".agent-town", "sessions");
+    for (const name of [`${testPrefix}-basic`, `${testPrefix}-resume`, `${testPrefix}-flags`]) {
+      const dir = join(sessionsDir, name);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("creates run.sh and layout.kdl files", () => {
+    const sessionName = `${testPrefix}-basic`;
+    const layoutPath = createSessionRecoveryFiles(
+      sessionName,
+      "/home/user/project",
+      ["claude"],
+      ["claude", "--resume", "__SESSION_ID__"],
+    );
+
+    expect(existsSync(layoutPath)).toBe(true);
+    const scriptPath = layoutPath.replace("layout.kdl", "run.sh");
+    expect(existsSync(scriptPath)).toBe(true);
+  });
+
+  test("run.sh contains launch command and resume logic", () => {
+    const sessionName = `${testPrefix}-resume`;
+    const layoutPath = createSessionRecoveryFiles(
+      sessionName,
+      "/home/user/project",
+      ["claude", "--dangerously-skip-permissions"],
+      ["claude", "--resume", "__SESSION_ID__", "--dangerously-skip-permissions"],
+    );
+
+    const scriptPath = layoutPath.replace("layout.kdl", "run.sh");
+    const content = readFileSync(scriptPath, "utf-8");
+
+    // Should contain the project dir cd
+    expect(content).toContain("cd /home/user/project");
+    // Should contain the launch command as fallback
+    expect(content).toContain("claude --dangerously-skip-permissions");
+    // Should contain resume logic with session-id file check
+    expect(content).toContain('if [ -f "$SID_FILE" ]');
+    expect(content).toContain("--resume");
+    expect(content).toContain('"$SESSION_ID"');
+  });
+
+  test("layout.kdl references the run.sh script", () => {
+    const sessionName = `${testPrefix}-flags`;
+    const layoutPath = createSessionRecoveryFiles(
+      sessionName,
+      "/tmp/test",
+      ["claude"],
+      ["claude", "--resume", "__SESSION_ID__"],
+    );
+
+    const layout = readFileSync(layoutPath, "utf-8");
+    expect(layout).toContain('pane command="bash"');
+    expect(layout).toContain("run.sh");
+  });
+});
+
+describe("persistSessionId", () => {
+  const testPrefix = `test-persist-${Date.now()}`;
+
+  afterAll(() => {
+    const sessionsDir = join(process.env.HOME || "/tmp", ".agent-town", "sessions");
+    rmSync(join(sessionsDir, `${testPrefix}-sid`), { recursive: true, force: true });
+  });
+
+  test("writes session-id file for a multiplexer session", () => {
+    const sessionName = `${testPrefix}-sid`;
+    persistSessionId(sessionName, "550e8400-e29b-41d4-a716-446655440000");
+
+    const sessionsDir = join(process.env.HOME || "/tmp", ".agent-town", "sessions");
+    const sidPath = join(sessionsDir, sessionName, "session-id");
+    expect(existsSync(sidPath)).toBe(true);
+    expect(readFileSync(sidPath, "utf-8")).toBe("550e8400-e29b-41d4-a716-446655440000");
   });
 });
 

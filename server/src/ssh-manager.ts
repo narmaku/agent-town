@@ -337,7 +337,13 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
         connections.delete(node.id);
         updateNodeStatus(node.id, "error", "SSH tunnel disconnected");
         // Auto-reconnect after a delay
-        setTimeout(() => connectNode(node.id), 5000);
+        setTimeout(() => {
+          connectNode(node.id).catch((err) => {
+            log.error(
+              `health: [${node.name}] auto-reconnect failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+        }, 5000);
       } else {
         log.debug(
           `health: [${node.name}] check failed (tunnel alive): ${err instanceof Error ? err.message : String(err)}`,
