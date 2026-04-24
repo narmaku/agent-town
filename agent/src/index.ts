@@ -18,7 +18,7 @@ import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
 import { discoverSessions } from "./session-parser";
-import { startTerminalServer } from "./terminal-server";
+import { persistSessionId, startTerminalServer } from "./terminal-server";
 
 const log = createLogger("agent");
 
@@ -100,6 +100,11 @@ function loadSessionNames(): Record<string, string> {
  * Discover sessions from all providers and map them to multiplexer sessions
  * using process-level inspection. Validates that mapped multiplexer sessions
  * actually exist (rejects zombie process associations).
+ *
+ * Uses two mapping strategies:
+ * 1. Primary: match by session ID (from --resume args or JSONL birth time)
+ * 2. Fallback: match by CWD when session ID matching fails (handles delay
+ *    between process start and first JSONL creation)
  */
 function discoverAndMapSessions(
   sessions: SessionInfo[],
@@ -109,6 +114,7 @@ function discoverAndMapSessions(
   const activeMuxNames = new Set(multiplexerSessions.map((s) => s.name));
   log.debug(`active mux sessions: [${[...activeMuxNames].join(", ")}]`);
 
+  // Primary pass: match sessions by session ID
   for (const session of sessions) {
     const mapping = processMappings.get(session.sessionId);
     if (mapping) {
@@ -120,6 +126,25 @@ function discoverAndMapSessions(
           `rejected mapping: session=${truncateId(session.sessionId)} mux=${mapping.session} (not in active mux list)`,
         );
       }
+    }
+  }
+
+  // Fallback pass: for sessions still unmapped, try matching by CWD.
+  // This handles the case where the user delays before sending their first
+  // message — the JSONL file is created long after the process started,
+  // so birth-time matching fails and the mapping is keyed by "cwd:<path>"
+  // instead of by session ID.
+  const mappedMuxSessions = new Set(sessions.filter((s) => s.multiplexerSession).map((s) => s.multiplexerSession));
+  for (const session of sessions) {
+    if (session.multiplexerSession) continue; // already mapped
+    if (!session.cwd) continue;
+
+    const cwdMapping = processMappings.get(`cwd:${session.cwd}`);
+    if (cwdMapping && activeMuxNames.has(cwdMapping.session) && !mappedMuxSessions.has(cwdMapping.session)) {
+      session.multiplexer = cwdMapping.multiplexer;
+      session.multiplexerSession = cwdMapping.session;
+      mappedMuxSessions.add(cwdMapping.session);
+      log.debug(`cwd fallback: session=${truncateId(session.sessionId)} mux=${cwdMapping.session} cwd=${session.cwd}`);
     }
   }
 
@@ -256,6 +281,14 @@ async function sendHeartbeat(): Promise<void> {
     adjustSessionStatuses(sessions, processMappings);
     trackMultiplexerAssociations(sessions, multiplexerSessions);
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
+
+    // Persist session IDs for mapped sessions so the recovery wrapper
+    // script can use --resume on zellij session resurrection after reboot.
+    for (const session of sessions) {
+      if (session.multiplexerSession && !session.sessionId.startsWith("pending-")) {
+        persistSessionId(session.multiplexerSession, session.sessionId);
+      }
+    }
 
     // Only include active (non-exited) multiplexer sessions
     const activeMuxSessions = multiplexerSessions.filter((s) => s.attached);
