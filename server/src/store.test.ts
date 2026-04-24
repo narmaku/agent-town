@@ -824,4 +824,97 @@ describe("store", () => {
     expect(machine?.sessions).toHaveLength(1);
     expect(machine?.sessions[0].sessionId).toBe("pending-solo-mux");
   });
+
+  test("server-side dedup: removes multiple placeholders sharing same mux as real session", () => {
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "multi-placeholder-dedup",
+        hostname: "multi-host",
+        sessions: [
+          {
+            sessionId: "real-uuid-xyz",
+            slug: "agent-session",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "main",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "Working...",
+            cwd: "/project",
+            multiplexerSession: "shared-mux",
+            multiplexer: "zellij",
+          },
+          {
+            sessionId: "pending-shared-mux",
+            slug: "shared-mux",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "",
+            status: "starting",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project",
+            multiplexerSession: "shared-mux",
+            multiplexer: "zellij",
+          },
+          {
+            sessionId: "pending-shared-mux-2",
+            slug: "shared-mux",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "",
+            status: "starting",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project",
+            multiplexerSession: "shared-mux",
+            multiplexer: "zellij",
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("multi-placeholder-dedup");
+    expect(machine?.sessions).toHaveLength(1);
+    expect(machine?.sessions[0].sessionId).toBe("real-uuid-xyz");
+  });
+
+  test("server-side dedup: placeholder without multiplexerSession is kept", () => {
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "no-mux-placeholder",
+        hostname: "no-mux-host",
+        sessions: [
+          {
+            sessionId: "real-uuid-aaa",
+            slug: "agent-a",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "main",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "Working...",
+            cwd: "/project",
+            multiplexerSession: "mux-a",
+            multiplexer: "zellij",
+          },
+          {
+            sessionId: "pending-orphan",
+            slug: "orphan",
+            projectPath: "/project",
+            projectName: "project",
+            gitBranch: "",
+            status: "starting",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/project",
+            // No multiplexerSession — should not be deduped
+          },
+        ],
+      }),
+    );
+
+    const machine = getMachine("no-mux-placeholder");
+    expect(machine?.sessions).toHaveLength(2);
+  });
 });

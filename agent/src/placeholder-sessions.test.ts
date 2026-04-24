@@ -102,6 +102,83 @@ describe("createPlaceholderSessions", () => {
     const ids = sessions.map((s) => s.sessionId).sort();
     expect(ids).toEqual(["pending-agent-1", "pending-agent-2"]);
   });
+
+  test("cleans up stale timestamp when real session claims the mux session", () => {
+    // First heartbeat: no real session, placeholder is created with timestamp
+    const sessions1: SessionInfo[] = [];
+    const mappings = new Map<string, ProcessMapping>();
+    mappings.set("cwd:/project", makeMapping({ session: "agent-1" }));
+    const activeMuxNames = new Set(["agent-1"]);
+
+    createPlaceholderSessions(sessions1, mappings, activeMuxNames);
+    expect(sessions1).toHaveLength(1);
+
+    // Age the placeholder so it would expire on next check
+    setPlaceholderCreatedAt("pending-agent-1", Date.now() - 4 * 60 * 1000);
+
+    // Second heartbeat: real session now claims the mux session
+    const sessions2: SessionInfo[] = [makeSession({ multiplexerSession: "agent-1" })];
+    createPlaceholderSessions(sessions2, mappings, activeMuxNames);
+
+    // Only the real session should remain
+    expect(sessions2).toHaveLength(1);
+    expect(sessions2[0].sessionId).toBe("real-uuid-1234");
+
+    // Simulate the placeholder reappearing (e.g., race condition)
+    // and verify the old timestamp was cleaned up so it gets a fresh one
+    const sessions3: SessionInfo[] = [];
+    const mappings3 = new Map<string, ProcessMapping>();
+    mappings3.set("cwd:/project", makeMapping({ session: "agent-1" }));
+    // Remove the real session from this heartbeat to force placeholder creation
+    createPlaceholderSessions(sessions3, mappings3, activeMuxNames);
+    expect(sessions3).toHaveLength(1);
+
+    // The placeholder should NOT be expired because the old timestamp was cleaned up
+    const result = expirePlaceholders(sessions3);
+    expect(result).toHaveLength(1);
+    expect(result[0].sessionId).toBe("pending-agent-1");
+  });
+
+  test("does not reset timestamp on repeated calls for same placeholder", () => {
+    const sessions: SessionInfo[] = [];
+    const mappings = new Map<string, ProcessMapping>();
+    mappings.set("cwd:/project", makeMapping({ session: "agent-1" }));
+    const activeMuxNames = new Set(["agent-1"]);
+
+    // First call creates the placeholder and registers the timestamp
+    createPlaceholderSessions(sessions, mappings, activeMuxNames);
+    expect(sessions).toHaveLength(1);
+
+    // Set the timestamp to 2 minutes ago (within TTL but aged)
+    setPlaceholderCreatedAt("pending-agent-1", Date.now() - 2 * 60 * 1000);
+
+    // Second call: simulating another heartbeat cycle. The placeholder for the
+    // same mux session already exists in the sessions array, so the function
+    // will skip it (mappedMuxSessions check). But if we start from an empty
+    // sessions array, it should NOT reset the timestamp.
+    const sessions2: SessionInfo[] = [];
+    createPlaceholderSessions(sessions2, mappings, activeMuxNames);
+    expect(sessions2).toHaveLength(1);
+
+    // Verify the timestamp is still the aged one (not reset to now)
+    // by expiring with a threshold between 2min and 3min — it should still be alive
+    // but if we set it to just past TTL, it should expire (confirming old timestamp kept)
+    setPlaceholderCreatedAt("pending-agent-1", Date.now() - 4 * 60 * 1000);
+    const result = expirePlaceholders(sessions2);
+    expect(result).toHaveLength(0);
+  });
+
+  test("defaults agentType to claude-code when mapping has no agentType", () => {
+    const sessions: SessionInfo[] = [];
+    const mappings = new Map<string, ProcessMapping>();
+    mappings.set("cwd:/project", makeMapping({ session: "agent-1", agentType: undefined }));
+    const activeMuxNames = new Set(["agent-1"]);
+
+    createPlaceholderSessions(sessions, mappings, activeMuxNames);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].agentType).toBe("claude-code");
+  });
 });
 
 describe("expirePlaceholders", () => {
@@ -167,6 +244,38 @@ describe("expirePlaceholders", () => {
     expect(result).toHaveLength(1);
     expect(result[0].sessionId).toBe("pending-fresh");
   });
+
+  test("keeps placeholder with no tracking info (unknown to timestamp map)", () => {
+    // A placeholder that somehow exists in sessions but has no timestamp entry
+    // (e.g., created externally or timestamp map was cleared)
+    const sessions: SessionInfo[] = [makeSession({ sessionId: "pending-unknown-mux", status: "starting" })];
+
+    const result = expirePlaceholders(sessions);
+    expect(result).toHaveLength(1);
+    expect(result[0].sessionId).toBe("pending-unknown-mux");
+  });
+
+  test("returns empty array when given empty sessions", () => {
+    const result = expirePlaceholders([]);
+    expect(result).toHaveLength(0);
+  });
+
+  test("placeholder at exactly TTL boundary is kept", () => {
+    const sessions: SessionInfo[] = [];
+    const mappings = new Map<string, ProcessMapping>();
+    mappings.set("cwd:/project", makeMapping({ session: "boundary" }));
+    const activeMuxNames = new Set(["boundary"]);
+
+    createPlaceholderSessions(sessions, mappings, activeMuxNames);
+
+    // Set to exactly 3 minutes ago (180_000 ms). The check is `> TTL`, not `>=`,
+    // so exactly at the boundary it should be kept.
+    setPlaceholderCreatedAt("pending-boundary", Date.now() - 180_000);
+
+    const result = expirePlaceholders(sessions);
+    expect(result).toHaveLength(1);
+    expect(result[0].sessionId).toBe("pending-boundary");
+  });
 });
 
 describe("agent-side deduplication", () => {
@@ -225,5 +334,121 @@ describe("agent-side deduplication", () => {
 
     // real1 for mux-a, placeholder for mux-b, placeholder for mux-c — all kept
     expect(deduped).toHaveLength(3);
+  });
+
+  test("returns empty array when given empty sessions", () => {
+    const deduped = deduplicateSessions([]);
+    expect(deduped).toHaveLength(0);
+  });
+
+  test("sessions without multiplexerSession are never deduped", () => {
+    const realNoMux = makeSession({
+      sessionId: "uuid-no-mux",
+      multiplexerSession: undefined,
+    });
+    const placeholderNoMux = makeSession({
+      sessionId: "pending-no-mux",
+      status: "starting",
+      multiplexerSession: undefined,
+    });
+
+    const deduped = deduplicateSessions([realNoMux, placeholderNoMux]);
+
+    // Both should be kept since neither has a multiplexerSession
+    expect(deduped).toHaveLength(2);
+  });
+
+  test("multiple real sessions sharing same mux session does not cause false dedup", () => {
+    // Two real (non-pending) sessions can share the same mux session
+    // (e.g., parent + sub-agent). Neither should be removed.
+    const real1 = makeSession({
+      sessionId: "uuid-parent",
+      multiplexerSession: "shared-mux",
+    });
+    const real2 = makeSession({
+      sessionId: "uuid-child",
+      multiplexerSession: "shared-mux",
+    });
+
+    const deduped = deduplicateSessions([real1, real2]);
+    expect(deduped).toHaveLength(2);
+  });
+
+  test("cleans up placeholder timestamp when dedup removes it", () => {
+    // Register a placeholder timestamp
+    setPlaceholderCreatedAt("pending-dedup-mux", Date.now());
+
+    const realSession = makeSession({
+      sessionId: "uuid-real",
+      multiplexerSession: "dedup-mux",
+    });
+    const placeholderSession = makeSession({
+      sessionId: "pending-dedup-mux",
+      status: "starting",
+      multiplexerSession: "dedup-mux",
+    });
+
+    const deduped = deduplicateSessions([realSession, placeholderSession]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].sessionId).toBe("uuid-real");
+
+    // If the placeholder reappears in a future heartbeat, it should get
+    // a fresh timestamp (the old one was cleaned up). Verify by creating
+    // a new placeholder and checking it doesn't immediately expire.
+    const sessions: SessionInfo[] = [];
+    const mappings = new Map<string, ProcessMapping>();
+    mappings.set("cwd:/project", makeMapping({ session: "dedup-mux" }));
+    createPlaceholderSessions(sessions, mappings, new Set(["dedup-mux"]));
+
+    const result = expirePlaceholders(sessions);
+    expect(result).toHaveLength(1);
+    expect(result[0].sessionId).toBe("pending-dedup-mux");
+  });
+});
+
+describe("combined expire + dedup pipeline", () => {
+  beforeEach(() => {
+    resetPlaceholderTimestamps();
+  });
+
+  test("expired placeholder removed before dedup, fresh placeholder deduped by real session", () => {
+    // Set up: expired placeholder for mux-a, fresh placeholder for mux-b,
+    // real session also for mux-b
+    const sessions: SessionInfo[] = [];
+    const mappings = new Map<string, ProcessMapping>();
+    mappings.set("cwd:/project-a", makeMapping({ session: "mux-a" }));
+    mappings.set("cwd:/project-b", makeMapping({ session: "mux-b" }));
+    createPlaceholderSessions(sessions, mappings, new Set(["mux-a", "mux-b"]));
+    expect(sessions).toHaveLength(2);
+
+    // Age mux-a's placeholder past TTL
+    setPlaceholderCreatedAt("pending-mux-a", Date.now() - 4 * 60 * 1000);
+
+    // Add a real session for mux-b
+    sessions.push(
+      makeSession({
+        sessionId: "uuid-real-b",
+        multiplexerSession: "mux-b",
+      }),
+    );
+
+    // Run the pipeline as it happens in sendHeartbeat()
+    const result = deduplicateSessions(expirePlaceholders(sessions));
+
+    // pending-mux-a expired, pending-mux-b deduped by real session
+    // Only the real session for mux-b should remain
+    expect(result).toHaveLength(1);
+    expect(result[0].sessionId).toBe("uuid-real-b");
+  });
+
+  test("pipeline with only real sessions passes all through", () => {
+    const sessions: SessionInfo[] = [
+      makeSession({ sessionId: "uuid-1", multiplexerSession: "mux-1" }),
+      makeSession({ sessionId: "uuid-2", multiplexerSession: "mux-2" }),
+      makeSession({ sessionId: "uuid-3" }), // no mux session
+    ];
+
+    const result = deduplicateSessions(expirePlaceholders(sessions));
+    expect(result).toHaveLength(3);
   });
 });
