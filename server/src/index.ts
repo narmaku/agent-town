@@ -10,6 +10,7 @@ import {
   type UpdateNodeRequest,
   type WebSocketMessage,
 } from "@agent-town/shared";
+import { broadcastToClients, PROXY_LAUNCH_TIMEOUT_MS, proxyFetch, WS_CONNECT_TIMEOUT_MS } from "./proxy-fetch";
 import { connectAutoNodes, connectNode, disconnectNode, resolveAgentEndpoint, testNodeConnection } from "./ssh-manager";
 import {
   addPendingSession,
@@ -62,15 +63,8 @@ function getAgentUrl(
   return url;
 }
 
-function broadcastToClients(message: WebSocketMessage): void {
-  const data = JSON.stringify(message);
-  for (const client of wsClients) {
-    try {
-      client.send(data);
-    } catch (_err) {
-      wsClients.delete(client);
-    }
-  }
+function broadcast(message: WebSocketMessage): void {
+  broadcastToClients(wsClients, message);
 }
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -164,7 +158,7 @@ async function routeRequest(
         machine.agentAddress = isLocal ? "localhost" : agentAddress;
       }
 
-      broadcastToClients({
+      broadcast({
         type: "machines_update",
         payload: getAllMachines(),
       });
@@ -197,14 +191,12 @@ async function routeRequest(
       getAgentUrl(machine, "/api/session-messages") +
       `?sessionId=${encodeURIComponent(sessionId)}&agentType=${agentType}&offset=${offset}&limit=${limit}`;
 
-    try {
-      const agentResp = await fetch(agentUrl);
-      const data = await agentResp.json();
-      return Response.json(data, { status: agentResp.status });
-    } catch (err) {
-      log.error(`session-messages: failed to fetch from agent: ${err instanceof Error ? err.message : String(err)}`);
-      return Response.json({ error: "Failed to fetch messages from agent" }, { status: 502 });
+    const result = await proxyFetch(agentUrl);
+    if (!result.ok) {
+      return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
+    const data = await result.response.json();
+    return Response.json(data, { status: result.response.status });
   }
 
   // API: search session message content (proxy to agent)
@@ -226,14 +218,12 @@ async function routeRequest(
       getAgentUrl(machine, "/api/search-messages") +
       `?query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`;
 
-    try {
-      const agentResp = await fetch(agentUrl);
-      const data = await agentResp.json();
-      return Response.json(data, { status: agentResp.status });
-    } catch (err) {
-      log.error(`search-messages: failed to fetch from agent: ${err instanceof Error ? err.message : String(err)}`);
-      return Response.json({ error: "Failed to search messages on agent" }, { status: 502 });
+    const result = await proxyFetch(agentUrl);
+    if (!result.ok) {
+      return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
+    const data = await result.response.json();
+    return Response.json(data, { status: result.response.status });
   }
 
   // API: get git diff for a session's working directory (proxy to agent)
@@ -252,14 +242,12 @@ async function routeRequest(
 
     const agentUrl = `${getAgentUrl(machine, "/api/git-diff")}?dir=${encodeURIComponent(dir)}`;
 
-    try {
-      const agentResp = await fetch(agentUrl);
-      const data = await agentResp.json();
-      return Response.json(data, { status: agentResp.status });
-    } catch (err) {
-      log.error(`git-diff: failed to fetch from agent: ${err instanceof Error ? err.message : String(err)}`);
-      return Response.json({ error: "Failed to fetch git diff from agent" }, { status: 502 });
+    const result = await proxyFetch(agentUrl);
+    if (!result.ok) {
+      return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
+    const data = await result.response.json();
+    return Response.json(data, { status: result.response.status });
   }
 
   // API: list directories on a machine (proxy to agent)
@@ -278,14 +266,12 @@ async function routeRequest(
 
     const agentUrl = `${getAgentUrl(machine, "/api/list-dirs")}?dir=${encodeURIComponent(dir)}`;
 
-    try {
-      const agentResp = await fetch(agentUrl);
-      const data = await agentResp.json();
-      return Response.json(data, { status: agentResp.status });
-    } catch (err) {
-      log.error(`list-dirs: failed to fetch from agent: ${err instanceof Error ? err.message : String(err)}`);
-      return Response.json({ error: "Failed to list directories from agent" }, { status: 502 });
+    const result = await proxyFetch(agentUrl);
+    if (!result.ok) {
+      return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
+    const data = await result.response.json();
+    return Response.json(data, { status: result.response.status });
   }
 
   // API: rename a session (also renames multiplexer session if active)
@@ -311,24 +297,22 @@ async function routeRequest(
           const machine = getMachine(body.machineId);
           if (machine?.terminalPort) {
             const agentUrl = getAgentUrl(machine, "/api/rename-session");
-            try {
-              const agentResp = await fetch(agentUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  multiplexer: muxInfo.multiplexer,
-                  currentName: currentMuxName,
-                  newName: newMuxName,
-                }),
-              });
-              if (!agentResp.ok) {
-                const errText = await agentResp.text();
-                log.error(`rename: agent rename failed: ${errText}`);
-              } else {
-                log.info("rename: agent rename succeeded");
-              }
-            } catch (err) {
-              log.error(`rename: agent rename error: ${err instanceof Error ? err.message : String(err)}`);
+            const renameResult = await proxyFetch(agentUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                multiplexer: muxInfo.multiplexer,
+                currentName: currentMuxName,
+                newName: newMuxName,
+              }),
+            });
+            if (!renameResult.ok) {
+              log.error(`rename: agent rename failed: ${renameResult.message}`);
+            } else if (!renameResult.response.ok) {
+              const errText = await renameResult.response.text();
+              log.error(`rename: agent rename failed: ${errText}`);
+            } else {
+              log.info("rename: agent rename succeeded");
             }
           } else {
             log.debug("rename: no terminalPort, skipping mux rename");
@@ -343,7 +327,7 @@ async function routeRequest(
         log.debug(`rename: UI-only (no active mux session)`);
       }
 
-      broadcastToClients({
+      broadcast({
         type: "machines_update",
         payload: getAllMachines(),
       });
@@ -370,7 +354,7 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/kill");
 
-      const agentResp = await fetch(agentUrl, {
+      const result = await proxyFetch(agentUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -379,7 +363,10 @@ async function routeRequest(
         }),
       });
 
-      if (!agentResp.ok) {
+      if (!result.ok) {
+        return Response.json({ error: result.error, message: result.message }, { status: result.status });
+      }
+      if (!result.response.ok) {
         return Response.json({ error: "Agent kill failed" }, { status: 502 });
       }
       return Response.json({ ok: true });
@@ -410,28 +397,33 @@ async function routeRequest(
       const muxType = body.multiplexer || getSessionMultiplexerInfo(body.machineId, body.sessionId)?.multiplexer;
       if (muxSession && muxType) {
         log.info(`delete: killing mux session=${muxSession} type=${muxType}`);
-        try {
-          const killUrl = getAgentUrl(machine, "/api/kill");
-          await fetch(killUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ multiplexer: muxType, session: muxSession }),
-          });
-        } catch (err) {
-          log.debug("best-effort mux kill failed", { error: String(err) });
+        const killUrl = getAgentUrl(machine, "/api/kill");
+        const killResult = await proxyFetch(killUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ multiplexer: muxType, session: muxSession }),
+        });
+        if (!killResult.ok) {
+          log.debug(`best-effort mux kill failed: ${killResult.message}`);
         }
       }
 
       // Step 3: Delete the JSONL file
       const deleteUrl = getAgentUrl(machine, "/api/delete-session");
-      const agentResp = await fetch(deleteUrl, {
+      const deleteResult = await proxyFetch(deleteUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: body.sessionId }),
       });
 
-      if (!agentResp.ok) {
-        const errText = await agentResp.text();
+      if (!deleteResult.ok) {
+        return Response.json(
+          { error: deleteResult.error, message: deleteResult.message },
+          { status: deleteResult.status },
+        );
+      }
+      if (!deleteResult.response.ok) {
+        const errText = await deleteResult.response.text();
         return Response.json({ error: errText || "Delete failed" }, { status: 502 });
       }
 
@@ -463,7 +455,7 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/send");
 
-      const agentResp = await fetch(agentUrl, {
+      const result = await proxyFetch(agentUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -474,7 +466,10 @@ async function routeRequest(
         }),
       });
 
-      if (!agentResp.ok) {
+      if (!result.ok) {
+        return Response.json({ error: result.error, message: result.message }, { status: result.status });
+      }
+      if (!result.response.ok) {
         return Response.json({ error: "Agent send failed" }, { status: 502 });
       }
       return Response.json({ ok: true });
@@ -504,7 +499,7 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/reconnect");
 
-      const agentResp = await fetch(agentUrl, {
+      const result = await proxyFetch(agentUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -516,8 +511,11 @@ async function routeRequest(
         }),
       });
 
-      if (!agentResp.ok) {
-        const errText = await agentResp.text();
+      if (!result.ok) {
+        return Response.json({ error: result.error, message: result.message }, { status: result.status });
+      }
+      if (!result.response.ok) {
+        const errText = await result.response.text();
         return Response.json({ error: errText || "Agent reconnect failed" }, { status: 502 });
       }
       return Response.json({ ok: true });
@@ -558,29 +556,36 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/launch");
 
-      const agentResp = await fetch(agentUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionName: body.sessionName,
-          projectDir: body.projectDir,
-          agentType: body.agentType || settings.defaultAgentType,
-          multiplexer: mux,
-          zellijLayout: settings.zellijLayout,
-          model: settings.defaultModel,
-          autonomous: body.autonomous,
-        }),
-      });
+      const result = await proxyFetch(
+        agentUrl,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionName: body.sessionName,
+            projectDir: body.projectDir,
+            agentType: body.agentType || settings.defaultAgentType,
+            multiplexer: mux,
+            zellijLayout: settings.zellijLayout,
+            model: settings.defaultModel,
+            autonomous: body.autonomous,
+          }),
+        },
+        PROXY_LAUNCH_TIMEOUT_MS,
+      );
 
-      if (!agentResp.ok) {
-        const errText = await agentResp.text();
+      if (!result.ok) {
+        return Response.json({ error: result.error, message: result.message }, { status: result.status });
+      }
+      if (!result.response.ok) {
+        const errText = await result.response.text();
         return Response.json({ error: errText || "Agent launch failed" }, { status: 502 });
       }
 
       // Add a pending session so the dashboard shows it immediately
       // (before the next heartbeat discovers the real session)
       addPendingSession(body.machineId, body.sessionName, body.projectDir, mux);
-      broadcastToClients({
+      broadcast({
         type: "machines_update",
         payload: getAllMachines(),
       });
@@ -618,23 +623,30 @@ async function routeRequest(
       const rawName = savedName || slug || body.sessionId.slice(0, 8);
       const sessionName = rawName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 50);
 
-      const agentResp = await fetch(agentUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionName,
-          sessionId: body.sessionId,
-          projectDir: body.projectDir,
-          agentType: body.agentType || settings.defaultAgentType,
-          multiplexer: settings.defaultMultiplexer,
-          zellijLayout: settings.zellijLayout,
-          model: settings.defaultModel,
-          autonomous: body.autonomous,
-        }),
-      });
+      const result = await proxyFetch(
+        agentUrl,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionName,
+            sessionId: body.sessionId,
+            projectDir: body.projectDir,
+            agentType: body.agentType || settings.defaultAgentType,
+            multiplexer: settings.defaultMultiplexer,
+            zellijLayout: settings.zellijLayout,
+            model: settings.defaultModel,
+            autonomous: body.autonomous,
+          }),
+        },
+        PROXY_LAUNCH_TIMEOUT_MS,
+      );
 
-      if (!agentResp.ok) {
-        const errText = await agentResp.text();
+      if (!result.ok) {
+        return Response.json({ error: result.error, message: result.message }, { status: result.status });
+      }
+      if (!result.response.ok) {
+        const errText = await result.response.text();
         return Response.json({ error: errText || "Agent resume failed" }, { status: 502 });
       }
       return Response.json({
@@ -817,7 +829,22 @@ const _server = Bun.serve({
 
         agentWs.binaryType = "arraybuffer";
 
+        // Connection timeout — close if agent doesn't respond within WS_CONNECT_TIMEOUT_MS
+        const connectTimeout = setTimeout(() => {
+          if (agentWs.readyState !== WebSocket.OPEN) {
+            log.warn(`ws: terminal proxy connection timeout for session=${session} agent=${agentHost}:${agentPort}`);
+            try {
+              ws.send("\r\n\x1b[31mConnection to agent terminal timed out\x1b[0m\r\n");
+              ws.close();
+            } catch (_err) {
+              // already closed
+            }
+            agentWs.close();
+          }
+        }, WS_CONNECT_TIMEOUT_MS);
+
         agentWs.onopen = () => {
+          clearTimeout(connectTimeout);
           log.debug(`ws: terminal proxy established for session=${session}`);
         };
 
@@ -834,6 +861,7 @@ const _server = Bun.serve({
         };
 
         agentWs.onclose = () => {
+          clearTimeout(connectTimeout);
           try {
             ws.close();
           } catch (_err) {
@@ -843,6 +871,7 @@ const _server = Bun.serve({
         };
 
         agentWs.onerror = () => {
+          clearTimeout(connectTimeout);
           log.warn(`ws: terminal proxy error for session=${session} agent=${agentHost}:${agentPort}`);
           try {
             ws.send("\r\n\x1b[31mFailed to connect to agent terminal server\x1b[0m\r\n");
@@ -869,8 +898,8 @@ const _server = Bun.serve({
     },
 
     close(ws) {
-      // Clean up dashboard clients
-      for (const client of wsClients) {
+      // Clean up dashboard clients — copy to array to avoid mutation during iteration
+      for (const client of [...wsClients]) {
         if (client.ws === ws) {
           wsClients.delete(client);
           break;
