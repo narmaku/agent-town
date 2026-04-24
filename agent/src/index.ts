@@ -18,6 +18,7 @@ import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
 import { discoverSessions } from "./session-parser";
+import { writeSessionMetadata } from "./session-recovery";
 import { startTerminalServer } from "./terminal-server";
 
 const log = createLogger("agent");
@@ -243,6 +244,31 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
   if (muxAssocChanged) saveLastKnownMux();
 }
 
+/**
+ * Persist session metadata to disk for sessions that are mapped to a
+ * multiplexer session. This enables the wrapper script to resume the
+ * correct session after a multiplexer recovery (e.g., after reboot).
+ *
+ * Only writes metadata for Claude Code sessions with valid (non-pending)
+ * session IDs.
+ */
+function persistSessionMetadata(sessions: SessionInfo[]): void {
+  for (const session of sessions) {
+    if (!session.multiplexerSession) continue;
+    if (!session.sessionId || session.sessionId.startsWith("pending-")) continue;
+    if (session.agentType !== "claude-code") continue;
+
+    writeSessionMetadata(session.multiplexerSession, {
+      sessionId: session.sessionId,
+      agentType: session.agentType,
+      projectDir: session.cwd,
+      autonomous: false, // We can't reliably detect this from session state
+      model: session.model,
+      createdAt: new Date().toISOString(),
+    });
+  }
+}
+
 async function sendHeartbeat(): Promise<void> {
   try {
     const [sessions, multiplexers, multiplexerSessions, processMappings] = await Promise.all([
@@ -255,6 +281,7 @@ async function sendHeartbeat(): Promise<void> {
     const activeMuxNames = discoverAndMapSessions(sessions, multiplexerSessions, processMappings);
     adjustSessionStatuses(sessions, processMappings);
     trackMultiplexerAssociations(sessions, multiplexerSessions);
+    persistSessionMetadata(sessions);
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
 
     // Deduplicate: when a real session and placeholder share the same mux session,
