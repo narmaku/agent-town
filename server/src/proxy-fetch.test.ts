@@ -1,5 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
-import { broadcastToClients, PROXY_LAUNCH_TIMEOUT_MS, PROXY_TIMEOUT_MS, proxyFetch } from "./proxy-fetch";
+import {
+  broadcastToClients,
+  PROXY_LAUNCH_TIMEOUT_MS,
+  PROXY_TIMEOUT_MS,
+  proxyFetch,
+  WS_CONNECT_TIMEOUT_MS,
+} from "./proxy-fetch";
 
 describe("proxyFetch", () => {
   test("returns response data on successful fetch", async () => {
@@ -107,6 +113,89 @@ describe("proxyFetch", () => {
       await proxyFetch("http://localhost:4681/api/test");
       expect(capturedSignal).toBeDefined();
       expect(capturedSignal).toBeInstanceOf(AbortSignal);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("treats AbortError the same as TimeoutError (504 response)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(() => Promise.reject(new DOMException("The operation was aborted.", "AbortError")));
+
+    try {
+      const result = await proxyFetch("http://localhost:4681/api/sessions");
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe(504);
+      expect(result.error).toBe("agent_timeout");
+      expect(result.message).toContain("did not respond");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("returns ok: true for non-200 agent responses (caller checks response.ok)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(JSON.stringify({ error: "not found" }), { status: 404 })),
+    );
+
+    try {
+      const result = await proxyFetch("http://localhost:4681/api/sessions");
+      // proxyFetch itself succeeds — the response reached us
+      expect(result.ok).toBe(true);
+      expect(result.response).toBeInstanceOf(Response);
+      expect(result.response?.status).toBe(404);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("handles non-Error throwable in catch path", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mock(() => Promise.reject("string error"));
+
+    try {
+      const result = await proxyFetch("http://localhost:4681/api/sessions");
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe(502);
+      expect(result.error).toBe("agent_unreachable");
+      expect(result.message).toBe("string error");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("uses custom timeout when provided", async () => {
+    const originalFetch = globalThis.fetch;
+    let capturedSignal: AbortSignal | undefined;
+    globalThis.fetch = mock((_url: string, init?: RequestInit) => {
+      capturedSignal = init?.signal ?? undefined;
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    });
+
+    try {
+      await proxyFetch("http://localhost:4681/api/launch", {}, 30_000);
+      expect(capturedSignal).toBeDefined();
+      expect(capturedSignal).toBeInstanceOf(AbortSignal);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("WS_CONNECT_TIMEOUT_MS is 10 seconds", () => {
+    expect(WS_CONNECT_TIMEOUT_MS).toBe(10_000);
+  });
+
+  test("timeout message includes rounded timeout value in seconds", async () => {
+    const originalFetch = globalThis.fetch;
+    // Simulate a timeout with a DOMException but control the timeoutMs parameter
+    // to verify the message formatting without waiting
+    globalThis.fetch = mock(() => Promise.reject(new DOMException("The operation timed out.", "TimeoutError")));
+
+    try {
+      const result = await proxyFetch("http://unreachable:4681/api/sessions", {}, 30_000);
+      expect(result.ok).toBe(false);
+      expect(result.message).toBe("Agent did not respond within 30s");
     } finally {
       globalThis.fetch = originalFetch;
     }
