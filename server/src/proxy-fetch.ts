@@ -12,19 +12,19 @@ export const PROXY_LAUNCH_TIMEOUT_MS = 30_000;
 export const WS_CONNECT_TIMEOUT_MS = 10_000;
 
 interface ProxyFetchSuccess {
-	ok: true;
-	response: Response;
-	status?: undefined;
-	error?: undefined;
-	message?: undefined;
+  ok: true;
+  response: Response;
+  status?: undefined;
+  error?: undefined;
+  message?: undefined;
 }
 
 interface ProxyFetchError {
-	ok: false;
-	response?: undefined;
-	status: number;
-	error: string;
-	message: string;
+  ok: false;
+  response?: undefined;
+  status: number;
+  error: string;
+  message: string;
 }
 
 type ProxyFetchResult = ProxyFetchSuccess | ProxyFetchError;
@@ -37,37 +37,37 @@ type ProxyFetchResult = ProxyFetchSuccess | ProxyFetchError;
  * determine if the fetch succeeded or timed out / failed.
  */
 export async function proxyFetch(
-	url: string,
-	init: RequestInit = {},
-	timeoutMs: number = PROXY_TIMEOUT_MS,
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = PROXY_TIMEOUT_MS,
 ): Promise<ProxyFetchResult> {
-	try {
-		const response = await fetch(url, {
-			...init,
-			signal: AbortSignal.timeout(timeoutMs),
-		});
-		return { ok: true, response };
-	} catch (err) {
-		const errMsg = err instanceof Error ? err.message : String(err);
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: true, response };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
 
-		if (err instanceof DOMException && err.name === "AbortError") {
-			log.warn(`proxy timeout after ${timeoutMs}ms: ${url}`);
-			return {
-				ok: false,
-				status: 504,
-				error: "agent_timeout",
-				message: `Agent did not respond within ${Math.round(timeoutMs / 1000)}s`,
-			};
-		}
+    if (err instanceof DOMException && err.name === "AbortError") {
+      log.warn(`proxy timeout after ${timeoutMs}ms: ${url}`);
+      return {
+        ok: false,
+        status: 504,
+        error: "agent_timeout",
+        message: `Agent did not respond within ${Math.round(timeoutMs / 1000)}s`,
+      };
+    }
 
-		log.error(`proxy fetch failed: ${url} — ${errMsg}`);
-		return {
-			ok: false,
-			status: 502,
-			error: "agent_unreachable",
-			message: errMsg,
-		};
-	}
+    log.error(`proxy fetch failed: ${url} — ${errMsg}`);
+    return {
+      ok: false,
+      status: 502,
+      error: "agent_unreachable",
+      message: errMsg,
+    };
+  }
 }
 
 type WsClient = { ws: unknown; send: (data: string) => void };
@@ -78,14 +78,14 @@ type WsClient = { ws: unknown; send: (data: string) => void };
  * when a failed client is removed during the loop.
  */
 export function broadcastToClients(wsClients: Set<WsClient>, message: WebSocketMessage): void {
-	const data = JSON.stringify(message);
-	const clients = [...wsClients];
-	for (const client of clients) {
-		try {
-			client.send(data);
-		} catch (err) {
-			log.debug(`broadcast: removing failed client: ${err instanceof Error ? err.message : String(err)}`);
-			wsClients.delete(client);
-		}
-	}
+  const data = JSON.stringify(message);
+  const clients = [...wsClients];
+  for (const client of clients) {
+    try {
+      client.send(data);
+    } catch (err) {
+      log.debug(`broadcast: removing failed client: ${err instanceof Error ? err.message : String(err)}`);
+      wsClients.delete(client);
+    }
+  }
 }
