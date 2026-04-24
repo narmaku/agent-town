@@ -625,7 +625,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
           }
 
           // Send the launch command (wrapper script path or cd + agent command)
-          const fullCmd = useWrapper ? `${launchCmd}\n` : `${launchCmd}\n`;
+          const fullCmd = `${launchCmd}\n`;
           const writeChars = Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
             env: cleanEnv,
             stdout: "ignore",
