@@ -117,6 +117,8 @@ async function deployAgent(node: RemoteNode): Promise<void> {
       [
         "rsync",
         "-az",
+        "--no-owner",
+        "--no-group",
         "--delete",
         "--exclude=node_modules",
         "--exclude=.git",
