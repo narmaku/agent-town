@@ -17,6 +17,7 @@ import { createPlaceholderSessions, deduplicateSessions, expirePlaceholders } fr
 import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
+import { discoverAndMapSessions } from "./session-mapping";
 import { discoverSessions } from "./session-parser";
 import { writeSessionMetadata } from "./session-recovery";
 import { startTerminalServer } from "./terminal-server";
@@ -96,36 +97,6 @@ function loadSessionNames(): Record<string, string> {
 //
 // Each function handles one phase of the heartbeat pipeline.
 // They are called sequentially from sendHeartbeat().
-
-/**
- * Discover sessions from all providers and map them to multiplexer sessions
- * using process-level inspection. Validates that mapped multiplexer sessions
- * actually exist (rejects zombie process associations).
- */
-function discoverAndMapSessions(
-  sessions: SessionInfo[],
-  multiplexerSessions: MultiplexerSessionInfo[],
-  processMappings: Map<string, ProcessMapping>,
-): Set<string> {
-  const activeMuxNames = new Set(multiplexerSessions.map((s) => s.name));
-  log.debug(`active mux sessions: [${[...activeMuxNames].join(", ")}]`);
-
-  for (const session of sessions) {
-    const mapping = processMappings.get(session.sessionId);
-    if (mapping) {
-      if (activeMuxNames.has(mapping.session)) {
-        session.multiplexer = mapping.multiplexer;
-        session.multiplexerSession = mapping.session;
-      } else {
-        log.debug(
-          `rejected mapping: session=${truncateId(session.sessionId)} mux=${mapping.session} (not in active mux list)`,
-        );
-      }
-    }
-  }
-
-  return activeMuxNames;
-}
 
 /**
  * Adjust session statuses using the priority chain:
