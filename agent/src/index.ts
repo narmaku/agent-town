@@ -13,11 +13,13 @@ import {
 import { configureLocalHooks } from "./hook-setup";
 import { getHookState, updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
-import { createPlaceholderSessions } from "./placeholder-sessions";
+import { createPlaceholderSessions, deduplicateSessions, expirePlaceholders } from "./placeholder-sessions";
 import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
+import { discoverAndMapSessions } from "./session-mapping";
 import { discoverSessions } from "./session-parser";
+import { writeSessionMetadata } from "./session-recovery";
 import { startTerminalServer } from "./terminal-server";
 
 const log = createLogger("agent");
@@ -95,36 +97,6 @@ function loadSessionNames(): Record<string, string> {
 //
 // Each function handles one phase of the heartbeat pipeline.
 // They are called sequentially from sendHeartbeat().
-
-/**
- * Discover sessions from all providers and map them to multiplexer sessions
- * using process-level inspection. Validates that mapped multiplexer sessions
- * actually exist (rejects zombie process associations).
- */
-function discoverAndMapSessions(
-  sessions: SessionInfo[],
-  multiplexerSessions: MultiplexerSessionInfo[],
-  processMappings: Map<string, ProcessMapping>,
-): Set<string> {
-  const activeMuxNames = new Set(multiplexerSessions.map((s) => s.name));
-  log.debug(`active mux sessions: [${[...activeMuxNames].join(", ")}]`);
-
-  for (const session of sessions) {
-    const mapping = processMappings.get(session.sessionId);
-    if (mapping) {
-      if (activeMuxNames.has(mapping.session)) {
-        session.multiplexer = mapping.multiplexer;
-        session.multiplexerSession = mapping.session;
-      } else {
-        log.debug(
-          `rejected mapping: session=${truncateId(session.sessionId)} mux=${mapping.session} (not in active mux list)`,
-        );
-      }
-    }
-  }
-
-  return activeMuxNames;
-}
 
 /**
  * Adjust session statuses using the priority chain:
@@ -243,6 +215,31 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
   if (muxAssocChanged) saveLastKnownMux();
 }
 
+/**
+ * Persist session metadata to disk for sessions that are mapped to a
+ * multiplexer session. This enables the wrapper script to resume the
+ * correct session after a multiplexer recovery (e.g., after reboot).
+ *
+ * Only writes metadata for Claude Code sessions with valid (non-pending)
+ * session IDs.
+ */
+function persistSessionMetadata(sessions: SessionInfo[]): void {
+  for (const session of sessions) {
+    if (!session.multiplexerSession) continue;
+    if (!session.sessionId || session.sessionId.startsWith("pending-")) continue;
+    if (session.agentType !== "claude-code") continue;
+
+    writeSessionMetadata(session.multiplexerSession, {
+      sessionId: session.sessionId,
+      agentType: session.agentType,
+      projectDir: session.cwd,
+      autonomous: false, // We can't reliably detect this from session state
+      model: session.model,
+      createdAt: new Date().toISOString(),
+    });
+  }
+}
+
 async function sendHeartbeat(): Promise<void> {
   try {
     const [sessions, multiplexers, multiplexerSessions, processMappings] = await Promise.all([
@@ -255,7 +252,12 @@ async function sendHeartbeat(): Promise<void> {
     const activeMuxNames = discoverAndMapSessions(sessions, multiplexerSessions, processMappings);
     adjustSessionStatuses(sessions, processMappings);
     trackMultiplexerAssociations(sessions, multiplexerSessions);
+    persistSessionMetadata(sessions);
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
+
+    // Deduplicate: when a real session and placeholder share the same mux session,
+    // keep only the real session. Then expire stale placeholders (older than TTL).
+    const dedupedSessions = deduplicateSessions(expirePlaceholders(sessions));
 
     // Only include active (non-exited) multiplexer sessions
     const activeMuxSessions = multiplexerSessions.filter((s) => s.attached);
@@ -264,7 +266,7 @@ async function sendHeartbeat(): Promise<void> {
       machineId: MACHINE_ID,
       hostname: machineHostname,
       platform: machinePlatform,
-      sessions,
+      sessions: dedupedSessions,
       multiplexers,
       multiplexerSessions: activeMuxSessions,
       availableAgents: getAllProviders().map((p) => p.type),
@@ -279,10 +281,10 @@ async function sendHeartbeat(): Promise<void> {
     });
 
     // Log heartbeat summary at debug level (runs every 5s)
-    const mapped = sessions.filter((s) => s.multiplexerSession).length;
+    const mapped = dedupedSessions.filter((s) => s.multiplexerSession).length;
     const rejected = processMappings.size - mapped;
     log.debug(
-      `heartbeat: ${sessions.length} sessions, ${processMappings.size} processes, ${mapped} mapped, ${rejected} unmatched`,
+      `heartbeat: ${dedupedSessions.length} sessions, ${processMappings.size} processes, ${mapped} mapped, ${rejected} unmatched`,
     );
 
     if (!response.ok) {
