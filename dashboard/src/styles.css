@@ -1685,6 +1685,163 @@ body {
   flex-shrink: 0;
 }
 
+/* Terminal helpers toolbar */
+.terminal-helpers {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.terminal-helpers-toggle {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.terminal-helpers-toggle:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.terminal-helpers-toggle.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.terminal-helpers-panel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.terminal-helpers-separator {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+.terminal-helper-btn {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-family: "Fira Code", "Cascadia Code", "SF Mono", monospace;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  min-width: 28px;
+  text-align: center;
+}
+
+.terminal-helper-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.terminal-helper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.terminal-helper-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+  animation: modifier-pulse 1s ease-in-out infinite;
+}
+
+@keyframes modifier-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.modifier-prompt {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: modifier-pulse 1s ease-in-out infinite;
+}
+
+.send-keys-wrapper {
+  position: relative;
+}
+
+.send-keys-dialog {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  gap: 4px;
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.send-keys-input {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: "Fira Code", "Cascadia Code", "SF Mono", monospace;
+  width: 140px;
+  outline: none;
+}
+
+.send-keys-input:focus {
+  border-color: var(--accent);
+}
+
+.send-keys-input::placeholder {
+  color: var(--text-muted);
+}
+
+.send-keys-submit {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.send-keys-submit:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.send-keys-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .terminal-pane-container {
   flex: 1;
   overflow: hidden;

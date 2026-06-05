@@ -3,11 +3,17 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalMultiplexer } from "@agent-town/shared";
 
 const DOUBLE_ESC_THRESHOLD_MS = 500;
+
+export interface TerminalPaneHandle {
+  sendData: (data: string) => void;
+  focusTerminal: () => void;
+  isConnected: boolean;
+}
 
 interface Props {
   machineId: string;
@@ -16,10 +22,34 @@ interface Props {
   onDoubleEsc?: () => void;
 }
 
-export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc }: Props): React.JSX.Element {
+export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(function TerminalPane(
+  { machineId, sessionName, multiplexer, onDoubleEsc },
+  ref,
+): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const onDoubleEscRef = useRef(onDoubleEsc);
   onDoubleEscRef.current = onDoubleEsc;
+  const wsRef = useRef<WebSocket | null>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const [connected, setConnected] = useState(false);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      sendData(data: string) {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(data);
+        }
+      },
+      focusTerminal() {
+        termRef.current?.focus();
+      },
+      get isConnected() {
+        return connected;
+      },
+    }),
+    [connected],
+  );
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -37,6 +67,8 @@ export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc 
       },
       allowProposedApi: true,
     });
+
+    termRef.current = term;
 
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
@@ -66,7 +98,10 @@ export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc 
     const wsUrl = `${protocol}//${window.location.host}/ws/terminal?${params}`;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
+    wsRef.current = ws;
+
     ws.onopen = () => {
+      setConnected(true);
       term.focus();
       // Send a resize after connect to ensure the PTY matches the browser size
       fitAddon.fit();
@@ -88,10 +123,12 @@ export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc 
     };
 
     ws.onclose = () => {
+      setConnected(false);
       term.write("\r\n\x1b[90m--- Connection closed ---\x1b[0m\r\n");
     };
 
     ws.onerror = () => {
+      setConnected(false);
       term.write("\r\n\x1b[31m--- Connection error ---\x1b[0m\r\n");
     };
 
@@ -129,10 +166,13 @@ export function TerminalPane({ machineId, sessionName, multiplexer, onDoubleEsc 
     return () => {
       keyHandler.dispose();
       resizeObserver.disconnect();
+      wsRef.current = null;
+      termRef.current = null;
+      setConnected(false);
       ws.close();
       term.dispose();
     };
   }, [machineId, sessionName, multiplexer]);
 
   return <div className="terminal-pane-container" ref={containerRef} />;
-}
+});
