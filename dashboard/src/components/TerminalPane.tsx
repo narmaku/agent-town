@@ -33,19 +33,23 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(function Termi
   const termRef = useRef<Terminal | null>(null);
   const [connected, setConnected] = useState(false);
 
-  useImperativeHandle(ref, () => ({
-    sendData(data: string) {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(data);
-      }
-    },
-    focusTerminal() {
-      termRef.current?.focus();
-    },
-    get isConnected() {
-      return connected;
-    },
-  }), [connected]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      sendData(data: string) {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(data);
+        }
+      },
+      focusTerminal() {
+        termRef.current?.focus();
+      },
+      get isConnected() {
+        return connected;
+      },
+    }),
+    [connected],
+  );
 
   useEffect(() => {
     if (!containerRef.current) return;

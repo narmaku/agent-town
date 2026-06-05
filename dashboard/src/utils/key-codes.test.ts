@@ -1,14 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  ALT_PREFIX,
-  ENTER,
-  ESCAPE,
-  TAB,
-  altCode,
-  arrowCode,
-  ctrlCode,
-  parseKeyCombo,
-} from "./key-codes";
+import { ALT_PREFIX, altCode, arrowCode, ctrlCode, ENTER, ESCAPE, parseKeyCombo, TAB } from "./key-codes";
 
 describe("ctrlCode", () => {
   test("maps lowercase a-z to control codes", () => {
