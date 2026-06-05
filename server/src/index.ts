@@ -479,6 +479,42 @@ async function routeRequest(
     }
   }
 
+  // API: upload a file to an agent machine (proxy to agent)
+  if (url.pathname === "/api/sessions/upload" && req.method === "POST") {
+    try {
+      const machineId = url.searchParams.get("machineId");
+      if (!machineId) {
+        return Response.json({ error: "Missing machineId query parameter" }, { status: 400 });
+      }
+
+      const machine = getMachine(machineId);
+      if (!machine || !machine.terminalPort) {
+        return Response.json({ error: "Machine not found" }, { status: 404 });
+      }
+
+      const agentUrl = getAgentUrl(machine, "/api/upload");
+      const contentType = req.headers.get("content-type");
+
+      const result = await proxyFetch(agentUrl, {
+        method: "POST",
+        headers: contentType ? { "content-type": contentType } : {},
+        body: req.body,
+        // @ts-expect-error Bun supports duplex on fetch
+        duplex: "half",
+      });
+
+      if (!result.ok) {
+        return Response.json({ error: result.error, message: result.message }, { status: result.status });
+      }
+
+      const data = await result.response.json();
+      return Response.json(data, { status: result.response.status });
+    } catch (err) {
+      log.error(`upload proxy: failed: ${err instanceof Error ? err.message : String(err)}`);
+      return Response.json({ error: "Failed to upload" }, { status: 500 });
+    }
+  }
+
   // API: reconnect agent in an existing mux session (proxy to agent)
   if (url.pathname === "/api/sessions/reconnect" && req.method === "POST") {
     try {
