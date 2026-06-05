@@ -1029,6 +1029,48 @@ export function startTerminalServer(port: number, machineId: string): Server {
         }
       }
 
+      // HTTP endpoint: upload a file to the agent machine
+      if (url.pathname === "/api/upload" && req.method === "POST") {
+        try {
+          const { mkdirSync, writeFileSync } = await import("node:fs");
+          const { join } = await import("node:path");
+          const { UPLOAD_DIR, MAX_UPLOAD_SIZE_BYTES, sanitizeFilename } = await import("./file-upload");
+
+          const formData = await req.formData();
+          const file = formData.get("file");
+
+          if (!file || !(file instanceof File)) {
+            return Response.json({ error: "No file provided" }, { status: 400 });
+          }
+
+          if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+            return Response.json(
+              { error: `File too large (${Math.round(file.size / 1024 / 1024)}MB). Max: ${Math.round(MAX_UPLOAD_SIZE_BYTES / 1024 / 1024)}MB` },
+              { status: 413 },
+            );
+          }
+
+          mkdirSync(UPLOAD_DIR, { recursive: true });
+
+          const safeName = sanitizeFilename(file.name);
+          const filePath = join(UPLOAD_DIR, safeName);
+
+          const buffer = await file.arrayBuffer();
+          writeFileSync(filePath, Buffer.from(buffer));
+
+          log.info(`upload: saved ${file.name} (${file.size} bytes) as ${safeName}`);
+
+          return Response.json({
+            ok: true,
+            path: filePath,
+            filename: file.name,
+          });
+        } catch (err) {
+          log.error(`upload failed: ${err instanceof Error ? err.message : "unknown"}`);
+          return Response.json({ error: "Upload failed" }, { status: 500 });
+        }
+      }
+
       // HTTP endpoint: send text to a multiplexer session
       //
       // Uses PTY attachment with bracketed paste mode for reliable text delivery
