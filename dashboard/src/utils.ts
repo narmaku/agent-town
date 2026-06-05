@@ -58,6 +58,7 @@ export const API = {
   SESSIONS_KILL: "/api/sessions/kill",
   SESSIONS_DELETE: "/api/sessions/delete",
   SESSIONS_SEND: "/api/sessions/send",
+  SESSIONS_UPLOAD: "/api/sessions/upload",
   AGENTS_LAUNCH: "/api/agents/launch",
   AGENTS_RESUME: "/api/agents/resume",
   SESSIONS_RECONNECT: "/api/sessions/reconnect",
