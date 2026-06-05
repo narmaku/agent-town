@@ -1,7 +1,11 @@
 import type { AgentType } from "@agent-town/shared";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { API } from "../utils";
+
+export interface SendMessageHandle {
+  appendText: (text: string) => void;
+}
 
 interface Props {
   machineId: string;
@@ -11,24 +15,38 @@ interface Props {
   onSent?: () => void;
 }
 
-export function SendMessage({ machineId, multiplexer, session, agentType, onSent }: Props): React.JSX.Element {
+export const SendMessage = forwardRef<SendMessageHandle, Props>(function SendMessage(
+  { machineId, multiplexer, session, agentType, onSent },
+  ref,
+): React.JSX.Element {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  useImperativeHandle(ref, () => ({
+    appendText(newText: string) {
+      setText((prev) => {
+        const separator = prev && !prev.endsWith("\n") ? "\n" : "";
+        return prev + separator + newText;
+      });
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+  }));
+
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
-  // Auto-resize textarea
+  // Auto-resize textarea when content changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: text is an intentional trigger for resize
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
       el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
     }
-  }, []);
+  }, [text]);
 
   async function handleSend() {
     if (!text.trim() || sending) return;
@@ -105,4 +123,4 @@ export function SendMessage({ machineId, multiplexer, session, agentType, onSent
       </div>
     </div>
   );
-}
+});

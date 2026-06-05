@@ -4468,3 +4468,71 @@ body {
     border-bottom: 1px solid var(--border);
   }
 }
+
+/* File drop zone */
+.file-drop-zone {
+  position: relative;
+  display: contents;
+}
+
+.file-drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(59, 130, 246, 0.08);
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.file-drop-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.file-drop-icon {
+  font-size: 32px;
+}
+
+.file-drop-text {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.file-upload-progress {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-primary);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 12px;
+  z-index: 25;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+.file-upload-error {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-primary);
+  color: var(--error, #ef4444);
+  border: 1px solid var(--error, #ef4444);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 12px;
+  z-index: 25;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}

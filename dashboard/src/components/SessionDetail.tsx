@@ -6,8 +6,9 @@ import { useResizable } from "../hooks/useResizable";
 import { useWindowWidth } from "../hooks/useWindowWidth";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
 import { DiffModal } from "./DiffModal";
+import { FileDropZone } from "./FileDropZone";
 import { InfoPane } from "./InfoPane";
-import { SendMessage } from "./SendMessage";
+import { SendMessage, type SendMessageHandle } from "./SendMessage";
 import { TerminalPane } from "./TerminalPane";
 
 type SessionTab = "chat" | "terminal";
@@ -164,6 +165,7 @@ export function SessionDetail({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageRef = useRef(session.lastMessage);
+  const sendMessageRef = useRef<SendMessageHandle>(null);
 
   // Tick for live timestamp updates
   useEffect(() => {
@@ -511,162 +513,169 @@ export function SessionDetail({
       </div>
 
       <div className={`fullscreen-body${infoPaneResize.isDragging || inputResize.isDragging ? " resizing" : ""}`}>
-        <div className="fullscreen-main">
-          {activeTab === "chat" ? (
-            <>
-              <div className={`fullscreen-messages ${flash ? "flash" : ""}`} ref={messageContainerRef}>
-                {hasMore && (
-                  <div className="chat-controls">
-                    <button
-                      type="button"
-                      className="load-previous-btn"
-                      onClick={loadPrevious}
-                      disabled={loadingHistory}
-                    >
-                      {loadingHistory ? "Loading..." : "Load previous messages"}
-                    </button>
-                    <button
-                      type="button"
-                      className="load-previous-btn load-all-btn"
-                      onClick={loadAll}
-                      disabled={loadingHistory}
-                    >
-                      Load all
-                    </button>
-                  </div>
-                )}
-
-                {history
-                  .filter((msg) => showToolDetails || !isToolResultMessage(msg))
-                  .map((msg) => (
-                    <div
-                      key={`${msg.timestamp}-${msg.role}-${msg.content?.slice(0, 20) ?? ""}`}
-                      className={`chat-message chat-${msg.role}`}
-                    >
-                      <div className="chat-message-header">
-                        <span className="chat-role">{msg.role === "user" ? "You" : "Assistant"}</span>
-                        <span className="chat-timestamp">{new Date(msg.timestamp).toLocaleString()}</span>
-                        {msg.model && <span className="chat-model">{msg.model}</span>}
-                      </div>
-                      <div className="chat-message-body">
-                        {msg.thinking && showThinking && (
-                          <details className="thinking-block" open>
-                            <summary>Thinking...</summary>
-                            <div className="thinking-content">{msg.thinking}</div>
-                          </details>
-                        )}
-                        {msg.role === "assistant" ? (
-                          <>
-                            {msg.content.trim() ? (
-                              <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                                {msg.content}
-                              </Markdown>
-                            ) : isToolOnlyMessage(msg) && !showToolDetails ? (
-                              <div className="chat-tools-summary">
-                                Used{" "}
-                                {msg.toolUse?.map((t) => (
-                                  <span key={t.id} className="tool-badge">
-                                    {t.name}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : msg.toolUse?.length && showToolDetails ? null : !msg.thinking ? (
-                              <span className="chat-empty-hint">[No text content]</span>
-                            ) : null}
-                            {msg.toolUse && msg.toolUse.length > 0 && showToolDetails && (
-                              <div className="chat-tool-calls">
-                                {msg.toolUse.map((t) => (
-                                  <ToolCallBlock key={t.id} tool={t} toolResults={msg.toolResults} />
-                                ))}
-                              </div>
-                            )}
-                            {msg.toolUse && msg.toolUse.length > 0 && !showToolDetails && msg.content.trim() && (
-                              <div className="chat-tools">
-                                {msg.toolUse.map((t) => (
-                                  <span key={t.id} className="tool-badge">
-                                    {t.name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="chat-user-text">
-                            {msg.content.trim()
-                              ? msg.content
-                              : showToolDetails && msg.toolResults?.length
-                                ? msg.toolResults.map((tr) => (
-                                    <div key={tr.toolUseId} className="tool-call-result">
-                                      <div className="tool-call-label">Result ({tr.toolUseId})</div>
-                                      <pre>{tr.content}</pre>
-                                    </div>
-                                  ))
-                                : msg.content || "[tool result]"}
-                          </div>
-                        )}
-                      </div>
+        <FileDropZone
+          machineId={machineId}
+          onFileUploaded={(ref) => sendMessageRef.current?.appendText(ref)}
+          disabled={!hasTerminal}
+        >
+          <div className="fullscreen-main">
+            {activeTab === "chat" ? (
+              <>
+                <div className={`fullscreen-messages ${flash ? "flash" : ""}`} ref={messageContainerRef}>
+                  {hasMore && (
+                    <div className="chat-controls">
+                      <button
+                        type="button"
+                        className="load-previous-btn"
+                        onClick={loadPrevious}
+                        disabled={loadingHistory}
+                      >
+                        {loadingHistory ? "Loading..." : "Load previous messages"}
+                      </button>
+                      <button
+                        type="button"
+                        className="load-previous-btn load-all-btn"
+                        onClick={loadAll}
+                        disabled={loadingHistory}
+                      >
+                        Load all
+                      </button>
                     </div>
-                  ))}
+                  )}
 
-                {history.length === 0 && !loadingHistory && (
-                  <div className="no-sessions" style={{ padding: "40px 0" }}>
-                    No messages yet
-                  </div>
-                )}
+                  {history
+                    .filter((msg) => showToolDetails || !isToolResultMessage(msg))
+                    .map((msg) => (
+                      <div
+                        key={`${msg.timestamp}-${msg.role}-${msg.content?.slice(0, 20) ?? ""}`}
+                        className={`chat-message chat-${msg.role}`}
+                      >
+                        <div className="chat-message-header">
+                          <span className="chat-role">{msg.role === "user" ? "You" : "Assistant"}</span>
+                          <span className="chat-timestamp">{new Date(msg.timestamp).toLocaleString()}</span>
+                          {msg.model && <span className="chat-model">{msg.model}</span>}
+                        </div>
+                        <div className="chat-message-body">
+                          {msg.thinking && showThinking && (
+                            <details className="thinking-block" open>
+                              <summary>Thinking...</summary>
+                              <div className="thinking-content">{msg.thinking}</div>
+                            </details>
+                          )}
+                          {msg.role === "assistant" ? (
+                            <>
+                              {msg.content.trim() ? (
+                                <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                                  {msg.content}
+                                </Markdown>
+                              ) : isToolOnlyMessage(msg) && !showToolDetails ? (
+                                <div className="chat-tools-summary">
+                                  Used{" "}
+                                  {msg.toolUse?.map((t) => (
+                                    <span key={t.id} className="tool-badge">
+                                      {t.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : msg.toolUse?.length && showToolDetails ? null : !msg.thinking ? (
+                                <span className="chat-empty-hint">[No text content]</span>
+                              ) : null}
+                              {msg.toolUse && msg.toolUse.length > 0 && showToolDetails && (
+                                <div className="chat-tool-calls">
+                                  {msg.toolUse.map((t) => (
+                                    <ToolCallBlock key={t.id} tool={t} toolResults={msg.toolResults} />
+                                  ))}
+                                </div>
+                              )}
+                              {msg.toolUse && msg.toolUse.length > 0 && !showToolDetails && msg.content.trim() && (
+                                <div className="chat-tools">
+                                  {msg.toolUse.map((t) => (
+                                    <span key={t.id} className="tool-badge">
+                                      {t.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="chat-user-text">
+                              {msg.content.trim()
+                                ? msg.content
+                                : showToolDetails && msg.toolResults?.length
+                                  ? msg.toolResults.map((tr) => (
+                                      <div key={tr.toolUseId} className="tool-call-result">
+                                        <div className="tool-call-label">Result ({tr.toolUseId})</div>
+                                        <pre>{tr.content}</pre>
+                                      </div>
+                                    ))
+                                  : msg.content || "[tool result]"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
 
-                <div ref={messagesEndRef} />
-              </div>
+                  {history.length === 0 && !loadingHistory && (
+                    <div className="no-sessions" style={{ padding: "40px 0" }}>
+                      No messages yet
+                    </div>
+                  )}
 
-              {showInlineActions && <div className="fullscreen-actions">{actionButtons}</div>}
+                  <div ref={messagesEndRef} />
+                </div>
 
-              {hasTerminal && (
-                <>
-                  {/* biome-ignore lint/a11y/noStaticElementInteractions: resize handle requires mouse interaction */}
-                  <div
-                    className={`resize-handle resize-handle-vertical${inputResize.isDragging ? " active" : ""}`}
-                    onMouseDown={inputResize.handleMouseDown}
-                    onDoubleClick={inputResize.resetSize}
-                    title="Drag to resize, double-click to reset"
-                  />
-                  <div className="fullscreen-input" style={{ height: inputResize.size }}>
-                    <SendMessage
-                      machineId={machineId}
-                      multiplexer={session.multiplexer ?? "zellij"}
-                      session={session.multiplexerSession ?? ""}
-                      agentType={session.agentType}
-                      onSent={handleSent}
+                {showInlineActions && <div className="fullscreen-actions">{actionButtons}</div>}
+
+                {hasTerminal && (
+                  <>
+                    {/* biome-ignore lint/a11y/noStaticElementInteractions: resize handle requires mouse interaction */}
+                    <div
+                      className={`resize-handle resize-handle-vertical${inputResize.isDragging ? " active" : ""}`}
+                      onMouseDown={inputResize.handleMouseDown}
+                      onDoubleClick={inputResize.resetSize}
+                      title="Drag to resize, double-click to reset"
                     />
-                  </div>
-                </>
-              )}
-            </>
-          ) : (
-            <div className="terminal-tab-content">
-              <div className="terminal-tab-toolbar">
-                {onOpenTerminalFullscreen && hasTerminal && (
-                  <button
-                    type="button"
-                    className="action-btn terminal-btn"
-                    onClick={() => {
-                      setActiveTab("chat");
-                      onOpenTerminalFullscreen(session.multiplexerSession ?? "", session.multiplexer ?? "zellij");
-                    }}
-                    aria-label="Open terminal in fullscreen"
-                  >
-                    Fullscreen
-                  </button>
+                    <div className="fullscreen-input" style={{ height: inputResize.size }}>
+                      <SendMessage
+                        ref={sendMessageRef}
+                        machineId={machineId}
+                        multiplexer={session.multiplexer ?? "zellij"}
+                        session={session.multiplexerSession ?? ""}
+                        agentType={session.agentType}
+                        onSent={handleSent}
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="terminal-tab-content">
+                <div className="terminal-tab-toolbar">
+                  {onOpenTerminalFullscreen && hasTerminal && (
+                    <button
+                      type="button"
+                      className="action-btn terminal-btn"
+                      onClick={() => {
+                        setActiveTab("chat");
+                        onOpenTerminalFullscreen(session.multiplexerSession ?? "", session.multiplexer ?? "zellij");
+                      }}
+                      aria-label="Open terminal in fullscreen"
+                    >
+                      Fullscreen
+                    </button>
+                  )}
+                </div>
+                {hasTerminal && (
+                  <TerminalPane
+                    machineId={machineId}
+                    sessionName={session.multiplexerSession ?? ""}
+                    multiplexer={session.multiplexer ?? "zellij"}
+                  />
                 )}
               </div>
-              {hasTerminal && (
-                <TerminalPane
-                  machineId={machineId}
-                  sessionName={session.multiplexerSession ?? ""}
-                  multiplexer={session.multiplexer ?? "zellij"}
-                />
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </FileDropZone>
 
         {isWide && infoPaneVisible && (
           /* biome-ignore lint/a11y/noStaticElementInteractions: resize handle requires mouse interaction */
