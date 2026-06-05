@@ -9,7 +9,8 @@ import { DiffModal } from "./DiffModal";
 import { FileDropZone } from "./FileDropZone";
 import { InfoPane } from "./InfoPane";
 import { SendMessage, type SendMessageHandle } from "./SendMessage";
-import { TerminalPane } from "./TerminalPane";
+import { TerminalHelpers } from "./TerminalHelpers";
+import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
 type SessionTab = "chat" | "terminal";
 
@@ -145,6 +146,7 @@ export function SessionDetail({
     maxSize: 400,
     side: "bottom",
   });
+  const terminalRef = useRef<TerminalPaneHandle>(null);
 
   const [history, setHistory] = useState<SessionMessage[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -664,9 +666,17 @@ export function SessionDetail({
                       Fullscreen
                     </button>
                   )}
+                  {hasTerminal && (
+                    <TerminalHelpers
+                      sendData={(data) => terminalRef.current?.sendData(data)}
+                      isConnected={terminalRef.current?.isConnected ?? false}
+                      onFocusTerminal={() => terminalRef.current?.focusTerminal()}
+                    />
+                  )}
                 </div>
                 {hasTerminal && (
                   <TerminalPane
+                    ref={terminalRef}
                     machineId={machineId}
                     sessionName={session.multiplexerSession ?? ""}
                     multiplexer={session.multiplexer ?? "zellij"}
