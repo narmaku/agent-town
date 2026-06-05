@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { MAX_UPLOAD_SIZE_BYTES, UPLOAD_DIR, cleanupOldUploads, sanitizeFilename } from "./file-upload";
+import { cleanupOldUploads, MAX_UPLOAD_SIZE_BYTES, sanitizeFilename, UPLOAD_DIR } from "./file-upload";
 
 describe("sanitizeFilename", () => {
   test("strips path separators", () => {

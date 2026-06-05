@@ -1045,7 +1045,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
 
           if (file.size > MAX_UPLOAD_SIZE_BYTES) {
             return Response.json(
-              { error: `File too large (${Math.round(file.size / 1024 / 1024)}MB). Max: ${Math.round(MAX_UPLOAD_SIZE_BYTES / 1024 / 1024)}MB` },
+              {
+                error: `File too large (${Math.round(file.size / 1024 / 1024)}MB). Max: ${Math.round(MAX_UPLOAD_SIZE_BYTES / 1024 / 1024)}MB`,
+              },
               { status: 413 },
             );
           }

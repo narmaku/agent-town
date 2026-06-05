@@ -18,7 +18,10 @@ export function sanitizeFilename(name: string): string {
 
   sanitized = sanitized.replace(/\.{2,}/g, "").replace(/^\.+/, "");
 
-  sanitized = sanitized.replace(/_+/g, "_").replace(/^_+|_+$/g, "").replace(/_\./g, ".");
+  sanitized = sanitized
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_\./g, ".");
 
   if (!sanitized) {
     sanitized = "upload";
