@@ -3600,6 +3600,20 @@ body {
   /* Terminal tab content: fill available space on mobile */
   .terminal-tab-toolbar {
     padding: 6px 12px;
+    flex-wrap: wrap;
+  }
+
+  .terminal-helpers {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+    border-top: 1px solid var(--border);
+    padding-top: 6px;
+    margin-top: 2px;
+  }
+
+  .terminal-helpers-panel {
+    flex-wrap: wrap;
   }
 
   /* Info pane: always overlay on mobile */
