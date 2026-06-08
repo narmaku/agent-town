@@ -917,4 +917,77 @@ describe("store", () => {
     const machine = getMachine("no-mux-placeholder");
     expect(machine?.sessions).toHaveLength(2);
   });
+
+  test("getMachine returns undefined for stale machine (past timeout)", () => {
+    const staleTimestamp = new Date(Date.now() - 60_000).toISOString();
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "stale-machine-1",
+        hostname: "stale-host-1",
+        timestamp: staleTimestamp,
+      }),
+    );
+
+    const machine = getMachine("stale-machine-1");
+    expect(machine).toBeUndefined();
+  });
+
+  test("getMachine returns machine within timeout window", () => {
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "fresh-machine-1",
+        hostname: "fresh-host-1",
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+    const machine = getMachine("fresh-machine-1");
+    expect(machine).not.toBeUndefined();
+    expect(machine?.hostname).toBe("fresh-host-1");
+  });
+
+  test("startStaleCleanupLoop calls broadcast when stale machines are removed", async () => {
+    const { startStaleCleanupLoop, stopStaleCleanupLoop } = await import("./store");
+
+    const staleTimestamp = new Date(Date.now() - 60_000).toISOString();
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "cleanup-stale-1",
+        hostname: "cleanup-host-1",
+        timestamp: staleTimestamp,
+      }),
+    );
+
+    let broadcastCalled = false;
+    startStaleCleanupLoop(() => {
+      broadcastCalled = true;
+    }, 50);
+
+    await new Promise((r) => setTimeout(r, 120));
+    stopStaleCleanupLoop();
+
+    expect(broadcastCalled).toBe(true);
+  });
+
+  test("startStaleCleanupLoop does not broadcast when no machines removed", async () => {
+    const { startStaleCleanupLoop, stopStaleCleanupLoop } = await import("./store");
+
+    upsertMachine(
+      makeHeartbeat({
+        machineId: "cleanup-fresh-1",
+        hostname: "cleanup-fresh-host-1",
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+    let broadcastCalled = false;
+    startStaleCleanupLoop(() => {
+      broadcastCalled = true;
+    }, 50);
+
+    await new Promise((r) => setTimeout(r, 120));
+    stopStaleCleanupLoop();
+
+    expect(broadcastCalled).toBe(false);
+  });
 });

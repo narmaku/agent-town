@@ -4707,3 +4707,48 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
 }
+
+/* Error boundary */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 24px;
+}
+
+.error-boundary-content {
+  max-width: 480px;
+  text-align: center;
+}
+
+.error-boundary-title {
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.error-boundary-message {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.error-boundary-detail {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  text-align: left;
+  overflow-x: auto;
+  margin-bottom: 16px;
+  color: var(--error, #ef4444);
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}

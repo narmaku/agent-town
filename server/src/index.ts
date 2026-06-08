@@ -25,6 +25,7 @@ import {
   getSessionSlug,
   getSettings,
   renameSession,
+  startStaleCleanupLoop,
   updateMultiplexerSessionName,
   updateNode,
   updateSettings,
@@ -956,3 +957,11 @@ log.info(`listening on http://0.0.0.0:${PORT} — dashboard: http://localhost:${
 
 // Auto-connect to nodes marked with autoConnect
 connectAutoNodes();
+
+// Periodically clean up stale machines and broadcast removals
+startStaleCleanupLoop(() => {
+  broadcast({
+    type: "machines_update",
+    payload: getAllMachines(),
+  });
+});

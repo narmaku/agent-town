@@ -368,6 +368,13 @@ export function App(): React.JSX.Element {
   const fullscreenMachine = fullscreen ? machines.find((m) => m.machineId === fullscreen.machineId) : null;
   const fullscreenSession = fullscreenMachine?.sessions.find((s) => s.sessionId === fullscreen?.sessionId) ?? null;
 
+  // Auto-close fullscreen if the machine or session disappeared (node disconnected)
+  useEffect(() => {
+    if (fullscreen && !fullscreenMachine) {
+      setFullscreen(null);
+    }
+  }, [fullscreen, fullscreenMachine]);
+
   const totalSessions = machines.reduce((sum, m) => sum + m.sessions.length, 0);
   const totalAttention = machines.reduce(
     (sum, m) => sum + m.sessions.filter((s) => s.status === "awaiting_input").length,
