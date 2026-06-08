@@ -321,7 +321,9 @@ export function getMachine(machineId: string): MachineInfo | undefined {
   const lastSeen = new Date(machine.lastHeartbeat).getTime();
   if (Date.now() - lastSeen > MACHINE_TIMEOUT_MS) {
     machines.delete(machineId);
-    log.debug(`getMachine: removed stale machine ${machineId.slice(0, 8)} (no heartbeat for ${Math.round((Date.now() - lastSeen) / 1000)}s)`);
+    log.debug(
+      `getMachine: removed stale machine ${machineId.slice(0, 8)} (no heartbeat for ${Math.round((Date.now() - lastSeen) / 1000)}s)`,
+    );
     return undefined;
   }
 
