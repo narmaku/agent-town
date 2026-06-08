@@ -315,7 +315,41 @@ export function getAllMachines(): MachineInfo[] {
 }
 
 export function getMachine(machineId: string): MachineInfo | undefined {
-  return machines.get(machineId);
+  const machine = machines.get(machineId);
+  if (!machine) return undefined;
+
+  const lastSeen = new Date(machine.lastHeartbeat).getTime();
+  if (Date.now() - lastSeen > MACHINE_TIMEOUT_MS) {
+    machines.delete(machineId);
+    log.debug(`getMachine: removed stale machine ${machineId.slice(0, 8)} (no heartbeat for ${Math.round((Date.now() - lastSeen) / 1000)}s)`);
+    return undefined;
+  }
+
+  return machine;
+}
+
+let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+export function startStaleCleanupLoop(broadcastFn: () => void, intervalMs = 10_000): void {
+  if (cleanupInterval) return;
+
+  cleanupInterval = setInterval(() => {
+    const before = machines.size;
+    getAllMachines();
+    const after = machines.size;
+
+    if (after < before) {
+      log.info(`stale cleanup: removed ${before - after} machine(s), broadcasting update`);
+      broadcastFn();
+    }
+  }, intervalMs);
+}
+
+export function stopStaleCleanupLoop(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
 }
 
 // Settings store
