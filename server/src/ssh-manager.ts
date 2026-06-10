@@ -12,6 +12,7 @@ interface NodeConnection {
   // SSH tunnel: forward local port → remote agent port, reverse remote → local server
   tunnel: Subprocess;
   localPort: number;
+  remoteHostname: string;
   // Periodic health check
   monitorTimer: ReturnType<typeof setInterval>;
 }
@@ -336,6 +337,11 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
       if (tunnel.exitCode !== null) {
         log.warn(`health: [${node.name}] SSH tunnel exited (code ${tunnel.exitCode}), reconnecting...`);
         clearInterval(monitorTimer);
+        const deadConn = connections.get(node.id);
+        if (deadConn?.remoteHostname) {
+          hostToTunnelPort.delete(deadConn.remoteHostname);
+          log.info(`health: removed tunnel mapping for hostname "${deadConn.remoteHostname}"`);
+        }
         connections.delete(node.id);
         updateNodeStatus(node.id, "error", "SSH tunnel disconnected");
         // Auto-reconnect after a delay
@@ -348,7 +354,7 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
     }
   }, HEALTH_CHECK_INTERVAL_MS);
 
-  return { tunnel, localPort, monitorTimer };
+  return { tunnel, localPort, remoteHostname: "", monitorTimer };
 }
 
 /**
@@ -415,6 +421,7 @@ export async function connectNode(nodeId: string): Promise<void> {
     );
     const remoteHostname = (await Bun.readableStreamToText(hostnameProc.stdout)).trim();
     await hostnameProc.exited;
+    conn.remoteHostname = remoteHostname;
     if (remoteHostname) {
       hostToTunnelPort.set(remoteHostname, conn.localPort);
       log.info(`connect: mapped hostname "${remoteHostname}" → localhost:${conn.localPort}`);
@@ -439,6 +446,10 @@ export async function disconnectNode(nodeId: string): Promise<void> {
 
   clearInterval(conn.monitorTimer);
   conn.tunnel.kill();
+  if (conn.remoteHostname) {
+    hostToTunnelPort.delete(conn.remoteHostname);
+    log.info(`disconnect: removed tunnel mapping for hostname "${conn.remoteHostname}"`);
+  }
   connections.delete(nodeId);
   updateNodeStatus(nodeId, "disconnected");
 
