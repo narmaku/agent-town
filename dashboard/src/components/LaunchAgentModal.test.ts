@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MachineInfo, SessionInfo } from "@agent-town/shared";
-import { deriveRecentDirectories, resolveSelectedMachineId } from "./LaunchAgentModal";
+import { deriveDefaultProjectDir, deriveRecentDirectories, resolveSelectedMachineId } from "./LaunchAgentModal";
 
 function makeSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
   return {
@@ -174,5 +174,38 @@ describe("resolveSelectedMachineId", () => {
   test("returns empty string when all inputs are empty strings", () => {
     const result = resolveSelectedMachineId("", "", "");
     expect(result).toBe("");
+  });
+});
+
+describe("deriveDefaultProjectDir", () => {
+  test("returns empty string for undefined machine", () => {
+    expect(deriveDefaultProjectDir(undefined)).toBe("");
+  });
+
+  test("returns empty string for machine with no sessions", () => {
+    expect(deriveDefaultProjectDir(makeMachine([]))).toBe("");
+  });
+
+  test("derives the home directory from a Linux session path", () => {
+    const machine = makeMachine([makeSession({ projectPath: "/home/user/project-a" })]);
+    expect(deriveDefaultProjectDir(machine)).toBe("/home/user");
+  });
+
+  test("derives the home directory from a macOS session path", () => {
+    const machine = makeMachine([makeSession({ projectPath: "/Users/nico/development/agent-town" })]);
+    expect(deriveDefaultProjectDir(machine)).toBe("/Users/nico");
+  });
+
+  test("falls back to the project path when it is outside any home directory", () => {
+    const machine = makeMachine([makeSession({ projectPath: "/srv/pipeline" })]);
+    expect(deriveDefaultProjectDir(machine)).toBe("/srv/pipeline");
+  });
+
+  test("skips sessions that have no project path", () => {
+    const machine = makeMachine([
+      makeSession({ projectPath: "" }),
+      makeSession({ projectPath: "/Users/nico/crimson" }),
+    ]);
+    expect(deriveDefaultProjectDir(machine)).toBe("/Users/nico");
   });
 });

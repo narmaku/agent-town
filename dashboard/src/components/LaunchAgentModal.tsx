@@ -24,6 +24,20 @@ interface Props {
  * Derive unique project directories from a machine's sessions,
  * sorted by most recent activity (newest first).
  */
+/** Matches a POSIX home directory on either Linux (/home/x) or macOS (/Users/x). */
+const HOME_DIR_RE = /^(\/(?:home|Users)\/[^/]+)/;
+
+/**
+ * Best guess at a starting directory for a new agent on `machine`, derived from
+ * where its existing sessions live. Returns "" when there is nothing to go on —
+ * an empty field the user must fill is better than a path that does not exist.
+ */
+export function deriveDefaultProjectDir(machine: MachineInfo | undefined): string {
+  const projectPath = machine?.sessions?.find((s) => s.projectPath)?.projectPath;
+  if (!projectPath) return "";
+  return projectPath.match(HOME_DIR_RE)?.[1] ?? projectPath;
+}
+
 export function deriveRecentDirectories(machine: MachineInfo | undefined): string[] {
   if (!machine?.sessions?.length) return [];
 
@@ -116,10 +130,7 @@ export function LaunchAgentModal({
     if (isFirstMachine && globalSettings?.defaultProjectDir) {
       setProjectDir(globalSettings.defaultProjectDir);
     } else {
-      // For remote machines, guess home dir from session paths
-      const firstSessionPath = selectedMachine.sessions[0]?.projectPath;
-      const homeMatch = firstSessionPath?.match(/^(\/home\/[^/]+)/);
-      setProjectDir(homeMatch ? homeMatch[1] : "/home");
+      setProjectDir(deriveDefaultProjectDir(selectedMachine));
     }
   }, [availableMux, globalSettings, selectedMachine, selectedMachineId, machines]);
 

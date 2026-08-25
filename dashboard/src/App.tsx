@@ -164,6 +164,9 @@ export function App(): React.JSX.Element {
   }, [layoutMode]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify(theme));
+    // Mirror the theme onto body so it paints the area outside .app in the same colour.
+    document.body.classList.toggle("theme-light", theme === "light");
+    document.body.classList.toggle("theme-dark", theme === "dark");
   }, [theme]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.FONT_SIZE, JSON.stringify(fontSize));

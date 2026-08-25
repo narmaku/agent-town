@@ -232,6 +232,9 @@ body {
   border: 1px solid var(--border);
   border-left: 3px solid;
   border-radius: 8px;
+  /* Grid items default to min-width:auto, so a long nowrap .session-message
+     would stretch the track and scroll the whole page sideways. */
+  min-width: 0;
   padding: 14px 16px;
   transition: border-color 0.2s, background 0.2s;
   cursor: pointer;
@@ -2783,6 +2786,9 @@ body {
 /* =================== */
 /* Light Theme          */
 /* =================== */
+/* body carries the theme too — it paints the area outside .app, and without
+   these tokens it keeps the dark --bg from :root and shows through as black. */
+body.theme-light,
 .app.theme-light {
   --bg: #ffffff;
   --bg-surface: #f8fafc;
@@ -3372,7 +3378,8 @@ body {
 /* ============================== */
 @media (min-width: 768px) and (max-width: 1023px) {
   .sessions-grid {
-    grid-template-columns: repeat(2, 1fr);
+    /* minmax(0, …) — a bare 1fr resolves its minimum to min-content and overflows. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .app {
@@ -3540,7 +3547,8 @@ body {
 
   /* Sessions grid: single column */
   .sessions-grid {
-    grid-template-columns: 1fr;
+    /* minmax(0, …) — a bare 1fr resolves its minimum to min-content and overflows. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
   }
 
