@@ -164,9 +164,9 @@ export function App(): React.JSX.Element {
   }, [layoutMode]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify(theme));
-    // Mirror the theme onto body so it paints the area outside .app in the same colour.
-    document.body.classList.toggle("theme-light", theme === "light");
-    document.body.classList.toggle("theme-dark", theme === "dark");
+    // The token layer keys off <html data-theme>, so one attribute themes the
+    // whole document — including the area outside .app that body paints.
+    document.documentElement.dataset.theme = theme;
   }, [theme]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.FONT_SIZE, JSON.stringify(fontSize));
@@ -393,7 +393,7 @@ export function App(): React.JSX.Element {
   }
 
   return (
-    <div className={`app theme-${theme} font-${fontSize} ${layoutMode === "explorer" ? "app-explorer" : ""}`}>
+    <div className={`app font-${fontSize} ${layoutMode === "explorer" ? "app-explorer" : ""}`}>
       <header className="app-header">
         <div className="header-left">
           {layoutMode === "explorer" && (

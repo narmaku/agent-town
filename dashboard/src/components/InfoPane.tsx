@@ -37,9 +37,9 @@ export function InfoPane({
         </span>
       </div>
 
-      <div className="info-pane-status-row">
-        <span className={`status-dot ${config.pulse ? "pulse" : ""}`} style={{ background: config.color }} />
-        <span style={{ color: config.color }}>{config.label}</span>
+      <div className="info-pane-status-row" data-status={session.status}>
+        <span className={`status-dot ${config.pulse ? "pulse" : ""}`} />
+        <span className="info-pane-status-label">{config.label}</span>
         <span
           className={`tracking-badge ${session.hookEnabled ? "hook" : "heuristic"}`}
           title={session.hookEnabled ? "Real-time tracking via hooks" : "Estimated status (no hooks)"}

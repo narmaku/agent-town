@@ -129,7 +129,7 @@ export function SessionCard({
     // biome-ignore lint/a11y/useSemanticElements: card component with complex content, not a simple button
     <div
       className={`session-card ${expanded ? "expanded" : ""}${selected ? " session-card--selected" : ""}`}
-      style={{ borderLeftColor: config.color, background: config.bg }}
+      data-status={session.status}
       onClick={handleCardClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -143,10 +143,8 @@ export function SessionCard({
     >
       <div className="session-header">
         <div className="session-status">
-          <span className={`status-dot ${config.pulse ? "pulse" : ""}`} style={{ background: config.color }} />
-          <span className="status-label" style={{ color: config.color }}>
-            {config.label}
-          </span>
+          <span className={`status-dot ${config.pulse ? "pulse" : ""}`} />
+          <span className="status-label">{config.label}</span>
           {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
           {session.agentType && session.agentType !== "claude-code" && (
             <span className={`agent-type-badge agent-${session.agentType}`} title={`Agent: ${session.agentType}`}>

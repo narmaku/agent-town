@@ -450,11 +450,9 @@ export function SessionDetail({
     <>
       <div className="fullscreen-header">
         <div className="fullscreen-title-row">
-          <div className="session-status">
-            <span className={`status-dot ${config.pulse ? "pulse" : ""}`} style={{ background: config.color }} />
-            <span className="status-label" style={{ color: config.color }}>
-              {config.label}
-            </span>
+          <div className="session-status" data-status={session.status}>
+            <span className={`status-dot ${config.pulse ? "pulse" : ""}`} />
+            <span className="status-label">{config.label}</span>
             {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
             <span
               className={`tracking-badge ${session.hookEnabled ? "hook" : "heuristic"}`}

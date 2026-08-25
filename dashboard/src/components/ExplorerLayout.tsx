@@ -60,6 +60,7 @@ function SessionEntry({
     // biome-ignore lint/a11y/useSemanticElements: complex list entry, not a simple button
     <div
       className="dashboard-session-entry"
+      data-status={session.status}
       onClick={() => onSelect(machineId, session.sessionId)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -70,7 +71,7 @@ function SessionEntry({
       role="button"
       tabIndex={0}
     >
-      <span className="status-dot" style={{ background: STATUS_CONFIG[session.status].color, width: 6, height: 6 }} />
+      <span className="status-dot status-dot--small" />
       <span className="dashboard-session-name">{session.customName || session.slug}</span>
       {showMessage ? (
         <span className="dashboard-session-message">
@@ -259,7 +260,7 @@ function ExplorerDashboard({
                   <div
                     key={status}
                     className={cardClasses}
-                    style={{ borderLeftColor: STATUS_CONFIG[status].color }}
+                    data-status={status}
                     onClick={() => onToggleStatusFilter(status)}
                     onKeyDown={(e) => handleCardKeyDown(e, status)}
                     role="button"
@@ -267,9 +268,7 @@ function ExplorerDashboard({
                     aria-label={`Filter by ${STATUS_CONFIG[status].label}: ${statusCounts[status] || 0} sessions`}
                     aria-pressed={isActive}
                   >
-                    <div className="dashboard-status-count" style={{ color: STATUS_CONFIG[status].color }}>
-                      {statusCounts[status] || 0}
-                    </div>
+                    <div className="dashboard-status-count">{statusCounts[status] || 0}</div>
                     <div className="dashboard-status-label">{STATUS_CONFIG[status].label}</div>
                   </div>
                 );
@@ -609,6 +608,7 @@ export function ExplorerLayout({
                               className={`explorer-session ${
                                 selected?.sessionId === session.sessionId ? "selected" : ""
                               }`}
+                              data-status={session.status}
                               onClick={() => selectSession(machine.machineId, session.sessionId)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
@@ -623,14 +623,7 @@ export function ExplorerLayout({
                               role="button"
                               tabIndex={0}
                             >
-                              <span
-                                className="status-dot"
-                                style={{
-                                  background: STATUS_CONFIG[session.status].color,
-                                  width: 6,
-                                  height: 6,
-                                }}
-                              />
+                              <span className="status-dot status-dot--small" />
                               {isRenaming ? (
                                 <input
                                   ref={renameInputRef}

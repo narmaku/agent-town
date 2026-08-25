@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { API, STATUS_CONFIG, shortenPath, timeAgo } from "./utils";
 
 describe("timeAgo", () => {
@@ -112,6 +115,7 @@ describe("shortenPath", () => {
 });
 
 describe("STATUS_CONFIG", () => {
+  const LIGHT_ROOT = ':root[data-theme="light"]';
   const ALL_STATUSES = [
     "starting",
     "working",
@@ -133,8 +137,6 @@ describe("STATUS_CONFIG", () => {
     for (const status of ALL_STATUSES) {
       const style = STATUS_CONFIG[status];
       expect(typeof style.label).toBe("string");
-      expect(typeof style.color).toBe("string");
-      expect(typeof style.bg).toBe("string");
       expect(typeof style.pulse).toBe("boolean");
     }
   });
@@ -145,12 +147,32 @@ describe("STATUS_CONFIG", () => {
     }
   });
 
-  test("colors are valid hex color strings", () => {
-    const hexColorRegex = /^#[0-9a-fA-F]{6}$/;
+  // Status colours live in the stylesheet, not in STATUS_CONFIG. A status with
+  // no tokens renders an uncoloured dot and a transparent card, which is easy to
+  // miss by eye, so assert the stylesheet covers every status instead.
+  test("every status has themed colour tokens and a data-status mapping", () => {
+    const css = readFileSync(join(import.meta.dir, "styles.css"), "utf8");
+    const lightAt = css.indexOf(LIGHT_ROOT);
+    const themes = {
+      dark: css.slice(css.indexOf(":root {"), lightAt),
+      light: css.slice(lightAt),
+    };
+
+    const missing: string[] = [];
     for (const status of ALL_STATUSES) {
-      expect(STATUS_CONFIG[status].color).toMatch(hexColorRegex);
-      expect(STATUS_CONFIG[status].bg).toMatch(hexColorRegex);
+      const name = status.replace(/_/g, "-");
+      for (const [themeName, block] of Object.entries(themes)) {
+        for (const role of ["fg", "bg"]) {
+          if (!block.includes(`--status-${name}-${role}:`)) {
+            missing.push(`${themeName} theme: --status-${name}-${role}`);
+          }
+        }
+      }
+      if (!css.includes(`[data-status="${status}"] {`)) {
+        missing.push(`no [data-status="${status}"] rule`);
+      }
     }
+    expect(missing).toEqual([]);
   });
 
   test("active statuses pulse and inactive statuses do not", () => {

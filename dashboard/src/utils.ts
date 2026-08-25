@@ -16,20 +16,25 @@ export function timeAgo(timestamp: string): string {
 
 export interface StatusStyle {
   label: string;
-  color: string;
-  bg: string;
   pulse: boolean;
 }
 
+/**
+ * Status colours are NOT here — they live in styles.css as `--status-<name>-fg`
+ * and `--status-<name>-bg`. Put `data-status={session.status}` on any element
+ * and every descendant can read `var(--status-fg)` / `var(--status-bg)`, so the
+ * light theme restyles them by redefining tokens instead of fighting inline
+ * styles with `!important`.
+ */
 export const STATUS_CONFIG: Record<SessionStatus, StatusStyle> = {
-  starting: { label: "Starting", color: "#a78bfa", bg: "#2e1065", pulse: true },
-  working: { label: "Working", color: "#22c55e", bg: "#052e16", pulse: true },
-  awaiting_input: { label: "Awaiting Input", color: "#60a5fa", bg: "#172554", pulse: false },
-  action_required: { label: "Action Required", color: "#f97316", bg: "#431407", pulse: true },
-  idle: { label: "Idle", color: "#6b7280", bg: "#1f2937", pulse: false },
-  done: { label: "Done", color: "#3b82f6", bg: "#172554", pulse: false },
-  error: { label: "Error", color: "#ef4444", bg: "#450a0a", pulse: true },
-  exited: { label: "Exited", color: "#f59e0b", bg: "#451a03", pulse: true },
+  starting: { label: "Starting", pulse: true },
+  working: { label: "Working", pulse: true },
+  awaiting_input: { label: "Awaiting Input", pulse: false },
+  action_required: { label: "Action Required", pulse: true },
+  idle: { label: "Idle", pulse: false },
+  done: { label: "Done", pulse: false },
+  error: { label: "Error", pulse: true },
+  exited: { label: "Exited", pulse: true },
 };
 
 // --- Path helpers ---

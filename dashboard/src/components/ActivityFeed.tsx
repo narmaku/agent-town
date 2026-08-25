@@ -105,6 +105,7 @@ export function ActivityFeed({
                 key={event.id}
                 type="button"
                 className="activity-feed-item"
+                data-status={event.toStatus}
                 onClick={() => {
                   onNavigateToSession(event.machineId, event.sessionId);
                   onClose();
@@ -112,14 +113,10 @@ export function ActivityFeed({
                 aria-label={`${event.sessionName} ${statusStyle.label} on ${event.hostname}`}
               >
                 <span className="activity-feed-time">{timeAgo(event.timestamp)}</span>
-                <span className="activity-feed-icon" style={{ color: statusStyle.color }}>
-                  {icon}
-                </span>
+                <span className="activity-feed-icon">{icon}</span>
                 <span className="activity-feed-details">
                   <span className="activity-feed-session-name">{event.sessionName}</span>
-                  <span className="activity-feed-status" style={{ color: statusStyle.color }}>
-                    {statusStyle.label.toLowerCase()}
-                  </span>
+                  <span className="activity-feed-status">{statusStyle.label.toLowerCase()}</span>
                   <span className="activity-feed-meta">
                     on {event.hostname} · {event.agentType}
                   </span>
