@@ -89,28 +89,6 @@ export function ContextIcon({ size = 12, className, "aria-label": ariaLabel }: I
   );
 }
 
-export function SidebarIcon({ size = 18, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      role={ariaLabel ? "img" : undefined}
-      aria-label={ariaLabel}
-      aria-hidden={ariaLabel ? undefined : "true"}
-    >
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-      <line x1="9" y1="3" x2="9" y2="21" />
-    </svg>
-  );
-}
-
 export function MenuIcon({ size = 18, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
   return (
     <svg
@@ -152,7 +130,7 @@ export function ControlRoomIcon({ size = 14, className, "aria-label": ariaLabel 
   );
 }
 
-export function ExplorerLayoutIcon({ size = 14, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
+export function SignalBoardIcon({ size = 14, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
   return (
     <svg
       width={size}
@@ -164,7 +142,8 @@ export function ExplorerLayoutIcon({ size = 14, className, "aria-label": ariaLab
       aria-label={ariaLabel}
       aria-hidden={ariaLabel ? undefined : "true"}
     >
-      <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .5.5v13a.5.5 0 0 1-.5.5H.5a.5.5 0 0 1-.5-.5v-13zM4 3h12v2H4V3zm0 4h12v2H4V7zm0 4h12v2H4v-2z" />
+      {/* Three status lanes, each a stack of cards. */}
+      <path d="M0 2h4.5v3H0V2zm0 4h4.5v8H0V6zM5.75 2h4.5v6h-4.5V2zm0 7h4.5v5h-4.5V9zM11.5 2H16v4h-4.5V2zm0 5H16v7h-4.5V7z" />
     </svg>
   );
 }
@@ -232,26 +211,6 @@ export function CwdIcon({ size = 12, className, "aria-label": ariaLabel }: IconP
       aria-hidden={ariaLabel ? undefined : "true"}
     >
       <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0114.25 15H1.75A1.75 1.75 0 010 13.25V2.75zm1.75-.25a.25.25 0 00-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 00.25-.25V2.75a.25.25 0 00-.25-.25H1.75zM7.25 8a.75.75 0 01-.22.53l-2.25 2.25-1.06-1.06L5.44 8 3.72 6.28l1.06-1.06 2.25 2.25A.75.75 0 017.25 8zM8 11.5a.75.75 0 010-1.5h4a.75.75 0 010 1.5H8z" />
-    </svg>
-  );
-}
-
-export function DashboardIcon({ size = 14, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      className={className}
-      role={ariaLabel ? "img" : undefined}
-      aria-label={ariaLabel}
-      aria-hidden={ariaLabel ? undefined : "true"}
-    >
-      <rect x="1" y="1" width="6" height="6" rx="1" />
-      <rect x="9" y="1" width="6" height="6" rx="1" />
-      <rect x="1" y="9" width="6" height="6" rx="1" />
-      <rect x="9" y="9" width="6" height="6" rx="1" />
     </svg>
   );
 }
