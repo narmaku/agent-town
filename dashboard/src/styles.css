@@ -334,30 +334,421 @@ body {
   font-weight: 600;
 }
 
-/* Machine Group */
-.machine-group {
-  margin-bottom: 32px;
-}
-
-.machine-header {
+/* ============================================================ */
+/* Control Room — dense operations table (replaces cards view)  */
+/* Consumes the [data-status] --status-fg/--status-bg cascade.  */
+/* ============================================================ */
+.control-room {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 18px;
+  padding: 14px 0 48px;
+  min-width: 0;
 }
 
-.machine-info {
+.cr-machine {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.cr-machine-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.cr-machine-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cr-machine-hostname {
+  font-weight: 650;
+  font-size: calc(13px + var(--font-offset));
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+
+.cr-machine-platform,
+.cr-machine-multiplexers {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Fira Code", monospace;
+  white-space: nowrap;
+}
+
+.cr-machine-launch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-emphasis);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cr-machine-launch:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.cr-machine-stats {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1;
+  flex-wrap: wrap;
 }
 
-.machine-hostname {
-  font-size: 16px;
+.cr-stat {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.cr-stat.attention {
+  color: var(--status-action-required-fg);
   font-weight: 600;
+}
+
+.cr-stat.working {
+  color: var(--status-working-fg);
+  font-weight: 600;
+}
+
+.cr-stat.total {
+  color: var(--text-secondary);
+}
+
+.cr-machine-heartbeat {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Fira Code", monospace;
+  white-space: nowrap;
+}
+
+.cr-empty {
+  padding: 18px 16px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.cr-group + .cr-group {
+  border-top: 1px solid var(--border);
+}
+
+.cr-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 14px 5px;
+  background: var(--bg-elevated);
+}
+
+.cr-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-group-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cr-table {
+  --cr-cols: 132px minmax(160px, 1.6fr) minmax(0, 0.9fr) minmax(0, 2.4fr) 138px 64px 96px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr-head,
+.cr-row {
+  display: grid;
+  grid-template-columns: var(--cr-cols);
+  align-items: center;
+  column-gap: 14px;
+}
+
+.cr-head {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.cr-row {
+  position: relative;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  outline: none;
+  min-height: 34px;
+}
+
+.cr-row:last-child {
+  border-bottom: none;
+}
+
+/* Left status rail, coloured by the row's [data-status] cascade. */
+.cr-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--status-fg);
+}
+
+.cr-row:hover {
+  background: var(--bg-hover);
+}
+
+.cr-row:focus-visible {
+  box-shadow: inset 0 0 0 1px rgb(var(--accent-blue-rgb) / 0.6);
+}
+
+.cr-row.expanded {
+  background: var(--bg-elevated);
+}
+
+.cr-row--selected {
+  background: rgb(var(--accent-blue-rgb) / var(--tint-chip));
+}
+
+.cr-row--selected:hover {
+  background: rgb(var(--accent-blue-rgb) / 0.2);
+}
+
+.cr-col-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cr-col-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cr-name {
+  font-weight: 600;
+  font-size: calc(13px + var(--font-offset));
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.cr-col-name .rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cr-col-branch {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cr-col-branch .git-branch {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.cr-col-message {
+  min-width: 0;
+}
+
+.cr-message {
+  display: block;
+  font-size: calc(12px + var(--font-offset));
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-message.action-hint {
+  color: var(--status-action-required-fg);
+  font-weight: 500;
+}
+
+.cr-col-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cr-model {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Fira Code", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-tokens {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+.cr-col-age {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "SF Mono", "Fira Code", monospace;
+  white-space: nowrap;
+}
+
+.cr-col-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cr-quick-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--border-emphasis);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.cr-quick-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.cr-chevron {
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+
+.cr-chevron.open {
+  transform: rotate(90deg);
+}
+
+.cr-detail {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding: 12px 4px 4px;
+  border-top: 1px solid var(--border);
+  cursor: default;
+}
+
+
+/* Shared expanded body (SessionExpanded), used by every layout. */
+.session-expanded {
+  display: block;
+}
+
+.session-expanded-meta {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Control Room responsive: shed columns as width tightens, then stack. */
+@media (max-width: 1120px) {
+  .cr-table {
+    --cr-cols: 132px minmax(150px, 1.6fr) minmax(0, 1fr) 138px 64px 96px;
+  }
+  .cr-col-message {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .cr-table {
+    --cr-cols: 128px minmax(140px, 1.7fr) minmax(0, 1fr) 64px 96px;
+  }
+  .cr-col-meta {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .cr-head {
+    display: none;
+  }
+  .cr-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
+  }
+  .cr-col-status {
+    flex: 0 0 auto;
+  }
+  .cr-col-name {
+    flex: 1 1 140px;
+  }
+  .cr-col-branch {
+    flex: 0 0 auto;
+    max-width: 45%;
+  }
+  .cr-col-age {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .cr-col-actions {
+    flex: 0 0 auto;
+  }
+  .cr-detail {
+    flex: 1 1 100%;
+    margin-top: 6px;
+  }
 }
 
 .machine-launch-btn {
@@ -398,112 +789,11 @@ body {
   flex: 1;
 }
 
-.machine-platform,
-.machine-multiplexers {
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.machine-stats {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-}
-
-.stat {
-  color: var(--text-muted);
-}
-
-.stat.attention {
-  color: var(--yellow);
-  font-weight: 600;
-}
-
-.stat.working {
-  color: var(--green);
-}
-
-.machine-heartbeat {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
 /* District (project path grouping) */
-.district {
-  margin-bottom: 16px;
-}
-
-.district:last-child {
-  margin-bottom: 0;
-}
-
-.district-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-
-.district-path {
-  font-size: 13px;
-  font-family: "SF Mono", "Fira Code", monospace;
-  color: var(--text-secondary);
-}
-
-.district-count {
-  font-size: 11px;
-  color: var(--text-muted);
-}
 
 /* Sessions Grid */
-.sessions-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
-}
 
 /* Session Card */
-.session-card {
-  border: 1px solid var(--border);
-  border-left: 3px solid;
-  background: var(--status-bg);
-  border-left-color: var(--status-fg);
-  border-radius: 8px;
-  /* Grid items default to min-width:auto, so a long nowrap .session-message
-     would stretch the track and scroll the whole page sideways. */
-  min-width: 0;
-  padding: 14px 16px;
-  transition: border-color 0.2s, background 0.2s;
-  cursor: pointer;
-  user-select: none;
-}
-
-.session-card:hover {
-  border-color: var(--border-emphasis);
-  filter: brightness(1.1);
-}
-
-.session-card--selected {
-  outline: 2px solid var(--blue);
-  outline-offset: -2px;
-}
-
-.session-card.expanded {
-  border-color: var(--border-strong);
-}
-
-.session-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
 
 .session-status {
   display: flex;
@@ -617,18 +907,6 @@ body {
   color: var(--text-muted);
 }
 
-.session-project {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.project-name {
-  font-size: calc(15px + var(--font-offset));
-  font-weight: 600;
-}
-
 .git-branch {
   font-size: 11px;
   color: var(--accent-violet-fg);
@@ -637,60 +915,6 @@ body {
   padding: 1px 6px;
   border-radius: 4px;
   font-family: "SF Mono", "Fira Code", monospace;
-}
-
-.mux-badge {
-  font-size: 10px;
-  color: var(--accent-green-fg);
-  background: rgb(var(--accent-green-rgb) / var(--tint-soft));
-  border: 1px solid rgb(var(--accent-green-rgb) / 0.2);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-family: "SF Mono", "Fira Code", monospace;
-}
-
-.session-name-primary {
-  font-size: calc(15px + var(--font-offset));
-  font-weight: 600;
-  cursor: default;
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-name-primary .rename-input {
-  width: 100%;
-  font-size: calc(14px + var(--font-offset));
-  font-weight: 600;
-}
-
-.session-name-badge {
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: rgb(var(--contrast-rgb) / var(--tint-faint));
-  border: 1px solid var(--border);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-family: "SF Mono", "Fira Code", monospace;
-  cursor: default;
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-name-badge .rename-input {
-  width: 100%;
-  font-size: 11px;
-}
-
-.session-name {
-  cursor: default;
-}
-
-.session-name:hover {
-  color: var(--text);
 }
 
 .rename-input {
@@ -707,62 +931,6 @@ body {
 
 .rename-input:focus {
   border-color: var(--blue);
-}
-
-.session-message {
-  font-size: calc(13px + var(--font-offset));
-  color: var(--text-muted);
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 8px;
-}
-
-.session-message.action-hint {
-  color: var(--accent-orange-fg-strong);
-  font-style: italic;
-}
-
-.session-message.expanded {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: unset;
-}
-
-.session-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.session-cwd {
-  font-family: "SF Mono", "Fira Code", monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
-}
-
-.session-footer-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.session-tokens {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-family: "SF Mono", "Fira Code", monospace;
-}
-
-.session-model {
-  background: var(--bg-elevated);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-family: "SF Mono", "Fira Code", monospace;
 }
 
 /* Empty State */
@@ -801,11 +969,6 @@ body {
 }
 
 /* Expanded Session Details */
-.session-details {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
 
 .detail-row {
   display: flex;
@@ -856,12 +1019,6 @@ body {
   color: var(--text);
   border-color: var(--border-strong);
   background: var(--bg-hover);
-}
-
-.no-terminal-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-style: italic;
 }
 
 .kill-btn {
@@ -3224,10 +3381,6 @@ body {
 /* Tablet Breakpoint (768-1023px) */
 /* ============================== */
 @media (min-width: 768px) and (max-width: 1023px) {
-  .sessions-grid {
-    /* minmax(0, …) — a bare 1fr resolves its minimum to min-content and overflows. */
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .app {
     padding: 0 16px;
@@ -3390,18 +3543,6 @@ body {
   /* Hide explorer layout toggle on mobile */
   .header-toolbar .layout-toggle {
     display: none;
-  }
-
-  /* Sessions grid: single column */
-  .sessions-grid {
-    /* minmax(0, …) — a bare 1fr resolves its minimum to min-content and overflows. */
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  /* Session card: tighter padding */
-  .session-card {
-    padding: 12px;
   }
 
   /* Touch-friendly action buttons */
@@ -3668,19 +3809,6 @@ body {
     right: -12px;
   }
 
-  /* Machine group: tighter on mobile */
-  .machine-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .machine-stats {
-    flex-wrap: wrap;
-    gap: 8px;
-    font-size: 12px;
-  }
-
   /* Detail toggles: touch-friendly */
   .detail-switch {
     min-height: 44px;
@@ -3690,21 +3818,6 @@ body {
   .load-previous-btn {
     min-height: 44px;
     padding: 8px 20px;
-  }
-
-  /* Session name: allow more room on mobile */
-  .session-name-primary {
-    max-width: none;
-  }
-
-  /* Session cwd: allow more room */
-  .session-cwd {
-    max-width: none;
-  }
-
-  /* District header: wrap on mobile */
-  .district-header {
-    flex-wrap: wrap;
   }
 
   /* Empty state: tighter padding */

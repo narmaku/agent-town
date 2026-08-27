@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { GroupMode, SortMode, TimeFilter } from "../App";
 import { useResizable } from "../hooks/useResizable";
 import { useWindowWidth } from "../hooks/useWindowWidth";
+import { buildGroups, filterSessionsByTime, sortSessions } from "../session-grouping";
 import { AGENT_TYPE_LABELS, API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
 import { DashboardIcon } from "./icons";
-import { buildGroups, filterSessionsByTime, sortSessions } from "./MachineGroup";
 import { SessionDetail } from "./SessionDetail";
 import {
   filterRawSessionsByStatus,

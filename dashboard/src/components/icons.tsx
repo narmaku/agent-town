@@ -134,7 +134,7 @@ export function MenuIcon({ size = 18, className, "aria-label": ariaLabel }: Icon
   );
 }
 
-export function CardsLayoutIcon({ size = 14, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
+export function ControlRoomIcon({ size = 14, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
   return (
     <svg
       width={size}
@@ -146,7 +146,8 @@ export function CardsLayoutIcon({ size = 14, className, "aria-label": ariaLabel 
       aria-label={ariaLabel}
       aria-hidden={ariaLabel ? undefined : "true"}
     >
-      <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z" />
+      {/* Dense operations rows: a status tick on the left rail and a line per session. */}
+      <path d="M2 3h2v2H2V3zm4 .5h9v1H6v-1zM2 7h2v2H2V7zm4 .5h9v1H6v-1zM2 11h2v2H2v-2zm4 .5h9v1H6v-1z" />
     </svg>
   );
 }

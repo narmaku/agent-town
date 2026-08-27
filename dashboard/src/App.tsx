@@ -10,10 +10,11 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ActivityFeed } from "./components/ActivityFeed";
+import { ControlRoom } from "./components/ControlRoom";
 import { ExplorerLayout } from "./components/ExplorerLayout";
 import {
   ActivityIcon,
-  CardsLayoutIcon,
+  ControlRoomIcon,
   ExplorerLayoutIcon,
   MenuIcon,
   SettingsIcon,
@@ -21,7 +22,6 @@ import {
 } from "./components/icons";
 import { KeyboardHelp } from "./components/KeyboardHelp";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
-import { buildGroups, filterSessionsByTime, MachineGroup, sortSessions } from "./components/MachineGroup";
 import { ResumeAgentModal } from "./components/ResumeAgentModal";
 import { SessionFullscreen } from "./components/SessionFullscreen";
 import { SettingsModal } from "./components/SettingsModal";
@@ -29,6 +29,7 @@ import { TerminalOverlay } from "./components/TerminalOverlay";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { createBrowserLogger } from "./logger";
+import { visibleSessions } from "./session-grouping";
 import { API } from "./utils";
 
 const logger = createBrowserLogger("App");
@@ -46,7 +47,7 @@ interface DeepSearchResult {
 export type SortMode = "recent" | "alphabetical" | "status";
 export type TimeFilter = "24h" | "3d" | "7d" | "all";
 export type GroupMode = "directory" | "status" | "none";
-export type LayoutMode = "cards" | "explorer";
+export type LayoutMode = "control" | "explorer";
 
 const STORAGE_KEYS = {
   THEME: "agentTown:theme",
@@ -139,7 +140,12 @@ export function App(): React.JSX.Element {
     loadLocalStorage(STORAGE_KEYS.FONT_SIZE, "small"),
   );
   const [groupMode, setGroupMode] = useState<GroupMode>(() => loadLocalStorage(STORAGE_KEYS.GROUP_MODE, "directory"));
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => loadLocalStorage(STORAGE_KEYS.LAYOUT_MODE, "cards"));
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => {
+    // Legacy installs persisted "cards"; anything that is not the Explorer maps
+    // to the Control Room, so old values coerce forward instead of breaking.
+    const stored = loadLocalStorage<string>(STORAGE_KEYS.LAYOUT_MODE, "control");
+    return stored === "explorer" ? "explorer" : "control";
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [deepSearch, setDeepSearch] = useState(false);
   const [deepSearchLoading, setDeepSearchLoading] = useState(false);
@@ -262,17 +268,12 @@ export function App(): React.JSX.Element {
     [machines, searchQuery, deepSearch, deepSearchSessionIds],
   );
 
-  // Flatten visible sessions for keyboard navigation, applying the same
-  // filtering/sorting as MachineGroup so navigation order matches the UI.
+  // Flatten visible sessions for keyboard navigation. visibleSessions is the same
+  // pipeline the Control Room renders with, so nav order always matches the UI.
   const allSessions = useMemo(() => {
-    return filteredMachines.flatMap((machine) => {
-      const timeSessions = filterSessionsByTime(machine.sessions, timeFilter);
-      const groups = buildGroups(timeSessions, groupMode);
-      return groups.flatMap(([, sessions]) => {
-        const filtered = hideIdle ? sessions.filter((s) => s.status !== "idle" && s.status !== "done") : sessions;
-        return sortSessions(filtered, sortMode);
-      });
-    });
+    return filteredMachines.flatMap((machine) =>
+      visibleSessions(machine.sessions, { timeFilter, groupMode, hideIdle, sortMode }),
+    );
   }, [filteredMachines, timeFilter, groupMode, hideIdle, sortMode]);
 
   // Build a lookup: sessionId -> { machineId, session }
@@ -346,7 +347,7 @@ export function App(): React.JSX.Element {
 
   const { selectedSessionId } = useKeyboardNavigation({
     sessions: allSessions,
-    enabled: enableKeyboardNav && layoutMode === "cards",
+    enabled: enableKeyboardNav && layoutMode === "control",
     shortcuts: keyboardShortcuts,
     onExpand: toggleExpanded,
     onFullscreen: handleKeyboardFullscreen,
@@ -533,12 +534,12 @@ export function App(): React.JSX.Element {
               <div className="layout-toggle">
                 <button
                   type="button"
-                  className={`layout-toggle-btn ${layoutMode === "cards" ? "active" : ""}`}
-                  onClick={() => setLayoutMode("cards")}
-                  title="Cards layout"
-                  aria-label="Cards layout"
+                  className={`layout-toggle-btn ${layoutMode === "control" ? "active" : ""}`}
+                  onClick={() => setLayoutMode("control")}
+                  title="Control Room"
+                  aria-label="Control Room layout"
                 >
-                  <CardsLayoutIcon />
+                  <ControlRoomIcon />
                 </button>
                 <button
                   type="button"
@@ -574,7 +575,7 @@ export function App(): React.JSX.Element {
                   onClose={() => setActivityOpen(false)}
                   onClearAll={clearActivity}
                   onNavigateToSession={(machineId, sessionId) => {
-                    if (layoutMode === "cards") {
+                    if (layoutMode === "control") {
                       setFullscreen({ machineId, sessionId });
                     } else {
                       setExplorerSelection({ machineId, sessionId });
@@ -599,7 +600,7 @@ export function App(): React.JSX.Element {
         </div>
       </header>
 
-      {layoutMode === "cards" ? (
+      {layoutMode === "control" ? (
         <main className="app-main">
           {filteredMachines.length === 0 && machines.length === 0 && (
             <div className="empty-state">
@@ -616,26 +617,21 @@ export function App(): React.JSX.Element {
               <p>No sessions match "{searchQuery}"</p>
             </div>
           )}
-          {filteredMachines.map((machine) => (
-            <MachineGroup
-              key={machine.machineId}
-              machine={machine}
-              hideIdle={hideIdle}
-              sortMode={sortMode}
-              timeFilter={timeFilter}
-              groupMode={groupMode}
-              onOpenTerminal={(sessionName, multiplexer) =>
-                handleOpenTerminal(machine.machineId, sessionName, multiplexer)
-              }
-              onResume={(sessionId, projectDir, agentType) =>
-                setResumeTarget({ machineId: machine.machineId, sessionId, projectDir, agentType })
-              }
-              onFullscreen={(session) => setFullscreen({ machineId: machine.machineId, sessionId: session.sessionId })}
-              autoDeleteOnClose={autoDeleteOnClose}
-              selectedSessionId={selectedSessionId}
-              onLaunchAgent={handleLaunchOnMachine}
-            />
-          ))}
+          <ControlRoom
+            machines={filteredMachines}
+            hideIdle={hideIdle}
+            sortMode={sortMode}
+            timeFilter={timeFilter}
+            groupMode={groupMode}
+            onOpenTerminal={handleOpenTerminal}
+            onResume={(machineId, sessionId, projectDir, agentType) =>
+              setResumeTarget({ machineId, sessionId, projectDir, agentType })
+            }
+            onFullscreen={(machineId, session) => setFullscreen({ machineId, sessionId: session.sessionId })}
+            autoDeleteOnClose={autoDeleteOnClose}
+            selectedSessionId={selectedSessionId}
+            onLaunchAgent={handleLaunchOnMachine}
+          />
         </main>
       ) : (
         <ExplorerLayout
