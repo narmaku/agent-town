@@ -1,7 +1,7 @@
 import type { Dirent } from "node:fs";
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
 
 import { parseTreeSession } from "../tree-session";
@@ -79,8 +79,9 @@ export async function discoverPiSessions(options: PiDiscoveryOptions = {}): Prom
       if (!cached.session) continue;
       const session = { ...cached.session, status: detectStatus(cached.session.lastActivity, nowMs) };
       sessions.push(session);
-      sessionPaths.set(session.sessionId, path);
-      sessionCreatedAt.set(session.sessionId, cached.createdAtMs ?? metadata.birthtimeMs ?? metadata.mtimeMs);
+      const key = sessionCacheKey(sessionsDir, session.sessionId);
+      sessionPaths.set(key, path);
+      sessionCreatedAt.set(key, cached.createdAtMs ?? metadata.birthtimeMs ?? metadata.mtimeMs);
     } catch (err) {
       log.debug(`session discovery skipped ${basename(path)}: ${formatError(err)}`);
     }
@@ -98,13 +99,15 @@ export async function findPiSessionCandidates(sessionsDir = getPiSessionsDir()):
   return sessions.map((session) => ({
     id: session.sessionId,
     cwd: session.cwd,
-    createdAtMs: sessionCreatedAt.get(session.sessionId) ?? Date.parse(session.lastActivity),
+    createdAtMs:
+      sessionCreatedAt.get(sessionCacheKey(sessionsDir, session.sessionId)) ?? Date.parse(session.lastActivity),
   }));
 }
 
 export async function findPiSessionPath(sessionId: string, sessionsDir = getPiSessionsDir()): Promise<string | null> {
   if (!sessionId) return null;
-  const cachedPath = sessionPaths.get(sessionId);
+  const key = sessionCacheKey(sessionsDir, sessionId);
+  const cachedPath = sessionPaths.get(key);
   if (cachedPath && (await Bun.file(cachedPath).exists())) return cachedPath;
 
   for (const path of await findPiSessionFiles(sessionsDir)) {
@@ -124,8 +127,9 @@ export async function deletePiSessionData(sessionId: string, sessionsDir = getPi
   try {
     await unlink(path);
     fileCache.delete(path);
-    sessionPaths.delete(sessionId);
-    sessionCreatedAt.delete(sessionId);
+    const key = sessionCacheKey(sessionsDir, sessionId);
+    sessionPaths.delete(key);
+    sessionCreatedAt.delete(key);
     return true;
   } catch (err) {
     log.warn(`session delete failed: session=${sessionId.slice(0, 8)} error=${formatError(err)}`);
@@ -169,17 +173,17 @@ function sessionFromParsed(
   const messages = parsed.messages;
   const last = messages.at(-1);
   const lastAssistant = findLastItem(messages, (message) => message.role === "assistant" && Boolean(message.content));
-  const sessionInfo = parsed.records.find((record) => record.type === "session_info");
+  const sessionInfo = findLastItem(parsed.records, (record) => record.type === "session_info");
   const firstUser = messages.find((message) => message.role === "user" && message.content);
   const name = stringValue(sessionInfo?.name) || stringValue(sessionInfo?.title) || parsed.header.name;
-  const lastActivity = last && Date.parse(last.timestamp) > 0 ? last.timestamp : new Date(mtimeMs).toISOString();
+  const lastActivity = new Date(mtimeMs).toISOString();
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   for (const message of messages) {
     totalInputTokens += message.tokenUsage?.inputTokens ?? 0;
     totalOutputTokens += message.tokenUsage?.outputTokens ?? 0;
   }
-  const model = findLastItem(messages, (message) => Boolean(message.model))?.model || parsed.header.model;
+  const model = findCurrentModel(parsed.activeRecords, parsed.header.model);
   const slug = (name || firstUser?.content || parsed.header.id).slice(0, 100);
 
   return {
@@ -208,6 +212,24 @@ function detectStatus(lastActivity: string, nowMs: number): SessionStatus {
   if (age < 30_000) return "working";
   if (age < 60_000) return "awaiting_input";
   return "idle";
+}
+
+function sessionCacheKey(sessionsDir: string, sessionId: string): string {
+  return `${resolve(sessionsDir)}\0${sessionId}`;
+}
+
+function findCurrentModel(records: Record<string, unknown>[], fallback: string | undefined): string | undefined {
+  let model = fallback;
+  for (const record of records) {
+    if (record.type === "model_change") {
+      model = stringValue(record.modelId) || model;
+      continue;
+    }
+    if (record.type !== "message" || typeof record.message !== "object" || record.message === null) continue;
+    const message = record.message as Record<string, unknown>;
+    if (message.role === "assistant") model = stringValue(message.model) || model;
+  }
+  return model;
 }
 
 function stringValue(value: unknown): string {

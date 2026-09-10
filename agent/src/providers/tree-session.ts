@@ -32,8 +32,9 @@ export function parseTreeSession(text: string): ParsedTreeSession | null {
   const messageRecords = records.filter((record) => record.type === "message" && isRecord(record.message));
   const usesTree = header.version !== 1 && messageRecords.some((record) => stringValue(record.id));
   const treeRecords = records.filter((record) => record.type !== "session" && stringValue(record.id));
-  const activeRecords = usesTree ? applyLatestCompaction(selectActiveBranch(treeRecords)) : messageRecords;
-  return { header, records, activeRecords, messages: normalizeMessages(activeRecords) };
+  const activeRecords = usesTree ? selectActiveBranch(treeRecords) : messageRecords;
+  const visibleRecords = usesTree ? applyLatestCompaction(activeRecords) : activeRecords;
+  return { header, records, activeRecords, messages: normalizeMessages(visibleRecords) };
 }
 
 function parseHeader(record: Record<string, unknown> | undefined): TreeSessionHeader | null {
