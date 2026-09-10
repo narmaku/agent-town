@@ -167,6 +167,74 @@ describe("paginated Codex database history", () => {
     expect(response).toMatchObject({ total: 2, hasMore: false });
     expect(response.messages.map((message) => message.content)).toEqual(["From the database", "Database reply"]);
   });
+
+  test("reads current thread_items projections when a rollout file is unavailable", async () => {
+    const db = new Database(join(codexHome, "thread_history_1.sqlite"), { create: true });
+    db.run(
+      "CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, item_id TEXT, rollout_ordinal INTEGER, created_at_ms INTEGER, item_json TEXT, item_type TEXT)",
+    );
+    const insert = db.prepare("INSERT INTO thread_items VALUES (?, ?, ?, ?, ?, ?, ?)");
+    insert.run(
+      SESSION_ID,
+      "turn-1",
+      "user-1",
+      1,
+      Date.parse("2026-09-10T00:00:00.000Z"),
+      JSON.stringify({
+        type: "userMessage",
+        id: "user-1",
+        content: [{ type: "text", text: "Current database question" }],
+      }),
+      "userMessage",
+    );
+    insert.run(
+      SESSION_ID,
+      "turn-1",
+      "reasoning-1",
+      2,
+      Date.parse("2026-09-10T00:00:01.000Z"),
+      JSON.stringify({ type: "reasoning", id: "reasoning-1", summary: ["Check the projected items."] }),
+      "reasoning",
+    );
+    insert.run(
+      SESSION_ID,
+      "turn-1",
+      "command-1",
+      3,
+      Date.parse("2026-09-10T00:00:02.000Z"),
+      JSON.stringify({
+        type: "commandExecution",
+        id: "command-1",
+        command: "bun test",
+        aggregatedOutput: "1 pass",
+        status: "completed",
+      }),
+      "commandExecution",
+    );
+    insert.run(
+      SESSION_ID,
+      "turn-1",
+      "assistant-1",
+      4,
+      Date.parse("2026-09-10T00:00:03.000Z"),
+      JSON.stringify({ type: "agentMessage", id: "assistant-1", text: "Current database reply" }),
+      "agentMessage",
+    );
+    db.close();
+
+    const response = await getCodexSessionMessages(SESSION_ID, 0, 10, codexHome);
+
+    expect(response).toMatchObject({ total: 3, hasMore: false });
+    expect(response.messages[0]).toMatchObject({ role: "user", content: "Current database question" });
+    expect(response.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "",
+      thinking: "Check the projected items.",
+      toolUse: [{ name: "commandExecution", id: "command-1", input: "bun test" }],
+      toolResults: [{ toolUseId: "command-1", content: "1 pass" }],
+    });
+    expect(response.messages[2]).toMatchObject({ role: "assistant", content: "Current database reply" });
+  });
 });
 
 function responseMessage(role: string, text: string, timestamp: string, model?: string): Record<string, unknown> {
