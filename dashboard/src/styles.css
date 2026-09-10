@@ -1100,9 +1100,9 @@ body {
 }
 
 .agent-pi {
-  background: rgb(var(--accent-purple-rgb) / var(--tint-chip));
-  color: var(--accent-purple-fg);
-  border-color: rgb(var(--accent-purple-rgb) / 0.3);
+  background: rgb(var(--accent-violet-rgb) / var(--tint-chip));
+  color: var(--accent-violet-fg);
+  border-color: rgb(var(--accent-violet-rgb) / 0.3);
 }
 
 .tracking-badge {
