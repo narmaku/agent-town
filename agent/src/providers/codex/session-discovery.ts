@@ -227,6 +227,7 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
     }
     model = stringValue(payload.model) || model;
     const info = isRecord(payload.info) ? payload.info : undefined;
+    const lastUsage = info && isRecord(info.last_token_usage) ? info.last_token_usage : undefined;
     const cumulativeUsage = info && isRecord(info.total_token_usage) ? info.total_token_usage : undefined;
     const usage = cumulativeUsage ?? (isRecord(payload.usage) ? payload.usage : info);
     if (usage) {
@@ -239,7 +240,11 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
         totalInputTokens += inputTokens;
         totalOutputTokens += outputTokens;
       }
-      if (inputTokens > 0) contextTokens = inputTokens;
+      const latestContextTokens = lastUsage
+        ? numberValue(lastUsage.total_tokens) ||
+          numberValue(lastUsage.input_tokens) + numberValue(lastUsage.output_tokens)
+        : inputTokens;
+      if (latestContextTokens > 0) contextTokens = latestContextTokens;
     }
   }
 
