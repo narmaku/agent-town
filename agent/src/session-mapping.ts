@@ -76,10 +76,7 @@ export function discoverAndMapSessions(
  * Adjust session statuses using hook events first, then provider-scoped
  * process activity, and finally the provider's storage heuristic.
  */
-export function adjustSessionStatuses(
-  sessions: SessionInfo[],
-  processMappings: Map<string, ProcessMapping>,
-): void {
+export function adjustSessionStatuses(sessions: SessionInfo[], processMappings: Map<string, ProcessMapping>): void {
   for (const session of sessions) {
     const hookState = getHookState(session.sessionId);
     if (hookState) {
