@@ -108,7 +108,7 @@ For OMP, check the active profile/root without editing native files:
 ls "${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}/sessions"/*/*.jsonl
 ```
 
-If `OMP_PROFILE` is set and `PI_CODING_AGENT_DIR` is not, the root is `~/.omp/profiles/$OMP_PROFILE/agent`. Agent Town accepts current files with a 256-byte title slot and legacy header-first files, then shows only the post-reset active branch. Nested artifact/subagent JSONLs are intentionally ignored. Sessions launched with a one-off `omp --session-dir` outside the service's active root are not visible.
+If `OMP_PROFILE` (or its legacy alias `PI_PROFILE`) is set and `PI_CODING_AGENT_DIR` is not, the root is `~/.omp/profiles/<profile>/agent`. `OMP_PROFILE` takes precedence when both profile variables are set. Agent Town accepts current files with a 256-byte title slot and legacy header-first files, then shows only the post-reset active branch. Nested artifact/subagent JSONLs are intentionally ignored. Sessions launched with a one-off `omp --session-dir` outside the service's active root are not visible.
 
 **Check 4: Process mapper is working**
 

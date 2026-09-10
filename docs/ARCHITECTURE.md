@@ -30,9 +30,9 @@ This document describes the internal architecture, data flows, and key subsystem
                     |           |           |                         |           |           |
                  zellij      tmux      processes                  zellij      tmux      processes
                  sessions    sessions   (ps)                      sessions    sessions   (ps)
-                    |           |           |                         |           |           |
-                 claude      opencode   gemini     process        claude      opencode   gemini     process
-                 code                   cli        mapper        code                   cli        mapper
+                    |           |                                     |           |
+              provider plugins + mapper                         provider plugins + mapper
+         (Claude/OpenCode/Gemini/Codex/Pi/OMP)             (Claude/OpenCode/Gemini/Codex/Pi/OMP)
 ```
 
 ### Components

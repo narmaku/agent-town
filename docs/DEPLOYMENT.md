@@ -265,6 +265,7 @@ Install Pi using its current instructions at [pi.dev](https://pi.dev/) and ensur
 | Variable | Default | Description |
 |---|---|---|
 | `OMP_PROFILE` | unset | Selects `~/.omp/profiles/<name>/agent` instead of the default agent root |
+| `PI_PROFILE` | unset | Legacy alias for `OMP_PROFILE`; ignored when `OMP_PROFILE` is set |
 | `PI_CODING_AGENT_DIR` | `~/.omp/agent` | Overrides OMP's active agent data root; also affects Pi when both providers run in the same service |
 
 Install OMP using the current [Oh My Pi instructions](https://github.com/can1357/oh-my-pi) and put `omp` on the Agent Town service `PATH`. Agent Town reads only the active profile/root's `sessions/*/*.jsonl`; one-off `--session-dir` locations are not discovered. Current fixed-title-slot and legacy header-first histories are supported without modifying or migrating them.

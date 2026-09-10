@@ -347,7 +347,7 @@ Current v2/v3 transcripts are trees: Agent Town follows guarded `id`/`parentId` 
 
 **Location:** `agent/src/providers/omp/`
 
-OMP stores sessions below `~/.omp/agent/sessions/` by default. `OMP_PROFILE=<name>` selects `~/.omp/profiles/<name>/agent`; `PI_CODING_AGENT_DIR` overrides the active agent root and must be visible to the Agent Town service. Agent Town scans only `sessions/*/*.jsonl`, so nested artifact/subagent transcripts and root-level unrelated JSONLs are excluded. Sessions created with an ad hoc `omp --session-dir` outside that root are not discoverable.
+OMP stores sessions below `~/.omp/agent/sessions/` by default. `OMP_PROFILE=<name>` selects `~/.omp/profiles/<name>/agent`; the legacy `PI_PROFILE` alias is also accepted. `PI_CODING_AGENT_DIR` overrides the active agent root and must be visible to the Agent Town service. Agent Town scans only `sessions/*/*.jsonl`, so nested artifact/subagent transcripts and root-level unrelated JSONLs are excluded. Sessions created with an ad hoc `omp --session-dir` outside that root are not discoverable.
 
 Current files begin with an exact 256-byte UTF-8 `type: "title"` slot before the v3 header; legacy header-first files remain supported. Header IDs and working directories are authoritative. Agent Town follows the active tree, starts display after the latest active `reset_boundary`, ignores credential/lifecycle/custom state as chat, and uses terminal message/session-exit records to preserve completion, interruption, pending, and error status. Resume uses `omp --resume <id>`, Autonomous adds `--yolo`, and text is delivered through bracketed paste without synthetic startup keystrokes.
 

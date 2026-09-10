@@ -839,6 +839,7 @@ interface SessionInfo {
   projectName: string;
   gitBranch: string;
   status: SessionStatus;
+  statusSource?: "activity" | "provider"; // Whether status is heuristic or native lifecycle state
   lastActivity: string;       // ISO timestamp
   lastMessage: string;
   lastAssistantMessage?: string;
