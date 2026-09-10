@@ -83,6 +83,10 @@ export const AGENT_TYPE_LABELS: Record<AgentType, string> = Object.fromEntries(
   ]),
 ) as Record<AgentType, string>;
 
+export function resolveAvailableAgentType(preferred: AgentType, available: AgentType[]): AgentType {
+  return available.includes(preferred) ? preferred : (available[0] ?? preferred);
+}
+
 // --- API endpoints ---
 
 export const API = {

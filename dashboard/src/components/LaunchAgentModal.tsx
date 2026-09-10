@@ -1,7 +1,7 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AGENT_TYPE_CONFIG, API } from "../utils";
+import { AGENT_TYPE_CONFIG, API, resolveAvailableAgentType } from "../utils";
 import { DirectoryBrowserModal } from "./DirectoryBrowserModal";
 
 export function resolveSelectedMachineId(
@@ -99,6 +99,7 @@ export function LaunchAgentModal({
   const availableAgentTypes = selectedMachine?.availableAgents?.length
     ? configuredAgentTypes.filter((type) => selectedMachine.availableAgents.includes(type))
     : configuredAgentTypes;
+  const selectedAgentType = resolveAvailableAgentType(agentType, availableAgentTypes);
 
   // Available multiplexers for the selected machine (from heartbeat data)
   const availableMux = useMemo(() => {
@@ -191,7 +192,7 @@ export function LaunchAgentModal({
           machineId: selectedMachineId,
           sessionName: sessionName.trim(),
           projectDir: projectDir.trim(),
-          agentType,
+          agentType: selectedAgentType,
           autonomous,
           multiplexer,
         }),
@@ -314,7 +315,7 @@ export function LaunchAgentModal({
               <select
                 id="launch-agent-type"
                 className="form-select"
-                value={agentType}
+                value={selectedAgentType}
                 onChange={(e) => setAgentType(e.target.value as AgentType)}
               >
                 {availableAgentTypes.map((t) => (
@@ -394,7 +395,7 @@ export function LaunchAgentModal({
               </label>
               {autonomous && (
                 <span className="form-hint" style={{ color: "var(--yellow)" }}>
-                  {AGENT_TYPE_CONFIG[agentType].autonomousHint}
+                  {AGENT_TYPE_CONFIG[selectedAgentType].autonomousHint}
                 </span>
               )}
             </div>
