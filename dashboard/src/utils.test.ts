@@ -7,8 +7,8 @@ import {
   AGENT_TYPE_LABELS,
   API,
   resolveAvailableAgentType,
-  shortenPath,
   STATUS_CONFIG,
+  shortenPath,
   timeAgo,
 } from "./utils";
 
