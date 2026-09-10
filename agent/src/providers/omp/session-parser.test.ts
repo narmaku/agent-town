@@ -176,9 +176,7 @@ describe("OMP session parsing", () => {
     expect(withMessage({ role: "assistant", content: "done" })).toBe("done");
     expect(withMessage({ role: "assistant", stopReason: "error", content: "failed" })).toBe("error");
     expect(withMessage({ role: "assistant", stopReason: "aborted", content: "stopped" })).toBe("exited");
-    expect(withMessage({ role: "assistant", content: [{ type: "toolCall", id: "a", name: "bash" }] })).toBe(
-      "working",
-    );
+    expect(withMessage({ role: "assistant", content: [{ type: "toolCall", id: "a", name: "bash" }] })).toBe("working");
     expect(withMessage({ role: "user", content: "waiting" })).toBe("working");
   });
 });

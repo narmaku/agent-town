@@ -1,6 +1,6 @@
 import type { SessionStatus } from "@agent-town/shared";
 
-import { parseTreeSession, type ParsedTreeSession } from "../tree-session";
+import { type ParsedTreeSession, parseTreeSession } from "../tree-session";
 
 const TITLE_SLOT_BYTES = 256;
 

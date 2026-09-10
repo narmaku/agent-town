@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { applyProviderStatusFallback } from "../../session-status";
-import { serializeOmpTitleSlotForTest } from "./session-parser";
 import {
   clearOmpSessionCache,
   deleteOmpSessionData,
@@ -14,6 +13,7 @@ import {
   getOmpAgentDir,
   getOmpSessionsDir,
 } from "./session-discovery";
+import { serializeOmpTitleSlotForTest } from "./session-parser";
 
 const roots: string[] = [];
 
@@ -69,7 +69,10 @@ async function writeSession(
     ...(options.terminalRecord ? [options.terminalRecord] : []),
   ];
   const logical = records.map((record) => JSON.stringify(record)).join("\n");
-  await writeFile(path, options.current === false ? logical : `${serializeOmpTitleSlotForTest(options.title ?? "")} ${logical}`.replace("} {", "}\n{"));
+  await writeFile(
+    path,
+    options.current === false ? logical : `${serializeOmpTitleSlotForTest(options.title ?? "")}${logical}`,
+  );
 }
 
 afterEach(async () => {

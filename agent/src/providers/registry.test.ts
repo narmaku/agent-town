@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { ClaudeCodeProvider } from "./claude-code/index";
 import { CodexProvider } from "./codex/index";
 import { GeminiCliProvider } from "./gemini-cli/index";
-import { OpenCodeProvider } from "./opencode/index";
 import { OmpProvider } from "./omp/index";
+import { OpenCodeProvider } from "./opencode/index";
 import { PiProvider } from "./pi/index";
 import { clearProviders, getAllProviders, getProvider, registerProvider } from "./registry";
 
