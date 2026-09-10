@@ -32,7 +32,8 @@ export function parseTreeSession(text: string): ParsedTreeSession | null {
 
   const messageRecords = records.filter((record) => record.type === "message" && isRecord(record.message));
   const usesTree = header.version !== 1 && messageRecords.some((record) => stringValue(record.id));
-  const activeRecords = usesTree ? selectActiveBranch(messageRecords) : messageRecords;
+  const treeRecords = records.filter((record) => record.type !== "session" && stringValue(record.id));
+  const activeRecords = usesTree ? selectActiveBranch(treeRecords) : messageRecords;
   return { header, records, activeRecords, messages: normalizeMessages(activeRecords) };
 }
 
@@ -88,6 +89,18 @@ function normalizeMessages(records: Record<string, unknown>[]): SessionMessage[]
   const messages: SessionMessage[] = [];
 
   for (const record of records) {
+    if (record.type === "compaction" || record.type === "branch_summary") {
+      const summary = stringValue(record.summary);
+      if (summary) {
+        messages.push({
+          role: "assistant",
+          timestamp: normalizeTimestamp(record.timestamp),
+          content: summary,
+        });
+      }
+      continue;
+    }
+
     const rawMessage = isRecord(record.message) ? record.message : undefined;
     if (!rawMessage) continue;
     const role = stringValue(rawMessage.role);
