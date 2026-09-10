@@ -61,8 +61,10 @@ On startup, the agent logs which providers are available:
 ```
 [info] registry: registered provider: Claude Code (claude-code)
 [info] registry: registered provider: OpenCode (opencode)
+[info] registry: registered provider: Gemini CLI (gemini-cli)
 [info] registry: registered provider: Codex CLI (codex)
 [info] registry: registered provider: Pi (pi)
+[info] registry: registered provider: OMP (omp)
 ```
 
 If a provider is not available:
@@ -70,7 +72,7 @@ If a provider is not available:
 [info] registry: provider not available: Claude Code (claude not found)
 ```
 
-Ensure the agent binary (`claude`, `opencode`, `gemini`, `codex`, or `pi`) is in the agent process's `$PATH`. When running as a systemd service, the `PATH` must be explicitly set in the service file. Pi's help output must identify it as the Pi coding agent; an unrelated system utility named `pi` is intentionally rejected.
+Ensure the agent binary (`claude`, `opencode`, `gemini`, `codex`, `pi`, or `omp`) is in the agent process's `$PATH`. When running as a systemd service, the `PATH` must be explicitly set in the service file. Pi's help output must identify it as the Pi coding agent; an unrelated system utility named `pi` is intentionally rejected. OMP's version output must identify the `omp` CLI.
 
 **Check 3: Session data exists**
 
@@ -101,6 +103,13 @@ ls "${PI_CODING_AGENT_SESSION_DIR:-${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/sessi
 
 Pi sessions form a tree. Agent Town displays only the ancestry of the last active leaf, so messages on an abandoned branch are intentionally absent. Current status is estimated from file activity and the running process.
 
+For OMP, check the active profile/root without editing native files:
+```bash
+ls "${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}/sessions"/*/*.jsonl
+```
+
+If `OMP_PROFILE` is set and `PI_CODING_AGENT_DIR` is not, the root is `~/.omp/profiles/$OMP_PROFILE/agent`. Agent Town accepts current files with a 256-byte title slot and legacy header-first files, then shows only the post-reset active branch. Nested artifact/subagent JSONLs are intentionally ignored. Sessions launched with a one-off `omp --session-dir` outside the service's active root are not visible.
+
 **Check 4: Process mapper is working**
 
 With `LOG_LEVEL=debug`, look for process mapper output:
@@ -110,7 +119,7 @@ With `LOG_LEVEL=debug`, look for process mapper output:
 
 If no agent processes are found, the mapper logs nothing. Verify the agent is actually running:
 ```bash
-ps aux | grep -E "claude|opencode|gemini|codex|pi" | grep -v grep
+ps aux | grep -E "claude|opencode|gemini|codex|pi|omp" | grep -v grep
 ```
 
 ---
@@ -191,6 +200,8 @@ If the Agent Town agent itself is running inside a zellij or tmux session, attac
 **Codex CLI:** Text is sent through the same bracketed-paste TUI path. A busy turn may defer input until Codex is ready.
 
 **Pi:** Text is sent through bracketed-paste mode. Agent Town does not send a synthetic initial prompt or attempt to accept unrelated trust/disclaimer dialogs.
+
+**OMP:** Text is sent through bracketed-paste mode with no synthetic startup prompt. Autonomous launches use OMP's `--yolo` approval mode.
 
 For multi-line text, a backup Enter is sent via native multiplexer commands (`zellij action write 13` or `tmux send-keys Enter`) after the PTY write, in case the PTY carriage return was swallowed.
 
@@ -328,6 +339,14 @@ If neither matches, the session will show as "idle".
 - Deletion locates the exact session header ID rather than guessing from timestamped filenames.
 - `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` must be visible to the Agent Town service environment.
 
+### OMP
+
+- Resume uses the exact native ID with `omp --resume <id>`; current UUID-like and legacy opaque IDs are accepted.
+- `OMP_PROFILE` or `PI_CODING_AGENT_DIR` must be visible to the Agent Town service. `PI_CODING_AGENT_DIR` affects both Pi and OMP if both providers are enabled.
+- Ad hoc `--session-dir` roots are outside Agent Town's discovery scope.
+- Lifecycle status comes from terminal native records when available; otherwise activity/process heuristics apply.
+- Deletion removes only the exact header-ID JSONL and its same-stem artifact directory. Agent Town never rewrites or migrates OMP sessions.
+
 ---
 
 ## How to Report Bugs
@@ -338,7 +357,7 @@ If neither matches, the session will show as "idle".
    - Operating system and version
    - Bun version (`bun --version`)
    - Multiplexer and version (`zellij --version` / `tmux -V`)
-   - Agent type and version (`claude --version` / `opencode --version` / `gemini --version` / `codex --version` / `pi --version`)
+   - Agent type and version (`claude --version` / `opencode --version` / `gemini --version` / `codex --version` / `pi --version` / `omp --version`)
 4. Open an issue at https://github.com/narmaku/agent-town/issues with:
    - Steps to reproduce
    - Expected behavior

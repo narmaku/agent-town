@@ -32,7 +32,7 @@ interface AgentProvider {
 
 | Property      | Type        | Description                                              |
 |---------------|-------------|----------------------------------------------------------|
-| `type`        | `AgentType` | Unique identifier (`"claude-code"`, `"opencode"`, `"gemini-cli"`, `"codex"`, or `"pi"`) |
+| `type`        | `AgentType` | Unique identifier (`"claude-code"`, `"opencode"`, `"gemini-cli"`, `"codex"`, `"pi"`, or `"omp"`) |
 | `displayName` | `string`    | Human-readable name (e.g., `"Claude Code"`)              |
 | `binaryName`  | `string`    | CLI binary name (e.g., `"claude"` or `"opencode"`)       |
 | `terminal`    | `TerminalCapabilities` | Provider-declared input and startup behavior       |
@@ -49,8 +49,10 @@ Discovers sessions from the agent's native storage. This is called every heartbe
 
 - **Claude Code:** Reads JSONL files from `~/.claude/projects/` directories.
 - **OpenCode:** Queries the OpenCode SDK (`session.list()`) with SQLite fallback.
+- **Gemini CLI:** Reads JSON sessions below `~/.gemini/tmp/`.
 - **Codex CLI:** Reads compatible versioned state databases under `CODEX_HOME` and falls back to active rollout JSONL files.
 - **Pi:** Reads direct and working-directory bucket JSONL sessions from `PI_CODING_AGENT_SESSION_DIR` and reconstructs the active tree branch.
+- **OMP:** Reads primary bucket JSONLs under the active OMP agent root, accepting fixed-title-slot current files and legacy header-first files.
 
 Returns an array of `SessionInfo` objects with fields populated from the agent's storage (session ID, project path, status, last message, etc.). At this stage, `multiplexerSession` and `multiplexer` fields are **not** set -- those are filled in later by the process mapper.
 
@@ -60,8 +62,10 @@ Returns paginated messages for a session. Used by the `/api/session-messages` en
 
 - **Claude Code:** Parses the session's JSONL file.
 - **OpenCode:** Uses `session.messages()` from the SDK with SQLite fallback.
+- **Gemini CLI:** Normalizes messages from the native JSON session document.
 - **Codex CLI:** Normalizes visible rollout messages, reasoning summaries, tool records, and token usage. System/developer content is not exposed.
 - **Pi:** Normalizes the active branch's text, thinking, tool calls/results, model, timestamps, and usage.
+- **OMP:** Normalizes only the post-reset active ancestry, excluding credential, lifecycle, artifact, and abandoned-branch records.
 
 #### `filterAgentProcesses(processes: AgentProcess[]): AgentProcess[]`
 
@@ -79,8 +83,10 @@ interface AgentProcess {
 
 - **Claude Code:** Matches processes with `claude` in the command line (excluding agent-town's own processes).
 - **OpenCode:** Matches processes with `opencode` in the command line.
+- **Gemini CLI:** Matches Gemini CLI executable shapes.
 - **Codex CLI:** Matches exact `codex` executable shapes, including the Node/Bun launcher form, without substring matching.
 - **Pi:** Matches exact direct/compiled and known Node/Bun package launcher shapes; substring matches such as `pip` and `pico` are rejected.
+- **OMP:** Matches exact `omp` and known Oh My Pi package launchers without substring matching.
 
 #### `extractSessionIdFromArgs(args: string): string | undefined`
 
@@ -88,8 +94,10 @@ Extracts a session ID from a process's command-line arguments. This is the fast 
 
 - **Claude Code:** Looks for `--resume <uuid>` in the args.
 - **OpenCode:** Looks for `--session <ses_id>` in the args.
+- **Gemini CLI:** Looks for the session ID in supported resume arguments.
 - **Codex CLI:** Looks for the positional UUID in `codex resume <uuid>`.
 - **Pi:** Looks for a safe value following `--session` or `--session-id`.
+- **OMP:** Looks for a safe opaque ID in `--resume`, `-r`, or legacy `--session` forms, including `--flag=value`.
 
 Returns `undefined` if the session ID cannot be determined from the command line (e.g., a freshly launched session with no `--resume` flag).
 
@@ -106,8 +114,10 @@ interface LaunchOptions {
 
 - **Claude Code:** Returns `claude [--model X] [--dangerously-skip-permissions]`
 - **OpenCode:** Returns `opencode [--model X]`
+- **Gemini CLI:** Returns `gemini [--model X] [--yolo]`
 - **Codex CLI:** Returns `codex [--model X] [--dangerously-bypass-approvals-and-sandbox]`
 - **Pi:** Returns `pi [--model X]`; `autonomous` is ignored because Pi has no tool-approval or built-in sandbox layer.
+- **OMP:** Returns `omp [--model X] [--yolo]`.
 
 #### `buildResumeCommand(opts: ResumeOptions): string[]`
 
@@ -123,8 +133,10 @@ interface ResumeOptions {
 
 - **Claude Code:** Returns `claude --resume <sessionId> [--model X] [--dangerously-skip-permissions]`
 - **OpenCode:** Returns `opencode --session <sessionId> [--model X]`
+- **Gemini CLI:** Returns its native resume command with the exact session ID.
 - **Codex CLI:** Returns `codex resume <sessionId> [--model X] [--dangerously-bypass-approvals-and-sandbox]`
 - **Pi:** Returns `pi --session <sessionId> [--model X]` (not the interactive `--resume` picker).
+- **OMP:** Returns `omp --resume <sessionId> [--model X] [--yolo]`.
 
 #### `handleHookEvent(payload: unknown): HookEventResult | null`
 
@@ -175,9 +187,13 @@ Fallback method for matching a running process to a session ID when `extractSess
 
 **OpenCode:** Finds the OpenCode session whose working directory matches `cwd`.
 
+**Gemini CLI:** Uses provider-native path and process metadata to resolve the session.
+
 **Codex CLI:** Selects the nearest retained, unclaimed, top-level session in the same working directory near the process start time.
 
 **Pi:** Selects the nearest retained, unclaimed session in the same working directory near the process start time.
+
+**OMP:** Selects the nearest retained, unclaimed primary session with the exact same working directory near process start.
 
 #### `deleteSessionData(sessionId: string): Promise<boolean>`
 
@@ -185,8 +201,10 @@ Deletes the session's data files from local storage. Returns `true` if the sessi
 
 - **Claude Code:** Deletes the JSONL file from `~/.claude/projects/`.
 - **OpenCode:** Deletes the session via SDK or SQLite.
+- **Gemini CLI:** Deletes the exact native session file.
 - **Codex CLI:** Runs `codex delete --force <uuid>` using an argument-array spawn. It never unlinks a guessed transcript path.
 - **Pi:** Parses headers under the configured session root and unlinks only the file whose ID exactly matches.
+- **OMP:** Parses authoritative header IDs and removes only the exact JSONL plus its same-stem artifact directory.
 
 ---
 
@@ -206,7 +224,7 @@ function getAllProviders(): AgentProvider[];
 
 At agent startup, `initializeProviders()` is called. It:
 
-1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`, `GeminiCliProvider`, `CodexProvider`, `PiProvider`).
+1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`, `GeminiCliProvider`, `CodexProvider`, `PiProvider`, `OmpProvider`).
 2. Calls `isAvailable()` on each.
 3. Registers only the providers whose binary is found in `$PATH`.
 
@@ -218,6 +236,7 @@ async function initializeProviders(): Promise<void> {
     new GeminiCliProvider(),
     new CodexProvider(),
     new PiProvider(),
+    new OmpProvider(),
   ];
 
   for (const provider of candidates) {
@@ -323,6 +342,16 @@ Codex session storage is private and versioned. Agent Town detects compatible sc
 Pi stores sessions below `~/.pi/agent/sessions/` by default. `PI_CODING_AGENT_DIR` changes the agent root and `PI_CODING_AGENT_SESSION_DIR` directly overrides the session root. Agent Town scans direct JSONL files and one level of working-directory buckets, but excludes deeper artifact/subagent files.
 
 Current v2/v3 transcripts are trees: Agent Town follows guarded `id`/`parentId` links from the last leaf and displays only that active ancestry. Legacy v1/missing-ID transcripts use linear order. Malformed lines, dangling parents, and cycles are isolated safely. Pi provides no hook, tool-approval layer, or built-in sandbox, so status is an estimate and the Autonomous dashboard option does not apply. Pi's separate project-trust prompt still controls whether project-local resources are loaded.
+
+### OMP Provider
+
+**Location:** `agent/src/providers/omp/`
+
+OMP stores sessions below `~/.omp/agent/sessions/` by default. `OMP_PROFILE=<name>` selects `~/.omp/profiles/<name>/agent`; `PI_CODING_AGENT_DIR` overrides the active agent root and must be visible to the Agent Town service. Agent Town scans only `sessions/*/*.jsonl`, so nested artifact/subagent transcripts and root-level unrelated JSONLs are excluded. Sessions created with an ad hoc `omp --session-dir` outside that root are not discoverable.
+
+Current files begin with an exact 256-byte UTF-8 `type: "title"` slot before the v3 header; legacy header-first files remain supported. Header IDs and working directories are authoritative. Agent Town follows the active tree, starts display after the latest active `reset_boundary`, ignores credential/lifecycle/custom state as chat, and uses terminal message/session-exit records to preserve completion, interruption, pending, and error status. Resume uses `omp --resume <id>`, Autonomous adds `--yolo`, and text is delivered through bracketed paste without synthetic startup keystrokes.
+
+Deletion does not rewrite or migrate OMP data. It locates an exact header ID and removes that JSONL and only its same-stem artifact directory.
 
 ---
 
