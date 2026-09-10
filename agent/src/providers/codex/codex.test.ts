@@ -30,9 +30,7 @@ describe("CodexProvider", () => {
 
   test("builds exact positional resume commands", () => {
     expect(provider.buildResumeCommand({ sessionId: SESSION_ID })).toEqual(["codex", "resume", SESSION_ID]);
-    expect(
-      provider.buildResumeCommand({ sessionId: SESSION_ID, model: "gpt-5.3-codex", autonomous: true }),
-    ).toEqual([
+    expect(provider.buildResumeCommand({ sessionId: SESSION_ID, model: "gpt-5.3-codex", autonomous: true })).toEqual([
       "codex",
       "resume",
       SESSION_ID,

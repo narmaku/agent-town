@@ -35,9 +35,7 @@ export function matchCodexSessionByStartTime(
         !claimedIds.has(candidate.id) &&
         Math.abs(candidate.createdAtMs - processStartMs) <= PROCESS_MATCH_WINDOW_MS,
     )
-    .sort(
-      (a, b) => Math.abs(a.createdAtMs - processStartMs) - Math.abs(b.createdAtMs - processStartMs),
-    )[0]?.id;
+    .sort((a, b) => Math.abs(a.createdAtMs - processStartMs) - Math.abs(b.createdAtMs - processStartMs))[0]?.id;
 }
 
 export async function findCodexSessionCandidates(): Promise<CodexSessionCandidate[]> {

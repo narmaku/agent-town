@@ -1,9 +1,9 @@
+import { Database } from "bun:sqlite";
+import type { Dirent } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-
 import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
-import { Database } from "bun:sqlite";
 
 const log = createLogger("codex:sessions");
 
@@ -46,7 +46,10 @@ export async function discoverCodexSessions(options: DiscoveryOptions = {}): Pro
   const fingerprint = await buildFingerprint([...databasePaths, ...rolloutPaths]);
 
   if (discoveryCache?.fingerprint === fingerprint) {
-    return discoveryCache.sessions.map((session) => ({ ...session, status: detectStatus(session.lastActivity, nowMs) }));
+    return discoveryCache.sessions.map((session) => ({
+      ...session,
+      status: detectStatus(session.lastActivity, nowMs),
+    }));
   }
 
   const databaseSessions = discoverFromDatabases(databasePaths, nowMs);
@@ -59,7 +62,9 @@ export async function discoverCodexSessions(options: DiscoveryOptions = {}): Pro
 async function findDatabasePaths(codexHome: string): Promise<string[]> {
   try {
     const entries = await readdir(codexHome, { withFileTypes: true });
-    const paths = entries.filter((entry) => entry.isFile() && DATABASE_FILE_RE.test(entry.name)).map((entry) => join(codexHome, entry.name));
+    const paths = entries
+      .filter((entry) => entry.isFile() && DATABASE_FILE_RE.test(entry.name))
+      .map((entry) => join(codexHome, entry.name));
     const withMtime = await Promise.all(paths.map(async (path) => ({ path, mtimeMs: (await stat(path)).mtimeMs })));
     return withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs).map((entry) => entry.path);
   } catch (err) {
@@ -74,7 +79,7 @@ async function findRolloutPaths(codexHome: string, nowMs: number): Promise<strin
 
   async function visit(directory: string, depth: number): Promise<void> {
     if (depth > 4 || paths.length >= MAX_ROLLOUT_FILES) return;
-    let entries;
+    let entries: Dirent[];
     try {
       entries = await readdir(directory, { withFileTypes: true });
     } catch (err) {
@@ -123,7 +128,10 @@ function discoverFromDatabases(paths: string[], nowMs: number): SessionInfo[] | 
       const table = tableNames.find((entry) => entry.name === "threads" || entry.name === "thread")?.name;
       if (!table) continue;
 
-      const columns = db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all().map((column) => column.name);
+      const columns = db
+        .query<{ name: string }, []>(`PRAGMA table_info(${table})`)
+        .all()
+        .map((column) => column.name);
       if (!columns.includes("id") || !columns.includes("cwd") || !columns.includes("updated_at")) continue;
 
       const rows = db.query<DatabaseRow, []>(`SELECT * FROM ${table}`).all();
@@ -214,7 +222,8 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
   const id = stringValue(metadata.id);
   const cwd = stringValue(metadata.cwd);
   const timestamp = stringValue(metadata.timestamp) || new Date(mtimeMs).toISOString();
-  if (!UUID_RE.test(id) || !cwd || isSubagentSource(metadata.source) || nowMs - mtimeMs > SESSION_RETENTION_MS) return null;
+  if (!UUID_RE.test(id) || !cwd || isSubagentSource(metadata.source) || nowMs - mtimeMs > SESSION_RETENTION_MS)
+    return null;
 
   const title = stringValue(metadata.title) || id.slice(0, 8);
   return {
@@ -240,8 +249,13 @@ export async function findCodexRolloutPath(sessionId: string, codexHome = getCod
   const paths = await findRolloutPaths(codexHome, Date.now());
   for (const path of paths) {
     try {
-      const header = await Bun.file(path).slice(0, 64 * 1024).text();
-      const metadata = header.split("\n").map(parseRecord).find((record) => record?.type === "session_meta");
+      const header = await Bun.file(path)
+        .slice(0, 64 * 1024)
+        .text();
+      const metadata = header
+        .split("\n")
+        .map(parseRecord)
+        .find((record) => record?.type === "session_meta");
       if (isRecord(metadata?.payload) && metadata.payload.id === sessionId) return path;
     } catch (err) {
       log.debug(`rollout lookup skipped ${basename(path)}: ${formatError(err)}`);

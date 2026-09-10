@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  extractCodexSessionIdFromArgs,
-  filterCodexProcesses,
-  matchCodexSessionByStartTime,
-} from "./process-mapper";
+import { extractCodexSessionIdFromArgs, filterCodexProcesses, matchCodexSessionByStartTime } from "./process-mapper";
 
 const SESSION_ID = "550e8400-e29b-41d4-a716-446655440000";
 
