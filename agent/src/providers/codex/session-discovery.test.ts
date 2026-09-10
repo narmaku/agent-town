@@ -84,7 +84,11 @@ describe("discoverCodexSessions", () => {
           type: "event_msg",
           payload: {
             type: "token_count",
-            info: { total_token_usage: { input_tokens: 200, output_tokens: 40 } },
+            info: {
+              last_token_usage: { input_tokens: 40, output_tokens: 15, total_tokens: 55 },
+              total_token_usage: { input_tokens: 200, output_tokens: 40 },
+              model_context_window: 258_400,
+            },
           },
         }),
       ].join("\n"),
@@ -100,7 +104,7 @@ describe("discoverCodexSessions", () => {
       version: "0.153.4",
       totalInputTokens: 200,
       totalOutputTokens: 40,
-      contextTokens: 200,
+      contextTokens: 55,
     });
   });
 
