@@ -246,7 +246,7 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
   if (!metadata) return null;
   const id = stringValue(metadata.id);
   const cwd = stringValue(metadata.cwd);
-  const timestamp = stringValue(metadata.timestamp) || new Date(mtimeMs).toISOString();
+  const lastActivity = new Date(mtimeMs).toISOString();
   if (!UUID_RE.test(id) || !cwd || isSubagentSource(metadata.source) || nowMs - mtimeMs > SESSION_RETENTION_MS)
     return null;
 
@@ -259,8 +259,8 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
     projectPath: cwd,
     projectName: basename(cwd),
     gitBranch: stringValue(metadata.git_branch) || "",
-    status: detectStatus(new Date(mtimeMs).toISOString(), nowMs),
-    lastActivity: timestamp,
+    status: detectStatus(lastActivity, nowMs),
+    lastActivity,
     lastMessage,
     cwd,
     model: model || stringValue(metadata.model) || undefined,
