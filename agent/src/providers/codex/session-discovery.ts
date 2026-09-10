@@ -12,6 +12,8 @@ const DATABASE_FILE_RE = /^(?:state|thread_history)_\d+\.sqlite$/;
 const MAX_ROLLOUT_FILES = 500;
 const MAX_DISCOVERY_BYTES = 512 * 1024;
 
+export type CodexCommandRunner = (command: string[]) => Promise<number>;
+
 interface DiscoveryOptions {
   codexHome?: string;
   nowMs?: number;
@@ -246,6 +248,33 @@ export async function findCodexRolloutPath(sessionId: string, codexHome = getCod
     }
   }
   return null;
+}
+
+export function buildCodexDeleteCommand(sessionId: string): string[] | null {
+  if (!UUID_RE.test(sessionId)) return null;
+  return ["codex", "delete", "--force", sessionId];
+}
+
+export async function deleteCodexSessionData(
+  sessionId: string,
+  runCommand: CodexCommandRunner = runCodexCommand,
+): Promise<boolean> {
+  const command = buildCodexDeleteCommand(sessionId);
+  if (!command) return false;
+  try {
+    const exitCode = await runCommand(command);
+    if (exitCode !== 0) log.warn(`native delete failed: session=${sessionId.slice(0, 8)} exit=${exitCode}`);
+    return exitCode === 0;
+  } catch (err) {
+    log.warn(`native delete failed: session=${sessionId.slice(0, 8)} error=${formatError(err)}`);
+    return false;
+  }
+}
+
+async function runCodexCommand(command: string[]): Promise<number> {
+  const process = Bun.spawn(command, { stdout: "ignore", stderr: "ignore" });
+  await process.exited;
+  return process.exitCode;
 }
 
 function detectStatus(lastActivity: string, nowMs: number): SessionStatus {
