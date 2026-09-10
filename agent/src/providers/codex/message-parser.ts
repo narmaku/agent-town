@@ -189,31 +189,34 @@ interface HistoryRow {
 }
 
 async function readDatabaseTranscript(sessionId: string, codexHome: string): Promise<string | null> {
-  const records: Record<string, unknown>[] = [];
   for (const path of await findCodexDatabasePaths(codexHome)) {
+    const records: Record<string, unknown>[] = [];
     let db: Database | undefined;
     try {
       db = new Database(path, { readonly: true, strict: true });
       const tables = db.query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'").all();
       for (const { name } of tables) {
+        const table = quoteSqlIdentifier(name);
         const columns = db
-          .query<{ name: string }, []>(`PRAGMA table_info(${name})`)
+          .query<{ name: string }, []>(`PRAGMA table_info(${table})`)
           .all()
           .map((column) => column.name);
         const threadColumn = ["thread_id", "session_id"].find((column) => columns.includes(column));
-        const payloadColumn = ["item", "data", "payload", "json", "items", "content"].find((column) =>
+        const payloadColumn = ["item_json", "item", "data", "payload", "json", "items", "content"].find((column) =>
           columns.includes(column),
         );
         if (!threadColumn || !payloadColumn) continue;
-        const timestampColumn = ["created_at", "timestamp", "ts"].find((column) => columns.includes(column));
-        const orderColumn = ["position", "sequence", "idx", "id", timestampColumn].find((column): column is string =>
-          Boolean(column && columns.includes(column)),
+        const timestampColumn = ["created_at_ms", "created_at", "timestamp", "ts"].find((column) =>
+          columns.includes(column),
         );
-        const timestampSelect = timestampColumn ? timestampColumn : "NULL";
-        const orderClause = orderColumn ? ` ORDER BY ${orderColumn}` : "";
+        const orderColumn = ["rollout_ordinal", "position", "sequence", "idx", "id", timestampColumn].find(
+          (column): column is string => Boolean(column && columns.includes(column)),
+        );
+        const timestampSelect = timestampColumn ? quoteSqlIdentifier(timestampColumn) : "NULL";
+        const orderClause = orderColumn ? ` ORDER BY ${quoteSqlIdentifier(orderColumn)}` : "";
         const rows = db
           .query<HistoryRow, [string]>(
-            `SELECT ${payloadColumn} AS payload, ${timestampSelect} AS timestamp FROM ${name} WHERE ${threadColumn} = ?${orderClause}`,
+            `SELECT ${quoteSqlIdentifier(payloadColumn)} AS payload, ${timestampSelect} AS timestamp FROM ${table} WHERE ${quoteSqlIdentifier(threadColumn)} = ?${orderClause}`,
           )
           .all(sessionId);
         for (const row of rows) records.push(...historyRowToRecords(row));
@@ -223,8 +226,9 @@ async function readDatabaseTranscript(sessionId: string, codexHome: string): Pro
     } finally {
       db?.close();
     }
+    if (records.length > 0) return records.map((record) => JSON.stringify(record)).join("\n");
   }
-  return records.length > 0 ? records.map((record) => JSON.stringify(record)).join("\n") : null;
+  return null;
 }
 
 function historyRowToRecords(row: HistoryRow): Record<string, unknown>[] {
@@ -240,6 +244,8 @@ function historyRowToRecords(row: HistoryRow): Record<string, unknown>[] {
   return values.flatMap((item) => {
     if (!isRecord(item)) return [];
     if (item.type === "response_item" || item.type === "event_msg") return [item];
+    const projectedRecords = currentHistoryItemToRecords(item, row.timestamp);
+    if (projectedRecords) return projectedRecords;
     const payload = isRecord(item.item) ? item.item : isRecord(item.payload) ? item.payload : item;
     const payloadType = stringValue(payload.type);
     const eventTypes = new Set(["user_message", "agent_message", "agent_reasoning", "token_count"]);
@@ -251,6 +257,84 @@ function historyRowToRecords(row: HistoryRow): Record<string, unknown>[] {
       },
     ];
   });
+}
+
+function currentHistoryItemToRecords(
+  item: Record<string, unknown>,
+  timestamp: unknown,
+): Record<string, unknown>[] | null {
+  const type = stringValue(item.type);
+  const id = stringValue(item.id);
+
+  if (type === "userMessage" || type === "agentMessage") {
+    const text = type === "userMessage" ? extractText(item.content) : stringValue(item.text);
+    if (!text) return [];
+    return [
+      {
+        timestamp,
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: type === "userMessage" ? "user" : "assistant",
+          content: [{ type: type === "userMessage" ? "input_text" : "output_text", text }],
+        },
+      },
+    ];
+  }
+
+  if (type === "reasoning") {
+    const thinking = extractText(item.summary) || extractText(item.content);
+    return thinking
+      ? [{ timestamp, type: "response_item", payload: { type: "reasoning", summary: [{ text: thinking }] } }]
+      : [];
+  }
+
+  const tool = projectedToolItem(item, id);
+  if (!tool) return KNOWN_NON_MESSAGE_ITEM_TYPES.has(type) ? [] : null;
+  return [
+    {
+      timestamp,
+      type: "response_item",
+      payload: { type: "custom_tool_call", call_id: id, name: tool.name, input: tool.input },
+    },
+    {
+      timestamp,
+      type: "response_item",
+      payload: { type: "custom_tool_call_output", call_id: id, output: tool.output },
+    },
+  ];
+}
+
+const KNOWN_NON_MESSAGE_ITEM_TYPES = new Set(["collabAgentToolCall", "contextCompaction", "subAgentActivity"]);
+
+interface ProjectedToolItem {
+  name: string;
+  input: unknown;
+  output: unknown;
+}
+
+function projectedToolItem(item: Record<string, unknown>, id: string): ProjectedToolItem | null {
+  if (!id) return null;
+  const type = stringValue(item.type);
+  if (type === "commandExecution") {
+    return { name: type, input: item.command, output: item.aggregatedOutput ?? item.status };
+  }
+  if (type === "mcpToolCall") {
+    const server = stringValue(item.server);
+    const tool = stringValue(item.tool);
+    return {
+      name: [server, tool].filter(Boolean).join(".") || type,
+      input: item.arguments,
+      output: item.result ?? item.error ?? item.status,
+    };
+  }
+  if (type === "fileChange") {
+    return { name: type, input: item.changes, output: item.status };
+  }
+  if (type === "webSearch") {
+    return { name: type, input: item.query ?? item.action, output: item.results };
+  }
+  return null;
 }
 
 function parseRecord(line: string): Record<string, unknown> | undefined {
@@ -289,11 +373,16 @@ function extractText(content: unknown): string {
   if (!Array.isArray(content)) return "";
   return content
     .flatMap((item) => {
+      if (typeof item === "string") return item ? [item] : [];
       if (!isRecord(item)) return [];
       const text = stringValue(item.text);
       return text ? [text] : [];
     })
     .join("\n\n");
+}
+
+function quoteSqlIdentifier(identifier: string): string {
+  return `"${identifier.replaceAll('"', '""')}"`;
 }
 
 function serializeToolInput(value: unknown): string | undefined {
