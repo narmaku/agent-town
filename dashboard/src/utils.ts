@@ -85,6 +85,12 @@ export const AGENT_TYPE_CONFIG: Record<AgentType, AgentTypeDisplayConfig> = {
     autonomousHint: "Pi has no tool-approval or built-in sandbox layer; Autonomous does not apply.",
     autonomousSupported: false,
   },
+  omp: {
+    label: "OMP",
+    shortLabel: "OMP",
+    autonomousHint: "Auto-approves all tool calls (--yolo mode).",
+    autonomousSupported: true,
+  },
 };
 
 export const AGENT_TYPE_LABELS: Record<AgentType, string> = Object.fromEntries(
