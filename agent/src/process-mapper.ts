@@ -19,6 +19,12 @@ export interface ProcessMapping {
   agentType?: AgentType; // agent type that owns this process
 }
 
+export type ProcessMappingKeyKind = "session" | "cwd";
+
+export function makeProcessMappingKey(agentType: AgentType, kind: ProcessMappingKeyKind, value: string): string {
+  return `${agentType}:${kind}:${value}`;
+}
+
 // Re-export for tests
 export { extractClaudeSessionIdFromArgs as extractSessionIdFromArgs, matchSessionByBirthTime, type SessionCandidate };
 
@@ -193,7 +199,7 @@ export async function discoverProcessMappings(): Promise<Map<string, ProcessMapp
         if (sessionId) claimedIds.add(sessionId);
         mapping.sessionId = sessionId;
 
-        const key = sessionId || `cwd:${cwd}`;
+        const key = makeProcessMappingKey(provider.type, sessionId ? "session" : "cwd", sessionId || cwd);
         mappings.set(key, mapping);
         log.debug(
           `pid=${proc.pid} agent=${provider.type} mux=${mapping.session} key=${key.slice(0, 20)} etimes=${proc.etimes}`,

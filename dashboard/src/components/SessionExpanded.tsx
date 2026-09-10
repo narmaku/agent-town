@@ -91,6 +91,7 @@ export function SessionExpanded({
         body: JSON.stringify({
           machineId,
           sessionId: session.sessionId,
+          agentType: session.agentType,
           multiplexer: session.multiplexer,
           multiplexerSession: session.multiplexerSession,
         }),

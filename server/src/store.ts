@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import {
+  type AgentType,
   type CreateNodeRequest,
   createLogger,
   DEFAULT_KEYBOARD_SHORTCUTS,
@@ -30,6 +31,7 @@ interface PendingSession {
   sessionName: string;
   projectDir: string;
   multiplexer: "zellij" | "tmux";
+  agentType: AgentType;
   createdAt: number;
 }
 
@@ -78,6 +80,7 @@ export function addPendingSession(
   sessionName: string,
   projectDir: string,
   multiplexer: "zellij" | "tmux",
+  agentType: AgentType = "claude-code",
 ): void {
   const key = `${machineId}:${sessionName}`;
   pendingSessions.set(key, {
@@ -85,6 +88,7 @@ export function addPendingSession(
     sessionName,
     projectDir,
     multiplexer,
+    agentType,
     createdAt: Date.now(),
   });
   log.info(`pending: added session=${sessionName} machine=${machineId.slice(0, 8)}`);
@@ -292,6 +296,7 @@ export function getAllMachines(): MachineInfo[] {
 
     const placeholders = newPending.map((p) => ({
       sessionId: `pending-${p.sessionName}`,
+      agentType: p.agentType,
       slug: p.sessionName,
       customName: p.sessionName,
       projectPath: p.projectDir,

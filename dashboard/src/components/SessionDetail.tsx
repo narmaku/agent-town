@@ -331,6 +331,7 @@ export function SessionDetail({
             body: JSON.stringify({
               machineId,
               sessionId: session.sessionId,
+              agentType: session.agentType,
               multiplexer: session.multiplexer,
               multiplexerSession: session.multiplexerSession,
             }),
