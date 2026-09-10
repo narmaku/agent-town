@@ -14,13 +14,22 @@ import {
 
 describe("agent type metadata", () => {
   test("defines labels, badges, and autonomy help for every provider", () => {
-    expect(Object.keys(AGENT_TYPE_CONFIG).sort()).toEqual(["claude-code", "codex", "gemini-cli", "opencode"]);
+    expect(Object.keys(AGENT_TYPE_CONFIG).sort()).toEqual(["claude-code", "codex", "gemini-cli", "opencode", "pi"]);
     expect(AGENT_TYPE_CONFIG.codex).toEqual({
       label: "Codex CLI",
       shortLabel: "CX",
       autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
+      autonomousSupported: true,
     });
     expect(AGENT_TYPE_LABELS.codex).toBe("Codex CLI");
+    expect(AGENT_TYPE_CONFIG.pi).toEqual({
+      label: "Pi",
+      shortLabel: "PI",
+      autonomousHint: "Pi has no permission layer; the Autonomous setting does not apply.",
+      autonomousSupported: false,
+    });
+    expect(AGENT_TYPE_LABELS.pi).toBe("Pi");
+    expect(readFileSync(join(import.meta.dir, "styles.css"), "utf8")).toContain(".agent-pi");
   });
 
   test("falls back when the preferred provider is unavailable on a machine", () => {
