@@ -1,4 +1,5 @@
 import { createLogger, type MultiplexerSessionInfo, type SessionInfo, truncateId } from "@agent-town/shared";
+import { getHookState } from "./hook-store";
 import { makeProcessMappingKey, type ProcessMapping } from "./process-mapper";
 
 function findLegacyMapping(
@@ -69,4 +70,38 @@ export function discoverAndMapSessions(
   }
 
   return activeMuxNames;
+}
+
+/**
+ * Adjust session statuses using hook events first, then provider-scoped
+ * process activity, and finally the provider's storage heuristic.
+ */
+export function adjustSessionStatuses(
+  sessions: SessionInfo[],
+  processMappings: Map<string, ProcessMapping>,
+): void {
+  for (const session of sessions) {
+    const hookState = getHookState(session.sessionId);
+    if (hookState) {
+      session.hookEnabled = true;
+      session.status = hookState.status;
+      session.currentTool = hookState.currentTool;
+      continue;
+    }
+
+    if (!session.multiplexerSession) {
+      session.status = "idle";
+      continue;
+    }
+
+    const mapping =
+      processMappings.get(makeProcessMappingKey(session.agentType, "session", session.sessionId)) ??
+      findLegacyMapping(processMappings, session.sessionId, session.agentType);
+
+    if (mapping?.hasActiveChildren) {
+      session.status = "working";
+    } else if (session.status === "idle") {
+      session.status = "awaiting_input";
+    }
+  }
 }
