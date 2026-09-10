@@ -131,21 +131,32 @@ describe("OMP session discovery", () => {
     const root = await makeRoot();
     await writeSession(join(root, "bucket", "normal.jsonl"), {
       id: "normal",
-      terminalRecord: { type: "session_exit", id: "exit", parentId: "assistant", kind: "normal" },
+      terminalRecord: {
+        type: "custom",
+        customType: "session_exit",
+        data: { reason: "dispose", kind: "normal", recordedAt: "2026-09-10T00:00:01Z" },
+      },
     });
     await writeSession(join(root, "bucket", "fatal.jsonl"), {
       id: "fatal",
-      terminalRecord: { type: "session_exit", id: "exit", parentId: "assistant", kind: "fatal" },
+      terminalRecord: {
+        type: "custom",
+        customType: "session_exit",
+        data: { reason: "uncaught_exception", kind: "fatal", recordedAt: "2026-09-10T00:00:01Z" },
+      },
     });
     await writeSession(join(root, "bucket", "interrupted.jsonl"), { id: "interrupted", stopReason: "aborted" });
     await writeSession(join(root, "bucket", "pending.jsonl"), {
       id: "pending",
       terminalRecord: {
-        type: "session_exit",
-        id: "exit",
-        parentId: "assistant",
-        kind: "process_exit",
-        pendingToolCalls: [{ toolName: "bash" }],
+        type: "custom",
+        customType: "session_exit",
+        data: {
+          reason: "process_exit",
+          kind: "process_exit",
+          recordedAt: "2026-09-10T00:00:01Z",
+          pendingToolCalls: [{ toolName: "bash" }],
+        },
       },
     });
 
@@ -154,7 +165,7 @@ describe("OMP session discovery", () => {
     expect(statuses).toEqual({ fatal: "error", interrupted: "exited", normal: "done", pending: "working" });
   });
 
-  test("keeps OMP terminal lifecycle states when no process is mapped", () => {
+  test("keeps OMP authoritative lifecycle states when no process is mapped", () => {
     const session = {
       sessionId: "done",
       agentType: "omp" as const,
@@ -170,6 +181,10 @@ describe("OMP session discovery", () => {
 
     applyProviderStatusFallback(session, undefined);
     expect(session.status).toBe("done");
+
+    const pending = { ...session, sessionId: "pending", status: "working" as const };
+    applyProviderStatusFallback(pending, undefined);
+    expect(pending.status).toBe("working");
   });
 
   test("invalidates cache changes and enforces retention", async () => {

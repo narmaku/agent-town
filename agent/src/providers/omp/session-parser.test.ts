@@ -181,6 +181,28 @@ describe("OMP session parsing", () => {
     expect(normal?.messages).toEqual([]);
   });
 
+  test("derives lifecycle status from current raw exit records without tree fields", () => {
+    const parsed = parseOmpSession(
+      jsonl([
+        { type: "session", version: 3, id: "raw-exit", cwd: "/work" },
+        {
+          type: "message",
+          id: "answer",
+          parentId: null,
+          message: { role: "assistant", content: "completed before the crash" },
+        },
+        {
+          type: "custom",
+          customType: "session_exit",
+          data: { reason: "uncaught_exception", kind: "fatal", recordedAt: "2026-09-10T00:00:00Z" },
+        },
+      ]),
+    );
+
+    expect(parsed?.lifecycleStatus).toBe("error");
+    expect(parsed?.messages.map((message) => message.content)).toEqual(["completed before the crash"]);
+  });
+
   test("maps message completion, error, abort, and pending states", () => {
     function withMessage(message: Record<string, unknown>) {
       return parseOmpSession(

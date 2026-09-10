@@ -50,6 +50,7 @@ describe("OmpProvider", () => {
   });
 
   test("verifies the installed binary identifies itself as OMP", async () => {
+    expect(await isOmpCliAvailable(async () => ({ exitCode: 0, output: "omp/18.1.2" }))).toBe(true);
     expect(await isOmpCliAvailable(async () => ({ exitCode: 0, output: "omp v18.1.2" }))).toBe(true);
     expect(await isOmpCliAvailable(async () => ({ exitCode: 0, output: "Usage: unrelated" }))).toBe(false);
     expect(await isOmpCliAvailable(async () => ({ exitCode: 1, output: "omp v18.1.2" }))).toBe(false);
