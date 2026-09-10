@@ -11,7 +11,7 @@ export interface ParsedOmpSession extends ParsedTreeSession {
 
 export function parseOmpSession(text: string): ParsedOmpSession | null {
   const slot = parseTitleSlot(text);
-  const logicalText = slot ? text.slice(slot.byteLength) : text;
+  const logicalText = slot ? text.slice(slot.characterLength) : text;
   const parsed = parseTreeSession(logicalText, { resetBoundaryType: "reset_boundary" });
   if (!parsed) return null;
 
@@ -36,7 +36,7 @@ export function serializeOmpTitleSlotForTest(title: string): string {
   return `${JSON.stringify({ ...base, pad: " ".repeat(paddingLength) })}\n`;
 }
 
-function parseTitleSlot(text: string): { title: string; byteLength: number } | undefined {
+function parseTitleSlot(text: string): { title: string; characterLength: number } | undefined {
   const newlineIndex = text.indexOf("\n");
   if (newlineIndex < 0) return undefined;
   const physicalLine = text.slice(0, newlineIndex + 1);
@@ -49,7 +49,7 @@ function parseTitleSlot(text: string): { title: string; byteLength: number } | u
     if (typeof value.title !== "string" || typeof value.updatedAt !== "string" || typeof value.pad !== "string") {
       return undefined;
     }
-    return { title: value.title.trim(), byteLength };
+    return { title: value.title.trim(), characterLength: physicalLine.length };
   } catch (_err) {
     return undefined;
   }
