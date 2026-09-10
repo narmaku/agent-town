@@ -49,7 +49,8 @@ export async function discoverCodexSessions(options: DiscoveryOptions = {}): Pro
   const nowMs = options.nowMs ?? Date.now();
   const databasePaths = await findCodexDatabasePaths(codexHome);
   const rolloutPaths = await findRolloutPaths(codexHome, nowMs);
-  const fingerprint = await buildFingerprint([...databasePaths, ...rolloutPaths]);
+  const databaseMetadataPaths = databasePaths.flatMap((path) => [path, `${path}-wal`]);
+  const fingerprint = await buildFingerprint([...databaseMetadataPaths, ...rolloutPaths]);
 
   if (discoveryCache?.fingerprint === fingerprint) {
     return discoveryCache.sessions.map((session) => ({
@@ -208,6 +209,7 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
   let model: string | undefined;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let contextTokens = 0;
 
   for (const line of text.split("\n")) {
     const record = parseRecord(line);
@@ -224,10 +226,20 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
       if (role === "user" || role === "assistant") lastMessage = extractText(payload.content).slice(0, 120);
     }
     model = stringValue(payload.model) || model;
-    const usage = isRecord(payload.info) ? payload.info : isRecord(payload.usage) ? payload.usage : undefined;
+    const info = isRecord(payload.info) ? payload.info : undefined;
+    const cumulativeUsage = info && isRecord(info.total_token_usage) ? info.total_token_usage : undefined;
+    const usage = cumulativeUsage ?? (isRecord(payload.usage) ? payload.usage : info);
     if (usage) {
-      totalInputTokens += numberValue(usage.input_tokens);
-      totalOutputTokens += numberValue(usage.output_tokens);
+      const inputTokens = numberValue(usage.input_tokens);
+      const outputTokens = numberValue(usage.output_tokens);
+      if (cumulativeUsage) {
+        totalInputTokens = inputTokens;
+        totalOutputTokens = outputTokens;
+      } else {
+        totalInputTokens += inputTokens;
+        totalOutputTokens += outputTokens;
+      }
+      if (inputTokens > 0) contextTokens = inputTokens;
     }
   }
 
@@ -255,6 +267,7 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
     version: stringValue(metadata.cli_version) || undefined,
     totalInputTokens: totalInputTokens || undefined,
     totalOutputTokens: totalOutputTokens || undefined,
+    contextTokens: contextTokens || undefined,
   };
 }
 
