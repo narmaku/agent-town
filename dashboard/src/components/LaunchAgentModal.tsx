@@ -316,7 +316,11 @@ export function LaunchAgentModal({
                 id="launch-agent-type"
                 className="form-select"
                 value={selectedAgentType}
-                onChange={(e) => setAgentType(e.target.value as AgentType)}
+                onChange={(e) => {
+                  const type = e.target.value as AgentType;
+                  setAgentType(type);
+                  if (!AGENT_TYPE_CONFIG[type].autonomousSupported) setAutonomous(false);
+                }}
               >
                 {availableAgentTypes.map((t) => (
                   <option key={t} value={t}>
@@ -390,10 +394,15 @@ export function LaunchAgentModal({
             </div>
             <div className="form-group">
               <label className="form-toggle-row">
-                <input type="checkbox" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={autonomous}
+                  disabled={!AGENT_TYPE_CONFIG[selectedAgentType].autonomousSupported}
+                  onChange={(e) => setAutonomous(e.target.checked)}
+                />
                 <span className="form-toggle-label">Autonomous</span>
               </label>
-              {autonomous && (
+              {(autonomous || !AGENT_TYPE_CONFIG[selectedAgentType].autonomousSupported) && (
                 <span className="form-hint" style={{ color: "var(--yellow)" }}>
                   {AGENT_TYPE_CONFIG[selectedAgentType].autonomousHint}
                 </span>
