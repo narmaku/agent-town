@@ -27,6 +27,7 @@ export async function initializeProviders(): Promise<void> {
   const { GeminiCliProvider } = await import("./gemini-cli/index");
   const { CodexProvider } = await import("./codex/index");
   const { PiProvider } = await import("./pi/index");
+  const { OmpProvider } = await import("./omp/index");
 
   const candidates: AgentProvider[] = [
     new ClaudeCodeProvider(),
@@ -34,6 +35,7 @@ export async function initializeProviders(): Promise<void> {
     new GeminiCliProvider(),
     new CodexProvider(),
     new PiProvider(),
+    new OmpProvider(),
   ];
 
   for (const provider of candidates) {
