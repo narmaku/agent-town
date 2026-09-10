@@ -168,7 +168,7 @@ function sessionFromParsed(
 ): SessionInfo {
   const messages = parsed.messages;
   const last = messages.at(-1);
-  const lastAssistant = messages.findLast((message) => message.role === "assistant" && message.content);
+  const lastAssistant = findLastItem(messages, (message) => message.role === "assistant" && Boolean(message.content));
   const sessionInfo = parsed.records.find((record) => record.type === "session_info");
   const firstUser = messages.find((message) => message.role === "user" && message.content);
   const name = stringValue(sessionInfo?.name) || stringValue(sessionInfo?.title) || parsed.header.name;
@@ -179,7 +179,7 @@ function sessionFromParsed(
     totalInputTokens += message.tokenUsage?.inputTokens ?? 0;
     totalOutputTokens += message.tokenUsage?.outputTokens ?? 0;
   }
-  const model = messages.findLast((message) => message.model)?.model || parsed.header.model;
+  const model = findLastItem(messages, (message) => Boolean(message.model))?.model || parsed.header.model;
   const slug = (name || firstUser?.content || parsed.header.id).slice(0, 100);
 
   return {
@@ -198,7 +198,8 @@ function sessionFromParsed(
     version: parsed.header.version ? String(parsed.header.version) : undefined,
     totalInputTokens: totalInputTokens || undefined,
     totalOutputTokens: totalOutputTokens || undefined,
-    contextTokens: messages.findLast((message) => message.tokenUsage?.inputTokens)?.tokenUsage?.inputTokens,
+    contextTokens: findLastItem(messages, (message) => Boolean(message.tokenUsage?.inputTokens))?.tokenUsage
+      ?.inputTokens,
   };
 }
 
@@ -215,4 +216,12 @@ function stringValue(value: unknown): string {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function findLastItem<T>(items: T[], predicate: (item: T) => boolean): T | undefined {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (predicate(item)) return item;
+  }
+  return undefined;
 }

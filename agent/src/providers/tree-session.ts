@@ -65,10 +65,10 @@ function selectActiveBranch(records: Record<string, unknown>[]): Record<string, 
   }
 
   const leaf =
-    records.findLast((record) => {
+    findLastItem(records, (record) => {
       const id = stringValue(record.id);
       return Boolean(id && !referencedParents.has(id));
-    }) ?? records.findLast((record) => stringValue(record.id));
+    }) ?? findLastItem(records, (record) => Boolean(stringValue(record.id)));
   if (!leaf) return records;
 
   const branch: Record<string, unknown>[] = [];
@@ -131,7 +131,9 @@ function normalizeMessages(records: Record<string, unknown>[]): SessionMessage[]
       const toolUseId = stringValue(rawMessage.toolCallId) || stringValue(rawMessage.toolUseId);
       const content = normalizeContent(rawMessage.content).text;
       if (!toolUseId || !content) continue;
-      const target = messages.findLast((message) => message.toolUse?.some((tool) => tool.id === toolUseId));
+      const target = findLastItem(messages, (message) =>
+        Boolean(message.toolUse?.some((tool) => tool.id === toolUseId)),
+      );
       const result = { toolUseId, content: content.slice(0, TOOL_CONTENT_MAX_LENGTH) };
       if (target) {
         target.toolResults ??= [];
@@ -223,4 +225,12 @@ function serialize(value: unknown): string | undefined {
   } catch (_err) {
     return undefined;
   }
+}
+
+function findLastItem<T>(items: T[], predicate: (item: T) => boolean): T | undefined {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (predicate(item)) return item;
+  }
+  return undefined;
 }
