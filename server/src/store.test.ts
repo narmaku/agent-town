@@ -294,6 +294,15 @@ describe("store", () => {
     expect(pending?.lastMessage).toContain("connect to the terminal");
   });
 
+  test("pending session preserves the selected agent type", () => {
+    upsertMachine(makeHeartbeat({ machineId: "typed-pending", hostname: "typed-pending-host" }));
+    addPendingSession("typed-pending", "codex-agent", "/home/user/project", "tmux", "gemini-cli");
+
+    const machine = getAllMachines().find((candidate) => candidate.machineId === "typed-pending");
+
+    expect(machine?.sessions[0].agentType).toBe("gemini-cli");
+  });
+
   test("pending session is removed when heartbeat matches by mux name", () => {
     upsertMachine(makeHeartbeat({ machineId: "pending-match", hostname: "pending-match-host" }));
 
