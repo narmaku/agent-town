@@ -28,6 +28,16 @@ describe("parseCodexTranscript", () => {
         type: "response_item",
         payload: { type: "function_call_output", call_id: "call-1", output: "one.ts" },
       },
+      {
+        timestamp: "2026-09-10T00:00:04.100Z",
+        type: "response_item",
+        payload: { type: "custom_tool_call", name: "view_image", call_id: "call-2", input: { path: "tree.png" } },
+      },
+      {
+        timestamp: "2026-09-10T00:00:04.200Z",
+        type: "response_item",
+        payload: { type: "custom_tool_call_output", call_id: "call-2", output: { loaded: true } },
+      },
       responseMessage("assistant", "The tree is small.", "2026-09-10T00:00:05.000Z", "gpt-5.3-codex"),
       {
         timestamp: "2026-09-10T00:00:06.000Z",
@@ -49,8 +59,14 @@ describe("parseCodexTranscript", () => {
     expect(messages[1]).toMatchObject({
       role: "assistant",
       thinking: "I should inspect files.",
-      toolUse: [{ name: "exec_command", id: "call-1", input: '{"cmd":"rg"}' }],
-      toolResults: [{ toolUseId: "call-1", content: "one.ts" }],
+      toolUse: [
+        { name: "exec_command", id: "call-1", input: '{"cmd":"rg"}' },
+        { name: "view_image", id: "call-2", input: '{\n  "path": "tree.png"\n}' },
+      ],
+      toolResults: [
+        { toolUseId: "call-1", content: "one.ts" },
+        { toolUseId: "call-2", content: '{\n  "loaded": true\n}' },
+      ],
     });
     expect(messages[2]).toMatchObject({
       role: "assistant",

@@ -60,4 +60,17 @@ describe("Codex native deletion", () => {
     expect(deleted).toBe(false);
     expect(calls).toEqual([["codex", "delete", "--force", SESSION_ID]]);
   });
+
+  test("rejects invalid IDs without spawning and contains runner errors", async () => {
+    let callCount = 0;
+    const runner = async (): Promise<number> => {
+      callCount++;
+      throw new Error("codex unavailable");
+    };
+
+    expect(await deleteCodexSessionData("../../other.jsonl", runner)).toBe(false);
+    expect(callCount).toBe(0);
+    expect(await deleteCodexSessionData(SESSION_ID, runner)).toBe(false);
+    expect(callCount).toBe(1);
+  });
 });
