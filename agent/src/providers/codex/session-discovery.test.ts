@@ -151,6 +151,21 @@ describe("discoverCodexSessions", () => {
     expect(first[0].lastActivity).toBe(new Date(activityMs).toISOString());
     expect(cached[0].status).toBe("awaiting_input");
   });
+
+  test("expires cached sessions when they pass the retention window", async () => {
+    const nowMs = Date.parse("2026-09-10T12:00:00.000Z");
+    createStateDatabase(join(codexHome, "state_5.sqlite"), [
+      thread(ACTIVE_ID, { updated_at: nowMs - 1_000 }),
+    ]);
+
+    expect(await discoverCodexSessions({ codexHome, nowMs })).toHaveLength(1);
+    expect(
+      await discoverCodexSessions({
+        codexHome,
+        nowMs: nowMs + 7 * 24 * 60 * 60 * 1000,
+      }),
+    ).toEqual([]);
+  });
 });
 
 interface ThreadRow {
