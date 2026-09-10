@@ -53,10 +53,12 @@ export async function discoverCodexSessions(options: DiscoveryOptions = {}): Pro
   const fingerprint = await buildFingerprint([...databaseMetadataPaths, ...rolloutPaths]);
 
   if (discoveryCache?.fingerprint === fingerprint) {
-    return discoveryCache.sessions.map((session) => ({
-      ...session,
-      status: detectStatus(session.lastActivity, nowMs),
-    }));
+    return discoveryCache.sessions
+      .filter((session) => nowMs - Date.parse(session.lastActivity) <= SESSION_RETENTION_MS)
+      .map((session) => ({
+        ...session,
+        status: detectStatus(session.lastActivity, nowMs),
+      }));
   }
 
   const databaseSessions = discoverFromDatabases(databasePaths, nowMs);

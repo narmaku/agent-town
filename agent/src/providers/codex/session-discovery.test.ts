@@ -154,9 +154,7 @@ describe("discoverCodexSessions", () => {
 
   test("expires cached sessions when they pass the retention window", async () => {
     const nowMs = Date.parse("2026-09-10T12:00:00.000Z");
-    createStateDatabase(join(codexHome, "state_5.sqlite"), [
-      thread(ACTIVE_ID, { updated_at: nowMs - 1_000 }),
-    ]);
+    createStateDatabase(join(codexHome, "state_5.sqlite"), [thread(ACTIVE_ID, { updated_at: nowMs - 1_000 })]);
 
     expect(await discoverCodexSessions({ codexHome, nowMs })).toHaveLength(1);
     expect(
