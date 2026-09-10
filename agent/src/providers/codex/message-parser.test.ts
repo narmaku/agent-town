@@ -34,7 +34,10 @@ describe("parseCodexTranscript", () => {
         type: "event_msg",
         payload: {
           type: "token_count",
-          info: { total_token_usage: { input_tokens: 120, output_tokens: 30 } },
+          info: {
+            last_token_usage: { input_tokens: 20, output_tokens: 5 },
+            total_token_usage: { input_tokens: 120, output_tokens: 30 },
+          },
         },
       },
     ]);
@@ -53,7 +56,7 @@ describe("parseCodexTranscript", () => {
       role: "assistant",
       content: "The tree is small.",
       model: "gpt-5.3-codex",
-      tokenUsage: { inputTokens: 120, outputTokens: 30 },
+      tokenUsage: { inputTokens: 20, outputTokens: 5 },
     });
     expect(messages.some((message) => message.content.includes("private"))).toBe(false);
   });
