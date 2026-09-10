@@ -37,6 +37,24 @@ describe("OMP session parsing", () => {
     expect(parsed?.title).not.toContain("pad");
   });
 
+  test("strips a byte-sized title slot without corrupting a header after a multibyte title", () => {
+    const slot = serializeOmpTitleSlotForTest("設計を直す");
+    expect(new TextEncoder().encode(slot).byteLength).toBe(256);
+    expect(slot.length).toBeLessThan(256);
+
+    const parsed = parseOmpSession(
+      `${slot}${JSON.stringify({
+        type: "session",
+        version: 3,
+        id: "unicode-title",
+        cwd: "/work/unicode",
+      })}`,
+    );
+
+    expect(parsed?.header.id).toBe("unicode-title");
+    expect(parsed?.title).toBe("設計を直す");
+  });
+
   test("accepts legacy header-first sessions and applies title fallbacks", () => {
     const headerTitle = parseOmpSession(
       jsonl([
