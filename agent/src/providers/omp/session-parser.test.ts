@@ -149,6 +149,46 @@ describe("OMP session parsing", () => {
     expect(JSON.stringify(parsed?.messages)).not.toContain("must-not-render");
   });
 
+  test("applies compaction within the post-reset branch", () => {
+    const parsed = parseOmpSession(
+      jsonl([
+        { type: "session", version: 3, id: "reset-compacted", cwd: "/work/tree" },
+        {
+          type: "message",
+          id: "old",
+          parentId: null,
+          message: { role: "user", content: "discarded before reset" },
+        },
+        { type: "reset_boundary", id: "reset", parentId: "old" },
+        {
+          type: "message",
+          id: "kept",
+          parentId: "reset",
+          message: { role: "user", content: "retained after reset" },
+        },
+        {
+          type: "compaction",
+          id: "compact",
+          parentId: "kept",
+          summary: "Post-reset summary",
+          firstKeptEntryId: "kept",
+        },
+        {
+          type: "message",
+          id: "after",
+          parentId: "compact",
+          message: { role: "assistant", content: "continued after compaction" },
+        },
+      ]),
+    );
+
+    expect(parsed?.messages.map((message) => message.content)).toEqual([
+      "Post-reset summary",
+      "retained after reset",
+      "continued after compaction",
+    ]);
+  });
+
   test("derives lifecycle status without exposing lifecycle records as chat", () => {
     const normal = parseOmpSession(
       jsonl([
