@@ -82,7 +82,7 @@ export const AGENT_TYPE_CONFIG: Record<AgentType, AgentTypeDisplayConfig> = {
   pi: {
     label: "Pi",
     shortLabel: "PI",
-    autonomousHint: "Pi has no permission layer; the Autonomous setting does not apply.",
+    autonomousHint: "Pi has no tool-approval or built-in sandbox layer; Autonomous does not apply.",
     autonomousSupported: false,
   },
 };

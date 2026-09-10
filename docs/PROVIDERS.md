@@ -107,7 +107,7 @@ interface LaunchOptions {
 - **Claude Code:** Returns `claude [--model X] [--dangerously-skip-permissions]`
 - **OpenCode:** Returns `opencode [--model X]`
 - **Codex CLI:** Returns `codex [--model X] [--dangerously-bypass-approvals-and-sandbox]`
-- **Pi:** Returns `pi [--model X]`; `autonomous` is ignored because Pi has no permission layer.
+- **Pi:** Returns `pi [--model X]`; `autonomous` is ignored because Pi has no tool-approval or built-in sandbox layer.
 
 #### `buildResumeCommand(opts: ResumeOptions): string[]`
 
@@ -322,7 +322,7 @@ Codex session storage is private and versioned. Agent Town detects compatible sc
 
 Pi stores sessions below `~/.pi/agent/sessions/` by default. `PI_CODING_AGENT_DIR` changes the agent root and `PI_CODING_AGENT_SESSION_DIR` directly overrides the session root. Agent Town scans direct JSONL files and one level of working-directory buckets, but excludes deeper artifact/subagent files.
 
-Current v2/v3 transcripts are trees: Agent Town follows guarded `id`/`parentId` links from the last leaf and displays only that active ancestry. Legacy v1/missing-ID transcripts use linear order. Malformed lines, dangling parents, and cycles are isolated safely. Pi provides no hook or permission layer, so status is an estimate and the Autonomous dashboard option does not apply.
+Current v2/v3 transcripts are trees: Agent Town follows guarded `id`/`parentId` links from the last leaf and displays only that active ancestry. Legacy v1/missing-ID transcripts use linear order. Malformed lines, dangling parents, and cycles are isolated safely. Pi provides no hook, tool-approval layer, or built-in sandbox, so status is an estimate and the Autonomous dashboard option does not apply. Pi's separate project-trust prompt still controls whether project-local resources are loaded.
 
 ---
 

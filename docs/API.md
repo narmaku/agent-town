@@ -526,7 +526,7 @@ Launches a new multiplexer session with an agent running inside it.
 }
 ```
 
-Creates a new zellij or tmux session and sends the provider's argument-array launch command through the multiplexer boundary. Codex uses `codex`, optionally with `--model` and `--dangerously-bypass-approvals-and-sandbox`. Pi uses `pi [--model <value>]`; its lack of a permission layer means `autonomous` is ignored.
+Creates a new zellij or tmux session and sends the provider's argument-array launch command through the multiplexer boundary. Codex uses `codex`, optionally with `--model` and `--dangerously-bypass-approvals-and-sandbox`. Pi uses `pi [--model <value>]`; its lack of a tool-approval or built-in sandbox layer means `autonomous` is ignored.
 
 **Response:** `200 OK`
 ```json

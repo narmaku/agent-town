@@ -324,7 +324,7 @@ If neither matches, the session will show as "idle".
 ### Pi
 
 - Resume uses `pi --session <id>`; `pi --resume` is the interactive picker and is not used by Agent Town.
-- Pi has no permission layer, so Agent Town disables and ignores its generic Autonomous option.
+- Pi has no tool-approval or built-in sandbox layer, so Agent Town disables and ignores its generic Autonomous option. Pi's separate project-trust prompt may still appear for project-local resources.
 - Deletion locates the exact session header ID rather than guessing from timestamped filenames.
 - `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` must be visible to the Agent Town service environment.
 

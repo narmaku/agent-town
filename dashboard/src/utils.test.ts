@@ -26,7 +26,7 @@ describe("agent type metadata", () => {
     expect(AGENT_TYPE_CONFIG.pi).toEqual({
       label: "Pi",
       shortLabel: "PI",
-      autonomousHint: "Pi has no permission layer; the Autonomous setting does not apply.",
+      autonomousHint: "Pi has no tool-approval or built-in sandbox layer; Autonomous does not apply.",
       autonomousSupported: false,
     });
     expect(AGENT_TYPE_LABELS.pi).toBe("Pi");
