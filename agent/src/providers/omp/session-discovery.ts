@@ -34,7 +34,7 @@ const sessionCreatedAt = new Map<string, number>();
 
 export function getOmpAgentDir(): string {
   if (process.env.PI_CODING_AGENT_DIR) return process.env.PI_CODING_AGENT_DIR;
-  const profile = process.env.OMP_PROFILE;
+  const profile = process.env.OMP_PROFILE || process.env.PI_PROFILE;
   if (profile && SAFE_PROFILE_RE.test(profile)) return join(homedir(), ".omp", "profiles", profile, "agent");
   return join(homedir(), ".omp", "agent");
 }
@@ -80,7 +80,7 @@ export async function discoverOmpSessions(options: OmpDiscoveryOptions = {}): Pr
       }
       if (!cached.session) continue;
       const session = { ...cached.session };
-      if (!isLifecycleStatus(session.status)) session.status = detectStatus(session.lastActivity, nowMs);
+      if (session.statusSource !== "provider") session.status = detectStatus(session.lastActivity, nowMs);
       sessions.push(session);
       sessionPaths.set(session.sessionId, path);
       sessionCreatedAt.set(session.sessionId, cached.createdAtMs ?? metadata.birthtimeMs ?? metadata.mtimeMs);
@@ -223,10 +223,6 @@ function detectStatus(lastActivity: string, nowMs: number): SessionStatus {
   if (age < 30_000) return "working";
   if (age < 60_000) return "awaiting_input";
   return "idle";
-}
-
-function isLifecycleStatus(status: SessionStatus): boolean {
-  return status === "done" || status === "error" || status === "exited" || status === "working";
 }
 
 function isContainedSessionPath(path: string, sessionsDir: string): boolean {

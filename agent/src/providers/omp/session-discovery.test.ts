@@ -240,9 +240,9 @@ describe("OMP session discovery", () => {
     expect((await discoverOmpSessions({ sessionsDir: root, nowMs: Date.parse(timestamp) + 10_000 }))[0]?.status).toBe(
       "working",
     );
-    expect((await discoverOmpSessions({ sessionsDir: root, nowMs: Date.parse(timestamp) + 5 * 60_000 }))[0]?.status).toBe(
-      "idle",
-    );
+    expect(
+      (await discoverOmpSessions({ sessionsDir: root, nowMs: Date.parse(timestamp) + 5 * 60_000 }))[0]?.status,
+    ).toBe("idle");
   });
 
   test("finds exact header IDs and deletes only their JSONL and same-stem artifacts", async () => {
