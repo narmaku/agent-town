@@ -6,6 +6,7 @@ import {
   AGENT_TYPE_CONFIG,
   AGENT_TYPE_LABELS,
   API,
+  normalizeAutonomousSetting,
   resolveAvailableAgentType,
   STATUS_CONFIG,
   shortenPath,
@@ -35,6 +36,12 @@ describe("agent type metadata", () => {
   test("falls back when the preferred provider is unavailable on a machine", () => {
     expect(resolveAvailableAgentType("codex", ["claude-code", "opencode"])).toBe("claude-code");
     expect(resolveAvailableAgentType("codex", ["claude-code", "codex"])).toBe("codex");
+  });
+
+  test("forces unsupported Pi autonomous requests off", () => {
+    expect(normalizeAutonomousSetting("pi", true)).toBe(false);
+    expect(normalizeAutonomousSetting("codex", true)).toBe(true);
+    expect(normalizeAutonomousSetting("codex", false)).toBe(false);
   });
 });
 
