@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -130,6 +131,41 @@ describe("Codex transcript access", () => {
       expect.objectContaining({ sessionId: SESSION_ID, agentType: "codex", matchCount: 1 }),
     ]);
     expect(await searchCodexMessages("developer", 10, codexHome)).toEqual([]);
+  });
+});
+
+describe("paginated Codex database history", () => {
+  let codexHome: string;
+
+  beforeEach(() => {
+    codexHome = mkdtempSync(join(tmpdir(), "codex-history-"));
+  });
+
+  afterEach(() => {
+    rmSync(codexHome, { recursive: true, force: true });
+  });
+
+  test("reads page items when a rollout file is unavailable", async () => {
+    const db = new Database(join(codexHome, "thread_history_5.sqlite"), { create: true });
+    db.run("CREATE TABLE history (thread_id TEXT, position INTEGER, created_at INTEGER, item TEXT)");
+    db.prepare("INSERT INTO history VALUES (?, ?, ?, ?)").run(
+      SESSION_ID,
+      1,
+      Date.parse("2026-09-10T00:00:00.000Z"),
+      JSON.stringify({
+        items: [
+          { type: "message", role: "developer", content: [{ type: "input_text", text: "private" }] },
+          { type: "message", role: "user", content: [{ type: "input_text", text: "From the database" }] },
+          { type: "message", role: "assistant", content: [{ type: "output_text", text: "Database reply" }] },
+        ],
+      }),
+    );
+    db.close();
+
+    const response = await getCodexSessionMessages(SESSION_ID, 0, 10, codexHome);
+
+    expect(response).toMatchObject({ total: 2, hasMore: false });
+    expect(response.messages.map((message) => message.content)).toEqual(["From the database", "Database reply"]);
   });
 });
 
