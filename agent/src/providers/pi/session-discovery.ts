@@ -70,7 +70,9 @@ export async function discoverPiSessions(options: PiDiscoveryOptions = {}): Prom
         cached = {
           fingerprint,
           session,
-          createdAtMs: parsed?.header.timestamp ? Date.parse(parsed.header.timestamp) : metadata.birthtimeMs || metadata.mtimeMs,
+          createdAtMs: parsed?.header.timestamp
+            ? Date.parse(parsed.header.timestamp)
+            : metadata.birthtimeMs || metadata.mtimeMs,
         };
         fileCache.set(path, cached);
       }

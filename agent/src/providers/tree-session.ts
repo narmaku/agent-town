@@ -105,7 +105,10 @@ function normalizeMessages(records: Record<string, unknown>[]): SessionMessage[]
         content: normalized.text,
         thinking: normalized.thinking || undefined,
         model: stringValue(rawMessage.model) || undefined,
-        tokenUsage: inputTokens || outputTokens ? { inputTokens: inputTokens || undefined, outputTokens: outputTokens || undefined } : undefined,
+        tokenUsage:
+          inputTokens || outputTokens
+            ? { inputTokens: inputTokens || undefined, outputTokens: outputTokens || undefined }
+            : undefined,
         toolUse: normalized.toolUse.length > 0 ? normalized.toolUse : undefined,
       });
       continue;

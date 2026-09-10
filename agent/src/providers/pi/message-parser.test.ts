@@ -2,9 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { clearPiSessionCache } from "./session-discovery";
 import { getPiSessionMessages, searchPiMessages } from "./message-parser";
+import { clearPiSessionCache } from "./session-discovery";
 
 const roots: string[] = [];
 
@@ -45,7 +44,9 @@ async function fixture(): Promise<{ root: string; path: string }> {
         timestamp: "2026-09-10T00:00:04Z",
         message: { role: "user", content: "last message" },
       },
-    ].map((record) => JSON.stringify(record)).join("\n"),
+    ]
+      .map((record) => JSON.stringify(record))
+      .join("\n"),
   );
   return { root, path };
 }

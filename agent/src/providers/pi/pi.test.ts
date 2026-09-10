@@ -38,7 +38,9 @@ describe("PiProvider", () => {
   });
 
   test("verifies that the short pi binary is the coding agent", async () => {
-    expect(await isPiCliAvailable(async () => ({ exitCode: 0, output: "Usage: pi [options]\nPi coding agent" }))).toBe(true);
+    expect(await isPiCliAvailable(async () => ({ exitCode: 0, output: "Usage: pi [options]\nPi coding agent" }))).toBe(
+      true,
+    );
     expect(await isPiCliAvailable(async () => ({ exitCode: 0, output: "calculate digits of pi" }))).toBe(false);
     expect(await isPiCliAvailable(async () => ({ exitCode: 1, output: "" }))).toBe(false);
   });
