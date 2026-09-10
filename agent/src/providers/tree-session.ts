@@ -26,14 +26,13 @@ export function parseTreeSession(text: string): ParsedTreeSession | null {
     const record = parseRecord(line);
     return record ? [record] : [];
   });
-  const headerRecord = records.find((record) => record.type === "session");
-  const header = parseHeader(headerRecord);
+  const header = parseHeader(records[0]?.type === "session" ? records[0] : undefined);
   if (!header) return null;
 
   const messageRecords = records.filter((record) => record.type === "message" && isRecord(record.message));
   const usesTree = header.version !== 1 && messageRecords.some((record) => stringValue(record.id));
   const treeRecords = records.filter((record) => record.type !== "session" && stringValue(record.id));
-  const activeRecords = usesTree ? selectActiveBranch(treeRecords) : messageRecords;
+  const activeRecords = usesTree ? applyLatestCompaction(selectActiveBranch(treeRecords)) : messageRecords;
   return { header, records, activeRecords, messages: normalizeMessages(activeRecords) };
 }
 
@@ -85,6 +84,19 @@ function selectActiveBranch(records: Record<string, unknown>[]): Record<string, 
   return branch.reverse();
 }
 
+function applyLatestCompaction(records: Record<string, unknown>[]): Record<string, unknown>[] {
+  const compactionIndex = findLastIndex(records, (record) => record.type === "compaction");
+  if (compactionIndex < 0) return records;
+
+  const compaction = records[compactionIndex];
+  const firstKeptEntryId = stringValue(compaction.firstKeptEntryId);
+  const firstKeptIndex = records.findIndex(
+    (record, index) => index < compactionIndex && stringValue(record.id) === firstKeptEntryId,
+  );
+  const retained = firstKeptIndex >= 0 ? records.slice(firstKeptIndex, compactionIndex) : [];
+  return [compaction, ...retained, ...records.slice(compactionIndex + 1)];
+}
+
 function normalizeMessages(records: Record<string, unknown>[]): SessionMessage[] {
   const messages: SessionMessage[] = [];
 
@@ -96,6 +108,7 @@ function normalizeMessages(records: Record<string, unknown>[]): SessionMessage[]
           role: "assistant",
           timestamp: normalizeTimestamp(record.timestamp),
           content: summary,
+          tokenUsage: normalizeUsage(record.usage),
         });
       }
       continue;
@@ -109,19 +122,13 @@ function normalizeMessages(records: Record<string, unknown>[]): SessionMessage[]
     if (role === "user" || role === "assistant") {
       const normalized = normalizeContent(rawMessage.content);
       if (!normalized.text && !normalized.thinking && normalized.toolUse.length === 0) continue;
-      const usage = isRecord(rawMessage.usage) ? rawMessage.usage : undefined;
-      const inputTokens = numberValue(usage?.input ?? usage?.inputTokens ?? usage?.input_tokens);
-      const outputTokens = numberValue(usage?.output ?? usage?.outputTokens ?? usage?.output_tokens);
       messages.push({
         role,
         timestamp,
         content: normalized.text,
         thinking: normalized.thinking || undefined,
         model: stringValue(rawMessage.model) || undefined,
-        tokenUsage:
-          inputTokens || outputTokens
-            ? { inputTokens: inputTokens || undefined, outputTokens: outputTokens || undefined }
-            : undefined,
+        tokenUsage: normalizeUsage(rawMessage.usage),
         toolUse: normalized.toolUse.length > 0 ? normalized.toolUse : undefined,
       });
       continue;
@@ -198,6 +205,15 @@ function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function normalizeUsage(value: unknown): SessionMessage["tokenUsage"] {
+  if (!isRecord(value)) return undefined;
+  const inputTokens = numberValue(value.input ?? value.inputTokens ?? value.input_tokens);
+  const outputTokens = numberValue(value.output ?? value.outputTokens ?? value.output_tokens);
+  return inputTokens || outputTokens
+    ? { inputTokens: inputTokens || undefined, outputTokens: outputTokens || undefined }
+    : undefined;
+}
+
 function validTimestamp(value: unknown): string | undefined {
   if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return new Date(value).toISOString();
   if (typeof value === "number" && Number.isFinite(value)) return normalizeTimestamp(value);
@@ -233,4 +249,12 @@ function findLastItem<T>(items: T[], predicate: (item: T) => boolean): T | undef
     if (predicate(item)) return item;
   }
   return undefined;
+}
+
+function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (predicate(item)) return index;
+  }
+  return -1;
 }
