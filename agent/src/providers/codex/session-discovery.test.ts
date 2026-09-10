@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -118,6 +118,34 @@ describe("discoverCodexSessions", () => {
     );
 
     expect(await discoverCodexSessions({ codexHome })).toEqual([]);
+  });
+
+  test("uses rollout modification time as activity time on cached discovery", async () => {
+    const nowMs = Date.parse("2026-09-10T12:00:00.000Z");
+    const activityMs = nowMs - 10_000;
+    const rolloutDir = join(codexHome, "sessions", "2026", "09", "10");
+    const rolloutPath = join(rolloutDir, `rollout-${ACTIVE_ID}.jsonl`);
+    mkdirSync(rolloutDir, { recursive: true });
+    writeFileSync(
+      rolloutPath,
+      JSON.stringify({
+        timestamp: "2026-09-01T00:00:00.000Z",
+        type: "session_meta",
+        payload: {
+          id: ACTIVE_ID,
+          cwd: "/work/active",
+          source: "cli",
+          timestamp: "2026-09-01T00:00:00.000Z",
+        },
+      }),
+    );
+    utimesSync(rolloutPath, activityMs / 1000, activityMs / 1000);
+
+    const first = await discoverCodexSessions({ codexHome, nowMs });
+    const cached = await discoverCodexSessions({ codexHome, nowMs: nowMs + 35_000 });
+
+    expect(first[0].lastActivity).toBe(new Date(activityMs).toISOString());
+    expect(cached[0].status).toBe("awaiting_input");
   });
 });
 
