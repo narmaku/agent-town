@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -127,6 +127,57 @@ describe("Pi session discovery", () => {
     expect(await Bun.file(exact).exists()).toBe(false);
     expect(await Bun.file(similar).exists()).toBe(true);
     expect(await deletePiSessionData("missing", root)).toBe(false);
+  });
+
+  test("scopes cached header matches to the requested session root", async () => {
+    const firstRoot = await makeRoot();
+    const secondRoot = await makeRoot();
+    const first = join(firstRoot, "first.jsonl");
+    const second = join(secondRoot, "second.jsonl");
+    await writeSession(first, { id: "same-id" });
+    await writeSession(second, { id: "same-id" });
+
+    await discoverPiSessions({ sessionsDir: firstRoot });
+    expect(await deletePiSessionData("same-id", secondRoot)).toBe(true);
+    expect(await Bun.file(first).exists()).toBe(true);
+    expect(await Bun.file(second).exists()).toBe(false);
+  });
+
+  test("uses the latest session metadata, model change, and file activity", async () => {
+    const root = await makeRoot();
+    const path = join(root, "metadata.jsonl");
+    await writeSession(path, { id: "metadata", name: "Old name", timestamp: "2020-01-01T00:00:00Z" });
+    await appendFile(
+      path,
+      `\n${[
+        {
+          type: "session_info",
+          id: "info-new",
+          parentId: "assistant",
+          timestamp: "2020-01-01T00:00:01Z",
+          name: "Current name",
+        },
+        {
+          type: "model_change",
+          id: "model-new",
+          parentId: "info-new",
+          timestamp: "2020-01-01T00:00:02Z",
+          provider: "openai",
+          modelId: "gpt-current",
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n")}`,
+    );
+    const metadata = await stat(path);
+
+    const sessions = await discoverPiSessions({ sessionsDir: root, nowMs: metadata.mtimeMs + 10_000 });
+    expect(sessions[0]).toMatchObject({
+      slug: "Current name",
+      model: "gpt-current",
+      lastActivity: new Date(metadata.mtimeMs).toISOString(),
+      status: "working",
+    });
   });
 
   test("exposes process candidates using header creation time", async () => {
