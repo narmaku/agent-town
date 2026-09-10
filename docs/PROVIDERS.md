@@ -371,6 +371,11 @@ export class MyAgentProvider implements AgentProvider {
   readonly type = "my-agent" as const;
   readonly displayName = "My Agent";
   readonly binaryName = "myagent";
+  readonly terminal = {
+    inputMode: "bracketed-paste",
+    startupMode: "tui",
+    autonomousDisclaimer: false,
+  } as const;
 
   async isAvailable(): Promise<boolean> {
     // Check if the binary exists in PATH
@@ -412,16 +417,16 @@ export class MyAgentProvider implements AgentProvider {
     return match?.[1];
   }
 
-  buildLaunchCommand(opts: LaunchOptions): string {
+  buildLaunchCommand(opts: LaunchOptions): string[] {
     const parts = ["myagent"];
-    if (opts.model) parts.push(`--model ${opts.model}`);
-    return parts.join(" ");
+    if (opts.model) parts.push("--model", opts.model);
+    return parts;
   }
 
-  buildResumeCommand(opts: ResumeOptions): string {
+  buildResumeCommand(opts: ResumeOptions): string[] {
     const parts = ["myagent", "--session", opts.sessionId];
-    if (opts.model) parts.push(`--model ${opts.model}`);
-    return parts.join(" ");
+    if (opts.model) parts.push("--model", opts.model);
+    return parts;
   }
 
   handleHookEvent(payload: unknown): HookEventResult | null {
@@ -490,6 +495,6 @@ Use the existing test patterns from `agent/src/providers/claude-code/`, `agent/s
 bun test --filter agent
 ```
 
-### Step 6: Handle agent-specific post-launch behavior
+### Step 6: Declare terminal behavior
 
-If your agent has special post-launch requirements (like Claude Code's trust prompt auto-acceptance), you may need to add agent-type-specific logic in `agent/src/terminal-server.ts` within the `/api/launch` and `/api/resume` handlers. Look for the existing `if (agentType === "claude-code")` blocks as examples.
+Set `terminal.inputMode` to `"direct"` or `"bracketed-paste"`, and set `terminal.startupMode` to `"cli-prompt"` when Agent Town should handle the provider's startup prompts. `autonomousDisclaimer` controls whether autonomous launches require a second confirmation keystroke. The terminal server uses these capabilities without provider-specific branches.
