@@ -98,6 +98,10 @@ export function resolveAvailableAgentType(preferred: AgentType, available: Agent
   return available.includes(preferred) ? preferred : (available[0] ?? preferred);
 }
 
+export function normalizeAutonomousSetting(agentType: AgentType, requested: boolean): boolean {
+  return AGENT_TYPE_CONFIG[agentType].autonomousSupported && requested;
+}
+
 // --- API endpoints ---
 
 export const API = {

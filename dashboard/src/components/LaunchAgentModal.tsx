@@ -1,7 +1,7 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AGENT_TYPE_CONFIG, API, resolveAvailableAgentType } from "../utils";
+import { AGENT_TYPE_CONFIG, API, normalizeAutonomousSetting, resolveAvailableAgentType } from "../utils";
 import { DirectoryBrowserModal } from "./DirectoryBrowserModal";
 
 export function resolveSelectedMachineId(
@@ -193,7 +193,7 @@ export function LaunchAgentModal({
           sessionName: sessionName.trim(),
           projectDir: projectDir.trim(),
           agentType: selectedAgentType,
-          autonomous,
+          autonomous: normalizeAutonomousSetting(selectedAgentType, autonomous),
           multiplexer,
         }),
       });
@@ -396,7 +396,7 @@ export function LaunchAgentModal({
               <label className="form-toggle-row">
                 <input
                   type="checkbox"
-                  checked={autonomous}
+                  checked={normalizeAutonomousSetting(selectedAgentType, autonomous)}
                   disabled={!AGENT_TYPE_CONFIG[selectedAgentType].autonomousSupported}
                   onChange={(e) => setAutonomous(e.target.checked)}
                 />

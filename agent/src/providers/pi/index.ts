@@ -15,7 +15,12 @@ export type PiIdentityRunner = () => Promise<PiIdentityResult>;
 export async function isPiCliAvailable(run: PiIdentityRunner = runPiHelp): Promise<boolean> {
   try {
     const result = await run();
-    return result.exitCode === 0 && /(?:usage:\s*pi\b|pi coding agent)/i.test(result.output);
+    return (
+      result.exitCode === 0 &&
+      /usage:\s*pi\b/i.test(result.output) &&
+      /--model\b/i.test(result.output) &&
+      /--session\b/i.test(result.output)
+    );
   } catch (_err) {
     return false;
   }
