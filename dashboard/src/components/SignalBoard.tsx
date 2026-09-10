@@ -3,7 +3,7 @@ import type React from "react";
 import type { SortMode, TimeFilter } from "../App";
 import { filterIdleSessions, filterSessionsByTime, sortSessions } from "../session-grouping";
 import { partitionIntoLanes, SIGNAL_LANES, type SignalLaneId } from "../signal-lanes";
-import { STATUS_CONFIG, timeAgo } from "../utils";
+import { AGENT_TYPE_CONFIG, STATUS_CONFIG, timeAgo } from "../utils";
 
 interface BoardSession {
   session: SessionInfo;
@@ -170,7 +170,7 @@ function SignalCard({ item, onOpenSession, onOpenTerminal }: SignalCardProps): R
         </span>
         {session.agentType && session.agentType !== "claude-code" && (
           <span className={`agent-type-badge agent-${session.agentType}`} title={`Agent: ${session.agentType}`}>
-            {session.agentType === "opencode" ? "OC" : session.agentType === "gemini-cli" ? "GE" : session.agentType}
+            {AGENT_TYPE_CONFIG[session.agentType].shortLabel}
           </span>
         )}
         {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}

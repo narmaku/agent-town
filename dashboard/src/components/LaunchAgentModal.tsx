@@ -1,7 +1,7 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AGENT_TYPE_LABELS, API } from "../utils";
+import { AGENT_TYPE_CONFIG, API } from "../utils";
 import { DirectoryBrowserModal } from "./DirectoryBrowserModal";
 
 export function resolveSelectedMachineId(
@@ -95,6 +95,10 @@ export function LaunchAgentModal({
 
   const selectedMachineId = resolveSelectedMachineId(machineId, initialMachineId, machines[0]?.machineId || "");
   const selectedMachine = machines.find((m) => m.machineId === selectedMachineId);
+  const configuredAgentTypes = Object.keys(AGENT_TYPE_CONFIG) as AgentType[];
+  const availableAgentTypes = selectedMachine?.availableAgents?.length
+    ? configuredAgentTypes.filter((type) => selectedMachine.availableAgents.includes(type))
+    : configuredAgentTypes;
 
   // Available multiplexers for the selected machine (from heartbeat data)
   const availableMux = useMemo(() => {
@@ -313,9 +317,9 @@ export function LaunchAgentModal({
                 value={agentType}
                 onChange={(e) => setAgentType(e.target.value as AgentType)}
               >
-                {(Object.keys(AGENT_TYPE_LABELS) as AgentType[]).map((t) => (
+                {availableAgentTypes.map((t) => (
                   <option key={t} value={t}>
-                    {AGENT_TYPE_LABELS[t]}
+                    {AGENT_TYPE_CONFIG[t].label}
                   </option>
                 ))}
               </select>
@@ -390,11 +394,7 @@ export function LaunchAgentModal({
               </label>
               {autonomous && (
                 <span className="form-hint" style={{ color: "var(--yellow)" }}>
-                  {agentType === "claude-code"
-                    ? "Skips all permission checks (--dangerously-skip-permissions)."
-                    : agentType === "gemini-cli"
-                      ? "Auto-approves all actions (--yolo mode)."
-                      : 'OpenCode uses config-based permissions — ensure opencode.json has permission: "allow".'}
+                  {AGENT_TYPE_CONFIG[agentType].autonomousHint}
                 </span>
               )}
             </div>

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Codex CLI provider with SQLite/rollout discovery, transcript parsing, process mapping, native resume/delete commands, and dashboard controls (2026-09-10)
 - Gemini CLI provider: third supported agent type with session discovery from `~/.gemini/tmp/`, JSON-based message parsing, and process detection (2026-03-21)
 - Git diff preview with file navigation and syntax-highlighted diffs per session (2026-03-21)
 - Configurable keyboard navigation with customizable shortcuts (j/k, Enter, f, t, s, /, ?) (2026-03-21)

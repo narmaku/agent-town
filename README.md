@@ -1,10 +1,10 @@
 # Agent Town
 
-A lightweight dashboard to monitor and connect to AI coding agent sessions across machines on your home network. Supports **Claude Code**, **OpenCode**, and **Gemini CLI** via a provider abstraction, with more agents easily added.
+A lightweight dashboard to monitor and connect to AI coding agent sessions across machines on your home network. Supports **Claude Code**, **OpenCode**, **Gemini CLI**, and **Codex CLI** via a provider abstraction, with more agents easily added.
 
 ## Features
 
-- **Multi-agent support**: Claude Code, OpenCode, and Gemini CLI (extensible via provider plugins)
+- **Multi-agent support**: Claude Code, OpenCode, Gemini CLI, and Codex CLI (extensible via provider plugins)
 - **Explorer and Cards layout modes**: switch between compact list and card-based views
 - **Configurable keyboard navigation**: navigate sessions with j/k, Enter to expand, f for fullscreen, t for terminal, s to send, / to search, ? for help (all shortcuts customizable)
 - **Activity feed**: cross-session status change notifications with click-to-navigate
@@ -30,7 +30,7 @@ Server (:4680) --- receives heartbeats, serves dashboard, proxies terminals
   |
 Agent (per machine) --- discovers sessions via providers, reports status, relays terminals
   |
-zellij/tmux sessions --- where AI coding agents (Claude Code, OpenCode, Gemini CLI) run
+zellij/tmux sessions --- where AI coding agents (Claude Code, OpenCode, Gemini CLI, Codex CLI) run
 ```
 
 ## Quick Start (local dev)
@@ -146,6 +146,7 @@ tmux new-session -d -s agent-town -c ~/development/agent-town './dev.sh'
 | `AGENT_TOWN_INTERVAL` | `5000` | Heartbeat interval in ms |
 | `AGENT_TOWN_TERMINAL_PORT` | `4681` | Terminal WebSocket port (agent) |
 | `AGENT_TOWN_MACHINE_ID` | auto (hostname hash) | Stable machine identifier |
+| `CODEX_HOME` | `~/.codex` | Codex state and session root |
 
 ## Dashboard Features
 
@@ -160,7 +161,7 @@ tmux new-session -d -s agent-town -c ~/development/agent-town './dev.sh'
 ```
 agent-town/
   agent/        # Runs on each machine, discovers sessions via provider plugins
-    providers/  # Agent type plugins (claude-code, opencode, gemini-cli)
+    providers/  # Agent type plugins (claude-code, opencode, gemini-cli, codex)
   server/       # Central hub, receives heartbeats, serves dashboard
   dashboard/    # React SPA with real-time status cards
   shared/       # TypeScript types and logger shared across packages

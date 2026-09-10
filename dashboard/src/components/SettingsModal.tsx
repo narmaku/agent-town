@@ -16,7 +16,7 @@ import {
   type NotificationSettings,
   saveNotificationSettings,
 } from "../notification-settings";
-import { API } from "../utils";
+import { AGENT_TYPE_CONFIG, API } from "../utils";
 
 const logger = createBrowserLogger("SettingsModal");
 
@@ -387,9 +387,11 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                   value={settings.defaultAgentType}
                   onChange={(e) => setSettings({ ...settings, defaultAgentType: e.target.value as AgentType })}
                 >
-                  <option value="claude-code">Claude Code</option>
-                  <option value="opencode">OpenCode</option>
-                  <option value="gemini-cli">Gemini CLI</option>
+                  {(Object.keys(AGENT_TYPE_CONFIG) as AgentType[]).map((type) => (
+                    <option key={type} value={type}>
+                      {AGENT_TYPE_CONFIG[type].label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="form-group">

@@ -1,7 +1,7 @@
 import type { AgentType } from "@agent-town/shared";
 import type React from "react";
 import { useState } from "react";
-import { API } from "../utils";
+import { AGENT_TYPE_CONFIG, API } from "../utils";
 
 interface Props {
   open: boolean;
@@ -105,8 +105,7 @@ export function ResumeAgentModal({
             </label>
             {autonomous && (
               <span className="form-hint" style={{ color: "var(--yellow)" }}>
-                Skips all permission checks (--dangerously-skip-permissions). The agent will run without human approval
-                for tool use.
+                {AGENT_TYPE_CONFIG[agentType].autonomousHint} The agent will run without human approval for tool use.
               </span>
             )}
           </div>
