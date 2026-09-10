@@ -107,11 +107,16 @@ export function parseCodexTranscript(text: string): SessionMessage[] {
 
     if (payloadType === "token_count") {
       const info = isRecord(payload.info) ? payload.info : undefined;
-      const totalUsage = info && isRecord(info.total_token_usage) ? info.total_token_usage : info;
+      const usage =
+        info && isRecord(info.last_token_usage)
+          ? info.last_token_usage
+          : info && isRecord(info.total_token_usage)
+            ? info.total_token_usage
+            : info;
       const previous = pendingToolMessage ?? messages.at(-1);
-      if (!previous || previous.role !== "assistant" || !totalUsage) continue;
-      const inputTokens = numberValue(totalUsage.input_tokens);
-      const outputTokens = numberValue(totalUsage.output_tokens);
+      if (!previous || previous.role !== "assistant" || !usage) continue;
+      const inputTokens = numberValue(usage.input_tokens);
+      const outputTokens = numberValue(usage.output_tokens);
       if (inputTokens || outputTokens) {
         previous.tokenUsage = {
           inputTokens: inputTokens || undefined,
