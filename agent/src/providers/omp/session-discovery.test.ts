@@ -78,6 +78,7 @@ async function writeSession(
 afterEach(async () => {
   clearOmpSessionCache();
   delete process.env.PI_CODING_AGENT_DIR;
+  delete process.env.PI_PROFILE;
   delete process.env.OMP_PROFILE;
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -85,6 +86,8 @@ afterEach(async () => {
 describe("OMP session discovery", () => {
   test("resolves the default, agent directory override, and active profile roots", () => {
     expect(getOmpAgentDir()).toMatch(/\.omp\/agent$/);
+    process.env.PI_PROFILE = "legacy-profile";
+    expect(getOmpAgentDir()).toMatch(/\.omp\/profiles\/legacy-profile\/agent$/);
     process.env.OMP_PROFILE = "work";
     expect(getOmpAgentDir()).toMatch(/\.omp\/profiles\/work\/agent$/);
     process.env.PI_CODING_AGENT_DIR = "/custom/omp-agent";
@@ -211,6 +214,35 @@ describe("OMP session discovery", () => {
     expect(
       await discoverOmpSessions({ sessionsDir: root, nowMs: metadata.mtimeMs + 31 * 24 * 60 * 60 * 1000 }),
     ).toEqual([]);
+  });
+
+  test("recomputes cached non-authoritative activity status as time advances", async () => {
+    const root = await makeRoot();
+    const path = join(root, "bucket", "waiting.jsonl");
+    const timestamp = "2026-09-10T00:00:00.000Z";
+    await mkdir(join(path, ".."), { recursive: true });
+    await writeFile(
+      path,
+      `${serializeOmpTitleSlotForTest("Waiting")}${[
+        { type: "session", version: 3, id: "waiting", cwd: "/work/omp", timestamp },
+        {
+          type: "message",
+          id: "user",
+          parentId: null,
+          timestamp,
+          message: { role: "user", content: "please continue" },
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n")}`,
+    );
+
+    expect((await discoverOmpSessions({ sessionsDir: root, nowMs: Date.parse(timestamp) + 10_000 }))[0]?.status).toBe(
+      "working",
+    );
+    expect((await discoverOmpSessions({ sessionsDir: root, nowMs: Date.parse(timestamp) + 5 * 60_000 }))[0]?.status).toBe(
+      "idle",
+    );
   });
 
   test("finds exact header IDs and deletes only their JSONL and same-stem artifacts", async () => {
