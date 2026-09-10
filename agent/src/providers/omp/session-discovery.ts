@@ -178,6 +178,7 @@ function sessionFromParsed(
     totalOutputTokens += message.tokenUsage?.outputTokens ?? 0;
   }
   const model = findLastItem(messages, (message) => Boolean(message.model))?.model || parsed.header.model;
+  const providerStatus = parsed.lifecycleStatusAuthoritative ? parsed.lifecycleStatus : undefined;
 
   return {
     sessionId: parsed.header.id,
@@ -186,7 +187,8 @@ function sessionFromParsed(
     projectPath: parsed.header.cwd,
     projectName: basename(parsed.header.cwd),
     gitBranch: stringValue(parsed.header.gitBranch) || stringValue(parsed.header.git_branch),
-    status: parsed.lifecycleStatus ?? detectStatus(lastActivity, nowMs),
+    status: providerStatus ?? parsed.lifecycleStatus ?? detectStatus(lastActivity, nowMs),
+    statusSource: providerStatus ? "provider" : "activity",
     lastActivity,
     lastMessage: last?.content.slice(0, 120) ?? "",
     lastAssistantMessage: lastAssistant?.content,

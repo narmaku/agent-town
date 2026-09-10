@@ -2,8 +2,6 @@ import type { SessionInfo } from "@agent-town/shared";
 
 import type { ProcessMapping } from "./providers/types";
 
-const OMP_TERMINAL_STATUSES = new Set<SessionInfo["status"]>(["done", "error", "exited"]);
-
 export function applyProviderStatusFallback(session: SessionInfo, mapping: ProcessMapping | undefined): void {
   if (session.multiplexerSession) {
     if (mapping?.hasActiveChildren) {
@@ -14,6 +12,6 @@ export function applyProviderStatusFallback(session: SessionInfo, mapping: Proce
     return;
   }
 
-  if (session.agentType === "omp" && OMP_TERMINAL_STATUSES.has(session.status)) return;
+  if (session.statusSource === "provider") return;
   session.status = "idle";
 }

@@ -15,7 +15,7 @@ export type OmpIdentityRunner = () => Promise<OmpIdentityResult>;
 export async function isOmpCliAvailable(run: OmpIdentityRunner = runOmpVersion): Promise<boolean> {
   try {
     const result = await run();
-    return result.exitCode === 0 && /^omp\s+v?\d+(?:\.\d+)+/im.test(result.output);
+    return result.exitCode === 0 && /^omp(?:\/|\s+v?)\d+(?:\.\d+)+/im.test(result.output);
   } catch (_err) {
     return false;
   }

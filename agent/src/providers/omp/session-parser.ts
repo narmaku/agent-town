@@ -7,6 +7,12 @@ const TITLE_SLOT_BYTES = 256;
 export interface ParsedOmpSession extends ParsedTreeSession {
   title: string;
   lifecycleStatus?: SessionStatus;
+  lifecycleStatusAuthoritative: boolean;
+}
+
+interface OmpLifecycleState {
+  status?: SessionStatus;
+  authoritative: boolean;
 }
 
 export function parseOmpSession(text: string): ParsedOmpSession | null {
@@ -14,11 +20,13 @@ export function parseOmpSession(text: string): ParsedOmpSession | null {
   const logicalText = slot ? text.slice(slot.characterLength) : text;
   const parsed = parseTreeSession(logicalText, { resetBoundaryType: "reset_boundary" });
   if (!parsed) return null;
+  const lifecycle = deriveLifecycleState(parsed.records, parsed.activeRecords);
 
   return {
     ...parsed,
     title: resolveTitle(slot?.title, parsed),
-    lifecycleStatus: deriveLifecycleStatus(parsed.activeRecords.length > 0 ? parsed.activeRecords : parsed.records),
+    lifecycleStatus: lifecycle.status,
+    lifecycleStatusAuthoritative: lifecycle.authoritative,
   };
 }
 
@@ -69,16 +77,21 @@ function resolveTitle(slotTitle: string | undefined, parsed: ParsedTreeSession):
   return parsed.header.id;
 }
 
-function deriveLifecycleStatus(records: Record<string, unknown>[]): SessionStatus | undefined {
+function deriveLifecycleState(
+  records: Record<string, unknown>[],
+  activeRecords: Record<string, unknown>[],
+): OmpLifecycleState {
+  const activeRecordSet = new Set(activeRecords);
   for (let index = records.length - 1; index >= 0; index--) {
     const record = records[index];
     const exit = sessionExitData(record);
-    if (exit) return statusFromExit(exit);
+    if (exit) return { status: statusFromExit(exit), authoritative: true };
 
-    if (record.type !== "message" || !isRecord(record.message)) continue;
-    return statusFromMessage(record.message);
+    if (!activeRecordSet.has(record) || record.type !== "message" || !isRecord(record.message)) continue;
+    const status = statusFromMessage(record.message);
+    return { status, authoritative: status !== undefined && status !== "working" };
   }
-  return undefined;
+  return { authoritative: false };
 }
 
 function sessionExitData(record: Record<string, unknown>): Record<string, unknown> | undefined {

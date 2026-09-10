@@ -174,6 +174,7 @@ describe("OMP session discovery", () => {
       projectName: "work",
       gitBranch: "",
       status: "done" as const,
+      statusSource: "provider" as const,
       lastActivity: "2026-09-10T00:00:00Z",
       lastMessage: "",
       cwd: "/work",
@@ -182,9 +183,18 @@ describe("OMP session discovery", () => {
     applyProviderStatusFallback(session, undefined);
     expect(session.status).toBe("done");
 
-    const pending = { ...session, sessionId: "pending", status: "working" as const };
+    const pending = {
+      ...session,
+      sessionId: "pending",
+      status: "working" as const,
+      statusSource: "provider" as const,
+    };
     applyProviderStatusFallback(pending, undefined);
     expect(pending.status).toBe("working");
+
+    const recentActivity = { ...pending, sessionId: "recent", statusSource: "activity" as const };
+    applyProviderStatusFallback(recentActivity, undefined);
+    expect(recentActivity.status).toBe("idle");
   });
 
   test("invalidates cache changes and enforces retention", async () => {
