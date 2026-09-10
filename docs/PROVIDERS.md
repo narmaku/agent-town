@@ -32,7 +32,7 @@ interface AgentProvider {
 
 | Property      | Type        | Description                                              |
 |---------------|-------------|----------------------------------------------------------|
-| `type`        | `AgentType` | Unique identifier (`"claude-code"`, `"opencode"`, `"gemini-cli"`, or `"codex"`) |
+| `type`        | `AgentType` | Unique identifier (`"claude-code"`, `"opencode"`, `"gemini-cli"`, `"codex"`, or `"pi"`) |
 | `displayName` | `string`    | Human-readable name (e.g., `"Claude Code"`)              |
 | `binaryName`  | `string`    | CLI binary name (e.g., `"claude"` or `"opencode"`)       |
 | `terminal`    | `TerminalCapabilities` | Provider-declared input and startup behavior       |
@@ -50,6 +50,7 @@ Discovers sessions from the agent's native storage. This is called every heartbe
 - **Claude Code:** Reads JSONL files from `~/.claude/projects/` directories.
 - **OpenCode:** Queries the OpenCode SDK (`session.list()`) with SQLite fallback.
 - **Codex CLI:** Reads compatible versioned state databases under `CODEX_HOME` and falls back to active rollout JSONL files.
+- **Pi:** Reads direct and working-directory bucket JSONL sessions from `PI_CODING_AGENT_SESSION_DIR` and reconstructs the active tree branch.
 
 Returns an array of `SessionInfo` objects with fields populated from the agent's storage (session ID, project path, status, last message, etc.). At this stage, `multiplexerSession` and `multiplexer` fields are **not** set -- those are filled in later by the process mapper.
 
@@ -60,6 +61,7 @@ Returns paginated messages for a session. Used by the `/api/session-messages` en
 - **Claude Code:** Parses the session's JSONL file.
 - **OpenCode:** Uses `session.messages()` from the SDK with SQLite fallback.
 - **Codex CLI:** Normalizes visible rollout messages, reasoning summaries, tool records, and token usage. System/developer content is not exposed.
+- **Pi:** Normalizes the active branch's text, thinking, tool calls/results, model, timestamps, and usage.
 
 #### `filterAgentProcesses(processes: AgentProcess[]): AgentProcess[]`
 
@@ -78,6 +80,7 @@ interface AgentProcess {
 - **Claude Code:** Matches processes with `claude` in the command line (excluding agent-town's own processes).
 - **OpenCode:** Matches processes with `opencode` in the command line.
 - **Codex CLI:** Matches exact `codex` executable shapes, including the Node/Bun launcher form, without substring matching.
+- **Pi:** Matches exact direct/compiled and known Node/Bun package launcher shapes; substring matches such as `pip` and `pico` are rejected.
 
 #### `extractSessionIdFromArgs(args: string): string | undefined`
 
@@ -86,6 +89,7 @@ Extracts a session ID from a process's command-line arguments. This is the fast 
 - **Claude Code:** Looks for `--resume <uuid>` in the args.
 - **OpenCode:** Looks for `--session <ses_id>` in the args.
 - **Codex CLI:** Looks for the positional UUID in `codex resume <uuid>`.
+- **Pi:** Looks for a safe value following `--session` or `--session-id`.
 
 Returns `undefined` if the session ID cannot be determined from the command line (e.g., a freshly launched session with no `--resume` flag).
 
@@ -103,6 +107,7 @@ interface LaunchOptions {
 - **Claude Code:** Returns `claude [--model X] [--dangerously-skip-permissions]`
 - **OpenCode:** Returns `opencode [--model X]`
 - **Codex CLI:** Returns `codex [--model X] [--dangerously-bypass-approvals-and-sandbox]`
+- **Pi:** Returns `pi [--model X]`; `autonomous` is ignored because Pi has no permission layer.
 
 #### `buildResumeCommand(opts: ResumeOptions): string[]`
 
@@ -119,6 +124,7 @@ interface ResumeOptions {
 - **Claude Code:** Returns `claude --resume <sessionId> [--model X] [--dangerously-skip-permissions]`
 - **OpenCode:** Returns `opencode --session <sessionId> [--model X]`
 - **Codex CLI:** Returns `codex resume <sessionId> [--model X] [--dangerously-bypass-approvals-and-sandbox]`
+- **Pi:** Returns `pi --session <sessionId> [--model X]` (not the interactive `--resume` picker).
 
 #### `handleHookEvent(payload: unknown): HookEventResult | null`
 
@@ -171,6 +177,8 @@ Fallback method for matching a running process to a session ID when `extractSess
 
 **Codex CLI:** Selects the nearest retained, unclaimed, top-level session in the same working directory near the process start time.
 
+**Pi:** Selects the nearest retained, unclaimed session in the same working directory near the process start time.
+
 #### `deleteSessionData(sessionId: string): Promise<boolean>`
 
 Deletes the session's data files from local storage. Returns `true` if the session was found and deleted.
@@ -178,6 +186,7 @@ Deletes the session's data files from local storage. Returns `true` if the sessi
 - **Claude Code:** Deletes the JSONL file from `~/.claude/projects/`.
 - **OpenCode:** Deletes the session via SDK or SQLite.
 - **Codex CLI:** Runs `codex delete --force <uuid>` using an argument-array spawn. It never unlinks a guessed transcript path.
+- **Pi:** Parses headers under the configured session root and unlinks only the file whose ID exactly matches.
 
 ---
 
@@ -197,7 +206,7 @@ function getAllProviders(): AgentProvider[];
 
 At agent startup, `initializeProviders()` is called. It:
 
-1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`, `GeminiCliProvider`, `CodexProvider`).
+1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`, `GeminiCliProvider`, `CodexProvider`, `PiProvider`).
 2. Calls `isAvailable()` on each.
 3. Registers only the providers whose binary is found in `$PATH`.
 
@@ -208,6 +217,7 @@ async function initializeProviders(): Promise<void> {
     new OpenCodeProvider(),
     new GeminiCliProvider(),
     new CodexProvider(),
+    new PiProvider(),
   ];
 
   for (const provider of candidates) {
@@ -305,6 +315,14 @@ Limitations compared to other providers:
 | `process-mapper.ts`    | Exact process detection and UUID/start-time mapping             |
 
 Codex session storage is private and versioned. Agent Town detects compatible schemas at runtime and falls back safely when they change. `CODEX_HOME` defaults to `~/.codex`; archived sessions and subagent rollouts are excluded. There is no hook integration, so status remains activity/process based. Resume requires a UUID, and autonomous mode deliberately bypasses both approvals and sandboxing.
+
+### Pi Provider
+
+**Location:** `agent/src/providers/pi/`
+
+Pi stores sessions below `~/.pi/agent/sessions/` by default. `PI_CODING_AGENT_DIR` changes the agent root and `PI_CODING_AGENT_SESSION_DIR` directly overrides the session root. Agent Town scans direct JSONL files and one level of working-directory buckets, but excludes deeper artifact/subagent files.
+
+Current v2/v3 transcripts are trees: Agent Town follows guarded `id`/`parentId` links from the last leaf and displays only that active ancestry. Legacy v1/missing-ID transcripts use linear order. Malformed lines, dangling parents, and cycles are isolated safely. Pi provides no hook or permission layer, so status is an estimate and the Autonomous dashboard option does not apply.
 
 ---
 
