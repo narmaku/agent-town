@@ -1,5 +1,5 @@
 import type { AgentProcess } from "../types";
-import { discoverCodexSessions } from "./session-discovery";
+import { discoverCodexSessions, getCodexSessionCreatedAt } from "./session-discovery";
 
 const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const RESUME_RE = new RegExp(`(?:^|\\s)resume\\s+(${UUID_PATTERN})(?:\\s|$)`, "i");
@@ -43,7 +43,7 @@ export async function findCodexSessionCandidates(): Promise<CodexSessionCandidat
   return sessions.map((session) => ({
     id: session.sessionId,
     cwd: session.cwd,
-    createdAtMs: Date.parse(session.lastActivity),
+    createdAtMs: getCodexSessionCreatedAt(session.sessionId) ?? Date.parse(session.lastActivity),
     isSubagent: false,
   }));
 }

@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import {
   createLogger,
   paginateFromEnd,
@@ -7,7 +8,7 @@ import {
 } from "@agent-town/shared";
 
 import type { SearchMessageResult } from "../../session-messages";
-import { discoverCodexSessions, findCodexRolloutPath, getCodexHome } from "./session-discovery";
+import { discoverCodexSessions, findCodexDatabasePaths, findCodexRolloutPath, getCodexHome } from "./session-discovery";
 
 const log = createLogger("codex:messages");
 
@@ -130,13 +131,13 @@ export async function getCodexSessionMessages(
   limit: number,
   codexHome = getCodexHome(),
 ): Promise<SessionMessagesResponse> {
-  const path = await findCodexRolloutPath(sessionId, codexHome);
-  if (!path) {
+  const transcript = await loadCodexTranscript(sessionId, codexHome);
+  if (!transcript) {
     log.warn(`session not found: sessionId=${truncateId(sessionId)}`);
     throw new Error("Session not found");
   }
 
-  const messages = parseCodexTranscript(await Bun.file(path).text());
+  const messages = parseCodexTranscript(transcript);
   const { slice, hasMore } = paginateFromEnd(messages, offset, limit);
   return { messages: slice, total: messages.length, hasMore };
 }
@@ -154,9 +155,9 @@ export async function searchCodexMessages(
   for (const session of sessions) {
     if (results.length >= maxResults) break;
     try {
-      const path = await findCodexRolloutPath(session.sessionId, codexHome);
-      if (!path) continue;
-      const messages = parseCodexTranscript(await Bun.file(path).text());
+      const transcript = await loadCodexTranscript(session.sessionId, codexHome);
+      if (!transcript) continue;
+      const messages = parseCodexTranscript(transcript);
       let matchCount = 0;
       let snippet = "";
       for (const message of messages) {
@@ -174,6 +175,82 @@ export async function searchCodexMessages(
   }
 
   return results;
+}
+
+async function loadCodexTranscript(sessionId: string, codexHome: string): Promise<string | null> {
+  const rolloutPath = await findCodexRolloutPath(sessionId, codexHome);
+  if (rolloutPath) return Bun.file(rolloutPath).text();
+  return readDatabaseTranscript(sessionId, codexHome);
+}
+
+interface HistoryRow {
+  payload: unknown;
+  timestamp: unknown;
+}
+
+async function readDatabaseTranscript(sessionId: string, codexHome: string): Promise<string | null> {
+  const records: Record<string, unknown>[] = [];
+  for (const path of await findCodexDatabasePaths(codexHome)) {
+    let db: Database | undefined;
+    try {
+      db = new Database(path, { readonly: true, strict: true });
+      const tables = db.query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'").all();
+      for (const { name } of tables) {
+        const columns = db
+          .query<{ name: string }, []>(`PRAGMA table_info(${name})`)
+          .all()
+          .map((column) => column.name);
+        const threadColumn = ["thread_id", "session_id"].find((column) => columns.includes(column));
+        const payloadColumn = ["item", "data", "payload", "json", "items", "content"].find((column) =>
+          columns.includes(column),
+        );
+        if (!threadColumn || !payloadColumn) continue;
+        const timestampColumn = ["created_at", "timestamp", "ts"].find((column) => columns.includes(column));
+        const orderColumn = ["position", "sequence", "idx", "id", timestampColumn].find((column): column is string =>
+          Boolean(column && columns.includes(column)),
+        );
+        const timestampSelect = timestampColumn ? timestampColumn : "NULL";
+        const orderClause = orderColumn ? ` ORDER BY ${orderColumn}` : "";
+        const rows = db
+          .query<HistoryRow, [string]>(
+            `SELECT ${payloadColumn} AS payload, ${timestampSelect} AS timestamp FROM ${name} WHERE ${threadColumn} = ?${orderClause}`,
+          )
+          .all(sessionId);
+        for (const row of rows) records.push(...historyRowToRecords(row));
+      }
+    } catch (err) {
+      log.debug(`history database skipped: ${formatError(err)}`);
+    } finally {
+      db?.close();
+    }
+  }
+  return records.length > 0 ? records.map((record) => JSON.stringify(record)).join("\n") : null;
+}
+
+function historyRowToRecords(row: HistoryRow): Record<string, unknown>[] {
+  let value = row.payload;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch (_err) {
+      return [];
+    }
+  }
+  const values = Array.isArray(value) ? value : isRecord(value) && Array.isArray(value.items) ? value.items : [value];
+  return values.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    if (item.type === "response_item" || item.type === "event_msg") return [item];
+    const payload = isRecord(item.item) ? item.item : isRecord(item.payload) ? item.payload : item;
+    const payloadType = stringValue(payload.type);
+    const eventTypes = new Set(["user_message", "agent_message", "agent_reasoning", "token_count"]);
+    return [
+      {
+        timestamp: item.timestamp ?? row.timestamp,
+        type: eventTypes.has(payloadType) ? "event_msg" : "response_item",
+        payload,
+      },
+    ];
+  });
 }
 
 function parseRecord(line: string): Record<string, unknown> | undefined {

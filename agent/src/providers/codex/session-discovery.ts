@@ -29,6 +29,7 @@ interface CachedDiscovery {
 }
 
 let discoveryCache: CachedDiscovery | undefined;
+const sessionCreatedAt = new Map<string, number>();
 
 export function getCodexHome(): string {
   return process.env.CODEX_HOME || join(homedir(), ".codex");
@@ -36,12 +37,17 @@ export function getCodexHome(): string {
 
 export function clearCodexSessionCache(): void {
   discoveryCache = undefined;
+  sessionCreatedAt.clear();
+}
+
+export function getCodexSessionCreatedAt(sessionId: string): number | undefined {
+  return sessionCreatedAt.get(sessionId);
 }
 
 export async function discoverCodexSessions(options: DiscoveryOptions = {}): Promise<SessionInfo[]> {
   const codexHome = options.codexHome ?? getCodexHome();
   const nowMs = options.nowMs ?? Date.now();
-  const databasePaths = await findDatabasePaths(codexHome);
+  const databasePaths = await findCodexDatabasePaths(codexHome);
   const rolloutPaths = await findRolloutPaths(codexHome, nowMs);
   const fingerprint = await buildFingerprint([...databasePaths, ...rolloutPaths]);
 
@@ -59,7 +65,7 @@ export async function discoverCodexSessions(options: DiscoveryOptions = {}): Pro
   return sessions.map((session) => ({ ...session }));
 }
 
-async function findDatabasePaths(codexHome: string): Promise<string[]> {
+export async function findCodexDatabasePaths(codexHome = getCodexHome()): Promise<string[]> {
   try {
     const entries = await readdir(codexHome, { withFileTypes: true });
     const paths = entries
@@ -153,9 +159,16 @@ function sessionFromDatabaseRow(row: DatabaseRow, nowMs: number): SessionInfo | 
   const cwd = stringValue(row.cwd);
   const updatedMs = timestampMs(row.updated_at);
   if (!id || !UUID_RE.test(id) || !cwd || !updatedMs) return null;
-  if (isTruthy(row.archived) || isSubagentSource(row.source) || nowMs - updatedMs > SESSION_RETENTION_MS) return null;
+  if (
+    isTruthy(row.archived) ||
+    (row.archived_at !== null && row.archived_at !== undefined && row.archived_at !== "" && row.archived_at !== 0) ||
+    isSubagentSource(row.source) ||
+    nowMs - updatedMs > SESSION_RETENTION_MS
+  )
+    return null;
 
   const title = stringValue(row.title) || id.slice(0, 8);
+  sessionCreatedAt.set(id, timestampMs(row.created_at) || updatedMs);
   return {
     sessionId: id,
     agentType: "codex",
@@ -226,6 +239,7 @@ function parseRolloutCatalogEntry(text: string, mtimeMs: number, nowMs: number):
     return null;
 
   const title = stringValue(metadata.title) || id.slice(0, 8);
+  sessionCreatedAt.set(id, timestampMs(metadata.timestamp) || mtimeMs);
   return {
     sessionId: id,
     agentType: "codex",
