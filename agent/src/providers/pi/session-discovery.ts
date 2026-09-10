@@ -182,7 +182,7 @@ function sessionFromParsed(
 
   return {
     sessionId: parsed.header.id,
-    agentType: "pi" as SessionInfo["agentType"],
+    agentType: "pi",
     slug,
     projectPath: parsed.header.cwd,
     projectName: basename(parsed.header.cwd),

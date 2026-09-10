@@ -70,6 +70,10 @@ export async function searchSessionMessages(
         const { searchCodexMessages } = await import("./providers/codex/message-parser");
         const codexResults = await searchCodexMessages(q, limit - results.length);
         results.push(...codexResults);
+      } else if (provider.type === "pi") {
+        const { searchPiMessages } = await import("./providers/pi/message-parser");
+        const piResults = await searchPiMessages(q, limit - results.length);
+        results.push(...piResults);
       }
     } catch (err) {
       log.debug(

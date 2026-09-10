@@ -50,7 +50,7 @@ export async function searchPiMessages(
       if (matchCount > 0) {
         results.push({
           sessionId: session.sessionId,
-          agentType: "pi" as SearchMessageResult["agentType"],
+          agentType: "pi",
           snippet,
           matchCount,
         });
