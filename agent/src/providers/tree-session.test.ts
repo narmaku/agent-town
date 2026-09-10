@@ -98,6 +98,28 @@ describe("parseTreeSession", () => {
     expect(parsed?.messages.map((message) => message.content)).toEqual(["hello", "hi"]);
   });
 
+  test("keeps summaries that connect an active branch across compaction", () => {
+    const parsed = parseTreeSession(
+      jsonl([
+        { type: "session", version: 3, id: "compacted", cwd: "/work" },
+        { type: "message", id: "root", parentId: null, message: { role: "user", content: "old context" } },
+        { type: "compaction", id: "compact", parentId: "root", summary: "Summary of earlier work" },
+        {
+          type: "message",
+          id: "after",
+          parentId: "compact",
+          message: { role: "assistant", content: "continued" },
+        },
+      ]),
+    );
+
+    expect(parsed?.messages.map((message) => message.content)).toEqual([
+      "old context",
+      "Summary of earlier work",
+      "continued",
+    ]);
+  });
+
   test("guards dangling parents and cycles without hanging", () => {
     const dangling = parseTreeSession(
       jsonl([
