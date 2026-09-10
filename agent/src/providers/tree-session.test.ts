@@ -98,12 +98,25 @@ describe("parseTreeSession", () => {
     expect(parsed?.messages.map((message) => message.content)).toEqual(["hello", "hi"]);
   });
 
-  test("keeps summaries that connect an active branch across compaction", () => {
+  test("replaces summarized history while retaining the documented compaction range", () => {
     const parsed = parseTreeSession(
       jsonl([
         { type: "session", version: 3, id: "compacted", cwd: "/work" },
         { type: "message", id: "root", parentId: null, message: { role: "user", content: "old context" } },
-        { type: "compaction", id: "compact", parentId: "root", summary: "Summary of earlier work" },
+        {
+          type: "message",
+          id: "kept",
+          parentId: "root",
+          message: { role: "user", content: "recent context" },
+        },
+        {
+          type: "compaction",
+          id: "compact",
+          parentId: "kept",
+          summary: "Summary of earlier work",
+          firstKeptEntryId: "kept",
+          usage: { input: 20, output: 8 },
+        },
         {
           type: "message",
           id: "after",
@@ -114,10 +127,11 @@ describe("parseTreeSession", () => {
     );
 
     expect(parsed?.messages.map((message) => message.content)).toEqual([
-      "old context",
       "Summary of earlier work",
+      "recent context",
       "continued",
     ]);
+    expect(parsed?.messages[0]?.tokenUsage).toEqual({ inputTokens: 20, outputTokens: 8 });
   });
 
   test("guards dangling parents and cycles without hanging", () => {
@@ -142,6 +156,14 @@ describe("parseTreeSession", () => {
 
   test("rejects files without a valid logical session header", () => {
     expect(parseTreeSession(jsonl([{ type: "message", message: { role: "user", content: "no header" } }]))).toBeNull();
+    expect(
+      parseTreeSession(
+        jsonl([
+          { type: "event", id: "not-a-header" },
+          { type: "session", version: 3, id: "embedded-session", cwd: "/work" },
+        ]),
+      ),
+    ).toBeNull();
     expect(parseTreeSession(jsonl([{ type: "session", id: "", cwd: "/work" }]))).toBeNull();
     expect(parseTreeSession("\n{malformed}\n")).toBeNull();
   });
