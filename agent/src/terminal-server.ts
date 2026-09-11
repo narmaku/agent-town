@@ -60,8 +60,8 @@ export function validateModel(model: string): string | null {
 
 export function validateSessionId(id: string): string | null {
   if (!id) return "Session ID is required";
-  // Claude Code: UUIDs (hex + hyphens). OpenCode: ses_<alphanumeric>. Gemini CLI: UUIDs.
-  if (!/^[a-zA-Z0-9_-]+$/i.test(id)) return "Session ID contains invalid characters";
+  // UUIDs, OpenCode ses_* IDs, and Pi custom IDs (which may contain dots).
+  if (!/^[a-zA-Z0-9._-]+$/i.test(id)) return "Session ID contains invalid characters";
   return null;
 }
 
