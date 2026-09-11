@@ -13,6 +13,11 @@ export class OpenCodeProvider implements AgentProvider {
   readonly type = "opencode" as const;
   readonly displayName = "OpenCode";
   readonly binaryName = "opencode";
+  readonly terminal = {
+    inputMode: "bracketed-paste",
+    startupMode: "tui",
+    autonomousDisclaimer: false,
+  } as const;
 
   async isAvailable(): Promise<boolean> {
     return isBinaryAvailable(this.binaryName);

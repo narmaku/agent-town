@@ -1,5 +1,16 @@
 import { createLogger, type MultiplexerSessionInfo, type SessionInfo, truncateId } from "@agent-town/shared";
-import type { ProcessMapping } from "./process-mapper";
+import { getHookState } from "./hook-store";
+import { makeProcessMappingKey, type ProcessMapping } from "./process-mapper";
+
+function findLegacyMapping(
+  processMappings: Map<string, ProcessMapping>,
+  key: string,
+  agentType: SessionInfo["agentType"],
+): ProcessMapping | undefined {
+  const mapping = processMappings.get(key);
+  if (!mapping || (mapping.agentType && mapping.agentType !== agentType)) return undefined;
+  return mapping;
+}
 
 const log = createLogger("mapping");
 
@@ -24,7 +35,9 @@ export function discoverAndMapSessions(
 
   // Pass 1: match by sessionId
   for (const session of sessions) {
-    const mapping = processMappings.get(session.sessionId);
+    const mapping =
+      processMappings.get(makeProcessMappingKey(session.agentType, "session", session.sessionId)) ??
+      findLegacyMapping(processMappings, session.sessionId, session.agentType);
     if (mapping) {
       if (activeMuxNames.has(mapping.session)) {
         session.multiplexer = mapping.multiplexer;
@@ -43,7 +56,9 @@ export function discoverAndMapSessions(
     if (session.multiplexerSession) continue;
     if (!session.cwd) continue;
 
-    const cwdMapping = processMappings.get(`cwd:${session.cwd}`);
+    const cwdMapping =
+      processMappings.get(makeProcessMappingKey(session.agentType, "cwd", session.cwd)) ??
+      findLegacyMapping(processMappings, `cwd:${session.cwd}`, session.agentType);
     if (!cwdMapping) continue;
     if (!activeMuxNames.has(cwdMapping.session)) continue;
     if (claimedMux.has(cwdMapping.session)) continue;
@@ -55,4 +70,35 @@ export function discoverAndMapSessions(
   }
 
   return activeMuxNames;
+}
+
+/**
+ * Adjust session statuses using hook events first, then provider-scoped
+ * process activity, and finally the provider's storage heuristic.
+ */
+export function adjustSessionStatuses(sessions: SessionInfo[], processMappings: Map<string, ProcessMapping>): void {
+  for (const session of sessions) {
+    const hookState = getHookState(session.sessionId);
+    if (hookState) {
+      session.hookEnabled = true;
+      session.status = hookState.status;
+      session.currentTool = hookState.currentTool;
+      continue;
+    }
+
+    if (!session.multiplexerSession) {
+      session.status = "idle";
+      continue;
+    }
+
+    const mapping =
+      processMappings.get(makeProcessMappingKey(session.agentType, "session", session.sessionId)) ??
+      findLegacyMapping(processMappings, session.sessionId, session.agentType);
+
+    if (mapping?.hasActiveChildren) {
+      session.status = "working";
+    } else if (session.status === "idle") {
+      session.status = "awaiting_input";
+    }
+  }
 }

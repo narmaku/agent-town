@@ -13,14 +13,15 @@ interface AgentProvider {
   readonly type: AgentType;
   readonly displayName: string;
   readonly binaryName: string;
+  readonly terminal: TerminalCapabilities;
 
   isAvailable(): Promise<boolean>;
   discoverSessions(): Promise<SessionInfo[]>;
   getSessionMessages(sessionId: string, offset: number, limit: number): Promise<SessionMessagesResponse>;
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[];
   extractSessionIdFromArgs(args: string): string | undefined;
-  buildLaunchCommand(opts: LaunchOptions): string;
-  buildResumeCommand(opts: ResumeOptions): string;
+  buildLaunchCommand(opts: LaunchOptions): string[];
+  buildResumeCommand(opts: ResumeOptions): string[];
   handleHookEvent(payload: unknown): HookEventResult | null;
   matchProcessToSessionId(cwd: string, processStartMs: number, claimedIds: Set<string>): Promise<string | undefined>;
   deleteSessionData(sessionId: string): Promise<boolean>;
@@ -31,9 +32,10 @@ interface AgentProvider {
 
 | Property      | Type        | Description                                              |
 |---------------|-------------|----------------------------------------------------------|
-| `type`        | `AgentType` | Unique identifier (`"claude-code"`, `"opencode"`, or `"gemini-cli"`) |
+| `type`        | `AgentType` | Unique identifier (`"claude-code"`, `"opencode"`, `"gemini-cli"`, or `"codex"`) |
 | `displayName` | `string`    | Human-readable name (e.g., `"Claude Code"`)              |
 | `binaryName`  | `string`    | CLI binary name (e.g., `"claude"` or `"opencode"`)       |
+| `terminal`    | `TerminalCapabilities` | Provider-declared input and startup behavior       |
 
 ### Methods
 
@@ -47,6 +49,7 @@ Discovers sessions from the agent's native storage. This is called every heartbe
 
 - **Claude Code:** Reads JSONL files from `~/.claude/projects/` directories.
 - **OpenCode:** Queries the OpenCode SDK (`session.list()`) with SQLite fallback.
+- **Codex CLI:** Reads compatible versioned state databases under `CODEX_HOME` and falls back to active rollout JSONL files.
 
 Returns an array of `SessionInfo` objects with fields populated from the agent's storage (session ID, project path, status, last message, etc.). At this stage, `multiplexerSession` and `multiplexer` fields are **not** set -- those are filled in later by the process mapper.
 
@@ -56,6 +59,7 @@ Returns paginated messages for a session. Used by the `/api/session-messages` en
 
 - **Claude Code:** Parses the session's JSONL file.
 - **OpenCode:** Uses `session.messages()` from the SDK with SQLite fallback.
+- **Codex CLI:** Normalizes visible rollout messages, reasoning summaries, tool records, and token usage. System/developer content is not exposed.
 
 #### `filterAgentProcesses(processes: AgentProcess[]): AgentProcess[]`
 
@@ -73,6 +77,7 @@ interface AgentProcess {
 
 - **Claude Code:** Matches processes with `claude` in the command line (excluding agent-town's own processes).
 - **OpenCode:** Matches processes with `opencode` in the command line.
+- **Codex CLI:** Matches exact `codex` executable shapes, including the Node/Bun launcher form, without substring matching.
 
 #### `extractSessionIdFromArgs(args: string): string | undefined`
 
@@ -80,10 +85,11 @@ Extracts a session ID from a process's command-line arguments. This is the fast 
 
 - **Claude Code:** Looks for `--resume <uuid>` in the args.
 - **OpenCode:** Looks for `--session <ses_id>` in the args.
+- **Codex CLI:** Looks for the positional UUID in `codex resume <uuid>`.
 
 Returns `undefined` if the session ID cannot be determined from the command line (e.g., a freshly launched session with no `--resume` flag).
 
-#### `buildLaunchCommand(opts: LaunchOptions): string`
+#### `buildLaunchCommand(opts: LaunchOptions): string[]`
 
 Builds the CLI command string to launch a new session. This command is sent to the multiplexer session.
 
@@ -96,8 +102,9 @@ interface LaunchOptions {
 
 - **Claude Code:** Returns `claude [--model X] [--dangerously-skip-permissions]`
 - **OpenCode:** Returns `opencode [--model X]`
+- **Codex CLI:** Returns `codex [--model X] [--dangerously-bypass-approvals-and-sandbox]`
 
-#### `buildResumeCommand(opts: ResumeOptions): string`
+#### `buildResumeCommand(opts: ResumeOptions): string[]`
 
 Builds the CLI command string to resume an existing session.
 
@@ -111,6 +118,7 @@ interface ResumeOptions {
 
 - **Claude Code:** Returns `claude --resume <sessionId> [--model X] [--dangerously-skip-permissions]`
 - **OpenCode:** Returns `opencode --session <sessionId> [--model X]`
+- **Codex CLI:** Returns `codex resume <sessionId> [--model X] [--dangerously-bypass-approvals-and-sandbox]`
 
 #### `handleHookEvent(payload: unknown): HookEventResult | null`
 
@@ -161,12 +169,15 @@ Fallback method for matching a running process to a session ID when `extractSess
 
 **OpenCode:** Finds the OpenCode session whose working directory matches `cwd`.
 
+**Codex CLI:** Selects the nearest retained, unclaimed, top-level session in the same working directory near the process start time.
+
 #### `deleteSessionData(sessionId: string): Promise<boolean>`
 
 Deletes the session's data files from local storage. Returns `true` if the session was found and deleted.
 
 - **Claude Code:** Deletes the JSONL file from `~/.claude/projects/`.
 - **OpenCode:** Deletes the session via SDK or SQLite.
+- **Codex CLI:** Runs `codex delete --force <uuid>` using an argument-array spawn. It never unlinks a guessed transcript path.
 
 ---
 
@@ -186,7 +197,7 @@ function getAllProviders(): AgentProvider[];
 
 At agent startup, `initializeProviders()` is called. It:
 
-1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`, `GeminiCliProvider`).
+1. Creates an instance of each known provider (`ClaudeCodeProvider`, `OpenCodeProvider`, `GeminiCliProvider`, `CodexProvider`).
 2. Calls `isAvailable()` on each.
 3. Registers only the providers whose binary is found in `$PATH`.
 
@@ -196,6 +207,7 @@ async function initializeProviders(): Promise<void> {
     new ClaudeCodeProvider(),
     new OpenCodeProvider(),
     new GeminiCliProvider(),
+    new CodexProvider(),
   ];
 
   for (const provider of candidates) {
@@ -281,6 +293,19 @@ Limitations compared to other providers:
 - **No hook/event support:** Gemini CLI does not currently support hooks or webhooks for real-time status tracking. Status detection relies entirely on file modification time heuristics, which is less accurate than Claude Code hooks or OpenCode SSE events.
 - **No SDK integration:** Session discovery and message parsing read JSON files directly from disk rather than communicating with a running server process.
 
+### Codex CLI Provider
+
+**Location:** `agent/src/providers/codex/`
+
+| File                   | Purpose                                                        |
+|------------------------|----------------------------------------------------------------|
+| `index.ts`             | Provider contract and safe launch/resume command arrays        |
+| `session-discovery.ts` | Read-only SQLite discovery, rollout fallback, and native delete |
+| `message-parser.ts`    | Visible message, reasoning, tool, usage, pagination, and search |
+| `process-mapper.ts`    | Exact process detection and UUID/start-time mapping             |
+
+Codex session storage is private and versioned. Agent Town detects compatible schemas at runtime and falls back safely when they change. `CODEX_HOME` defaults to `~/.codex`; archived sessions and subagent rollouts are excluded. There is no hook integration, so status remains activity/process based. Resume requires a UUID, and autonomous mode deliberately bypasses both approvals and sandboxing.
+
 ---
 
 ## How Session Discovery Works
@@ -346,6 +371,11 @@ export class MyAgentProvider implements AgentProvider {
   readonly type = "my-agent" as const;
   readonly displayName = "My Agent";
   readonly binaryName = "myagent";
+  readonly terminal = {
+    inputMode: "bracketed-paste",
+    startupMode: "tui",
+    autonomousDisclaimer: false,
+  } as const;
 
   async isAvailable(): Promise<boolean> {
     // Check if the binary exists in PATH
@@ -387,16 +417,16 @@ export class MyAgentProvider implements AgentProvider {
     return match?.[1];
   }
 
-  buildLaunchCommand(opts: LaunchOptions): string {
+  buildLaunchCommand(opts: LaunchOptions): string[] {
     const parts = ["myagent"];
-    if (opts.model) parts.push(`--model ${opts.model}`);
-    return parts.join(" ");
+    if (opts.model) parts.push("--model", opts.model);
+    return parts;
   }
 
-  buildResumeCommand(opts: ResumeOptions): string {
+  buildResumeCommand(opts: ResumeOptions): string[] {
     const parts = ["myagent", "--session", opts.sessionId];
-    if (opts.model) parts.push(`--model ${opts.model}`);
-    return parts.join(" ");
+    if (opts.model) parts.push("--model", opts.model);
+    return parts;
   }
 
   handleHookEvent(payload: unknown): HookEventResult | null {
@@ -465,6 +495,6 @@ Use the existing test patterns from `agent/src/providers/claude-code/`, `agent/s
 bun test --filter agent
 ```
 
-### Step 6: Handle agent-specific post-launch behavior
+### Step 6: Declare terminal behavior
 
-If your agent has special post-launch requirements (like Claude Code's trust prompt auto-acceptance), you may need to add agent-type-specific logic in `agent/src/terminal-server.ts` within the `/api/launch` and `/api/resume` handlers. Look for the existing `if (agentType === "claude-code")` blocks as examples.
+Set `terminal.inputMode` to `"direct"` or `"bracketed-paste"`, and set `terminal.startupMode` to `"cli-prompt"` when Agent Town should handle the provider's startup prompts. `autonomousDisclaimer` controls whether autonomous launches require a second confirmation keystroke. The terminal server uses these capabilities without provider-specific branches.

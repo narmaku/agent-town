@@ -2,7 +2,32 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { API, STATUS_CONFIG, shortenPath, timeAgo } from "./utils";
+import {
+  AGENT_TYPE_CONFIG,
+  AGENT_TYPE_LABELS,
+  API,
+  resolveAvailableAgentType,
+  STATUS_CONFIG,
+  shortenPath,
+  timeAgo,
+} from "./utils";
+
+describe("agent type metadata", () => {
+  test("defines labels, badges, and autonomy help for every provider", () => {
+    expect(Object.keys(AGENT_TYPE_CONFIG).sort()).toEqual(["claude-code", "codex", "gemini-cli", "opencode"]);
+    expect(AGENT_TYPE_CONFIG.codex).toEqual({
+      label: "Codex CLI",
+      shortLabel: "CX",
+      autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
+    });
+    expect(AGENT_TYPE_LABELS.codex).toBe("Codex CLI");
+  });
+
+  test("falls back when the preferred provider is unavailable on a machine", () => {
+    expect(resolveAvailableAgentType("codex", ["claude-code", "opencode"])).toBe("claude-code");
+    expect(resolveAvailableAgentType("codex", ["claude-code", "codex"])).toBe("codex");
+  });
+});
 
 describe("timeAgo", () => {
   test("returns 'just now' for timestamps less than 10 seconds ago", () => {
