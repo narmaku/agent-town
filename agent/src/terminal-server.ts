@@ -60,8 +60,10 @@ export function validateModel(model: string): string | null {
 
 export function validateSessionId(id: string): string | null {
   if (!id) return "Session ID is required";
-  // UUIDs, OpenCode ses_* IDs, and Pi custom IDs (which may contain dots).
-  if (!/^[a-zA-Z0-9._-]+$/i.test(id)) return "Session ID contains invalid characters";
+  // UUIDs, provider-prefixed IDs, and opaque Pi/OMP IDs with single-dot separators.
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/i.test(id) || id.includes("..")) {
+    return "Session ID contains invalid characters";
+  }
   return null;
 }
 

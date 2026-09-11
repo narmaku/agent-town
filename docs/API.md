@@ -73,7 +73,7 @@ Proxies to the agent to retrieve paginated session messages.
 |-------------|----------|----------------|----------------------------------|
 | `machineId` | Yes      | --             | Machine identifier               |
 | `sessionId` | Yes      | --             | Agent session ID                 |
-| `agentType` | No       | `"claude-code"` | Agent type (`claude-code`, `opencode`, `gemini-cli`, `codex`, or `pi`) |
+| `agentType` | No       | `"claude-code"` | Agent type (`claude-code`, `opencode`, `gemini-cli`, `codex`, `pi`, or `omp`) |
 | `offset`    | No       | `0`            | Pagination offset                |
 | `limit`     | No       | `10`           | Number of messages to return     |
 
@@ -193,7 +193,7 @@ Sends text to a session's multiplexer (like typing into the terminal). Proxied t
 }
 ```
 
-The `agentType` field is optional (defaults to `"claude-code"`). It selects the provider-declared input mode; OpenCode, Gemini CLI, and Codex use bracketed paste for their TUIs.
+The `agentType` field is optional (defaults to `"claude-code"`). It selects the provider-declared input mode; OpenCode, Gemini CLI, Codex, Pi, and OMP use bracketed paste for their TUIs.
 
 **Response:** `200 OK`
 ```json
@@ -490,7 +490,7 @@ These endpoints are exposed by the agent's terminal server on each machine. The 
 
 ### GET /api/session-messages
 
-Returns paginated session messages from the provider's native local storage. Codex reads compatible versioned SQLite state and active rollout JSONL records under `CODEX_HOME`. Pi reads the active ancestry from native tree JSONL sessions under `PI_CODING_AGENT_SESSION_DIR`.
+Returns paginated session messages from the provider's native local storage. Codex reads compatible versioned SQLite state and active rollout JSONL records under `CODEX_HOME`. Pi reads the active ancestry from native tree JSONL sessions under `PI_CODING_AGENT_SESSION_DIR`. OMP reads the visible post-reset active ancestry from primary JSONLs under the active OMP root, accepting current title-slot and legacy header-first files.
 
 **Query parameters:**
 | Parameter   | Required | Default        | Description                      |
@@ -526,7 +526,7 @@ Launches a new multiplexer session with an agent running inside it.
 }
 ```
 
-Creates a new zellij or tmux session and sends the provider's argument-array launch command through the multiplexer boundary. Codex uses `codex`, optionally with `--model` and `--dangerously-bypass-approvals-and-sandbox`. Pi uses `pi [--model <value>]`; its lack of a tool-approval or built-in sandbox layer means `autonomous` is ignored.
+Creates a new zellij or tmux session and sends the provider's argument-array launch command through the multiplexer boundary. Codex uses `codex`, optionally with `--model` and `--dangerously-bypass-approvals-and-sandbox`. Pi uses `pi [--model <value>]`; its lack of a tool-approval or built-in sandbox layer means `autonomous` is ignored. OMP uses `omp [--model <value>]` and adds `--yolo` for autonomous mode.
 
 **Response:** `200 OK`
 ```json
@@ -557,7 +557,7 @@ Resumes an existing agent session in a new multiplexer session.
 }
 ```
 
-Pi resumes with `pi --session <sessionId> [--model <value>]`. Agent Town does not use Pi's interactive `--resume` picker.
+Pi resumes with `pi --session <sessionId> [--model <value>]`. Agent Town does not use Pi's interactive `--resume` picker. OMP resumes the exact native ID with `omp --resume <sessionId> [--model <value>] [--yolo]`.
 
 **Response:** `200 OK`
 ```json
@@ -623,7 +623,7 @@ For zellij, uses `kill-session` which terminates running processes but leaves th
 
 ### POST /api/delete-session
 
-Deletes a session through its provider (JSONL for Claude Code, DB record for OpenCode, `codex delete --force <uuid>` for Codex CLI, or the exact header-ID-matched native JSONL for Pi).
+Deletes a session through its provider (JSONL for Claude Code, DB record for OpenCode, `codex delete --force <uuid>` for Codex CLI, the exact header-ID-matched native JSONL for Pi, or OMP's exact JSONL plus same-stem artifact directory).
 
 **Request body:**
 ```json
@@ -649,7 +649,7 @@ When `agentType` is specified, deletion is restricted to that provider. For back
 
 ### POST /api/send
 
-Sends text to a multiplexer session. The provider declares direct or bracketed-paste input; Codex, Gemini CLI, OpenCode, and Pi use the TUI/bracketed-paste path.
+Sends text to a multiplexer session. The provider declares direct or bracketed-paste input; Codex, Gemini CLI, OpenCode, Pi, and OMP use the TUI/bracketed-paste path.
 
 **Request body:**
 ```json
@@ -810,7 +810,7 @@ All TypeScript types used in the API are defined in `shared/src/index.ts`.
 ### Core Types
 
 ```typescript
-type AgentType = "claude-code" | "opencode" | "gemini-cli" | "codex" | "pi";
+type AgentType = "claude-code" | "opencode" | "gemini-cli" | "codex" | "pi" | "omp";
 
 type SessionStatus =
   | "starting"
@@ -839,6 +839,7 @@ interface SessionInfo {
   projectName: string;
   gitBranch: string;
   status: SessionStatus;
+  statusSource?: "activity" | "provider"; // Whether status is heuristic or native lifecycle state
   lastActivity: string;       // ISO timestamp
   lastMessage: string;
   lastAssistantMessage?: string;

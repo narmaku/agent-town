@@ -1,6 +1,7 @@
 import { createLogger, type MultiplexerSessionInfo, type SessionInfo, truncateId } from "@agent-town/shared";
 import { getHookState } from "./hook-store";
 import { makeProcessMappingKey, type ProcessMapping } from "./process-mapper";
+import { applyProviderStatusFallback } from "./session-status";
 
 function findLegacyMapping(
   processMappings: Map<string, ProcessMapping>,
@@ -86,19 +87,9 @@ export function adjustSessionStatuses(sessions: SessionInfo[], processMappings: 
       continue;
     }
 
-    if (!session.multiplexerSession) {
-      session.status = "idle";
-      continue;
-    }
-
     const mapping =
       processMappings.get(makeProcessMappingKey(session.agentType, "session", session.sessionId)) ??
       findLegacyMapping(processMappings, session.sessionId, session.agentType);
-
-    if (mapping?.hasActiveChildren) {
-      session.status = "working";
-    } else if (session.status === "idle") {
-      session.status = "awaiting_input";
-    }
+    applyProviderStatusFallback(session, mapping);
   }
 }

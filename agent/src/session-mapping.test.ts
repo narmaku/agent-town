@@ -191,4 +191,26 @@ describe("adjustSessionStatuses", () => {
 
     expect(sessions[0].status).toBe("working");
   });
+
+  test("preserves OMP lifecycle status when another provider owns the same process ID", () => {
+    const sessions = [
+      makeSession({
+        sessionId: "shared-lifecycle-id",
+        agentType: "omp",
+        status: "done",
+        statusSource: "provider",
+      }),
+    ];
+    const mappings = new Map<string, ProcessMapping>([
+      [
+        makeProcessMappingKey("claude-code", "session", "shared-lifecycle-id"),
+        makeMapping({ agentType: "claude-code", session: "claude-session", hasActiveChildren: true }),
+      ],
+    ]);
+
+    adjustSessionStatuses(sessions, mappings);
+
+    expect(sessions[0].status).toBe("done");
+    expect(sessions[0].multiplexerSession).toBeUndefined();
+  });
 });

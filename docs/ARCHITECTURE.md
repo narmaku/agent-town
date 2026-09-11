@@ -30,9 +30,9 @@ This document describes the internal architecture, data flows, and key subsystem
                     |           |           |                         |           |           |
                  zellij      tmux      processes                  zellij      tmux      processes
                  sessions    sessions   (ps)                      sessions    sessions   (ps)
-                    |           |           |                         |           |           |
-                 claude      opencode   gemini     process        claude      opencode   gemini     process
-                 code                   cli        mapper        code                   cli        mapper
+                    |           |                                     |           |
+              provider plugins + mapper                         provider plugins + mapper
+         (Claude/OpenCode/Gemini/Codex/Pi/OMP)             (Claude/OpenCode/Gemini/Codex/Pi/OMP)
 ```
 
 ### Components
@@ -41,7 +41,7 @@ This document describes the internal architecture, data flows, and key subsystem
 
 **Server** (`server/`): Central hub running on port 4680. Receives heartbeats from agents, stores machine/session state in memory, broadcasts updates to dashboard clients, proxies API calls and terminal connections to agents. Manages SSH tunnels for remote nodes.
 
-**Agent** (`agent/`): Runs on each machine (local or remote) on port 4681. Discovers AI coding agent sessions (Claude Code, OpenCode, Gemini CLI, Codex CLI, Pi) through the provider plugin system, maps running processes to multiplexer sessions, sends heartbeats to the server, and provides terminal relay and session management APIs.
+**Agent** (`agent/`): Runs on each machine (local or remote) on port 4681. Discovers AI coding agent sessions (Claude Code, OpenCode, Gemini CLI, Codex CLI, Pi, OMP) through the provider plugin system, maps running processes to multiplexer sessions, sends heartbeats to the server, and provides terminal relay and session management APIs.
 
 **Shared** (`shared/`): TypeScript type definitions and the logger utility. No runtime dependencies. Used by both server and agent.
 
@@ -68,6 +68,7 @@ Calls `discoverSessions()` on all registered providers in parallel. Each provide
 - **Gemini CLI:** Scans `~/.gemini/tmp/<project_hash>/chats/` for JSON session files. Resolves project paths via `~/.gemini/projects.json` or `.project_root` files. Status is inferred from file modification times.
 - **Codex CLI:** Honors `CODEX_HOME` (default `~/.codex`), reads compatible versioned state databases in read-only mode, and falls back to bounded scans of active rollout JSONL files. Archived and subagent sessions are excluded. Because Codex has no Agent Town hook integration, status is inferred from activity and process mapping.
 - **Pi:** Scans direct and working-directory buckets under `PI_CODING_AGENT_SESSION_DIR` (default `~/.pi/agent/sessions`). Tree-format sessions are reduced to the ancestry of the latest active leaf; legacy v1 sessions remain linear. Status is inferred from activity and process mapping because Pi has no hook integration.
+- **OMP:** Scans only primary bucket JSONLs under the active OMP root (default `~/.omp/agent/sessions`). It accepts current 256-byte title slots and legacy header-first sessions, reduces the tree to post-reset active ancestry, and preserves native terminal lifecycle states alongside process mapping.
 
 Returns a flat array of `SessionInfo[]` -- at this point, no multiplexer mapping exists.
 

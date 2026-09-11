@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- OMP provider with current and legacy tree-session discovery, lifecycle-aware status, exact resume/delete behavior, search, and dashboard controls (2026-09-10)
 - Pi provider with active-branch JSONL discovery, transcript search, exact process/session mapping, resume/delete support, and dashboard controls (2026-09-10)
 - Codex CLI provider with SQLite/rollout discovery, transcript parsing, process mapping, native resume/delete commands, and dashboard controls (2026-09-10)
 - Gemini CLI provider: third supported agent type with session discovery from `~/.gemini/tmp/`, JSON-based message parsing, and process detection (2026-03-21)

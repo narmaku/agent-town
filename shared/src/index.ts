@@ -3,7 +3,7 @@ export { createLogger, type Logger } from "./logger";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
 export { formatCompactTokens, paginateFromEnd, safeJsonParse, truncateId } from "./utils";
 
-export type AgentType = "claude-code" | "opencode" | "gemini-cli" | "codex" | "pi";
+export type AgentType = "claude-code" | "opencode" | "gemini-cli" | "codex" | "pi" | "omp";
 
 export type SessionStatus =
   | "starting"
@@ -26,6 +26,7 @@ export interface SessionInfo {
   projectName: string;
   gitBranch: string;
   status: SessionStatus;
+  statusSource?: "activity" | "provider";
   lastActivity: string; // ISO timestamp
   lastMessage: string; // short summary of last message
   lastAssistantMessage?: string; // full markdown text of last assistant response

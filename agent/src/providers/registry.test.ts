@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { ClaudeCodeProvider } from "./claude-code/index";
 import { CodexProvider } from "./codex/index";
 import { GeminiCliProvider } from "./gemini-cli/index";
+import { OmpProvider } from "./omp/index";
 import { OpenCodeProvider } from "./opencode/index";
 import { PiProvider } from "./pi/index";
 import { clearProviders, getAllProviders, getProvider, registerProvider } from "./registry";
@@ -32,19 +33,21 @@ describe("provider registry", () => {
     expect(getProvider("opencode")).toBeDefined();
   });
 
-  test("registers all five providers", () => {
+  test("registers all six providers", () => {
     registerProvider(new ClaudeCodeProvider());
     registerProvider(new OpenCodeProvider());
     registerProvider(new GeminiCliProvider());
     registerProvider(new CodexProvider());
     registerProvider(new PiProvider());
+    registerProvider(new OmpProvider());
 
-    expect(getAllProviders()).toHaveLength(5);
+    expect(getAllProviders()).toHaveLength(6);
     expect(getProvider("claude-code")).toBeDefined();
     expect(getProvider("opencode")).toBeDefined();
     expect(getProvider("gemini-cli")).toBeDefined();
     expect(getProvider("codex")).toBeDefined();
     expect(getProvider("pi")).toBeDefined();
+    expect(getProvider("omp")).toBeDefined();
   });
 
   test("returns undefined for unregistered type", () => {

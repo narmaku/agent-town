@@ -21,7 +21,11 @@ export interface ParsedTreeSession {
   messages: SessionMessage[];
 }
 
-export function parseTreeSession(text: string): ParsedTreeSession | null {
+export interface TreeSessionParseOptions {
+  resetBoundaryType?: string;
+}
+
+export function parseTreeSession(text: string, options: TreeSessionParseOptions = {}): ParsedTreeSession | null {
   const records = text.split("\n").flatMap((line) => {
     const record = parseRecord(line);
     return record ? [record] : [];
@@ -32,7 +36,11 @@ export function parseTreeSession(text: string): ParsedTreeSession | null {
   const messageRecords = records.filter((record) => record.type === "message" && isRecord(record.message));
   const usesTree = header.version !== 1 && messageRecords.some((record) => stringValue(record.id));
   const treeRecords = records.filter((record) => record.type !== "session" && stringValue(record.id));
-  const activeRecords = usesTree ? selectActiveBranch(treeRecords) : messageRecords;
+  let activeRecords = usesTree ? selectActiveBranch(treeRecords) : messageRecords;
+  if (options.resetBoundaryType) {
+    const resetIndex = findLastIndex(activeRecords, (record) => record.type === options.resetBoundaryType);
+    if (resetIndex >= 0) activeRecords = activeRecords.slice(resetIndex + 1);
+  }
   const visibleRecords = usesTree ? applyLatestCompaction(activeRecords) : activeRecords;
   return { header, records, activeRecords, messages: normalizeMessages(visibleRecords) };
 }

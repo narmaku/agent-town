@@ -74,6 +74,10 @@ export async function searchSessionMessages(
         const { searchPiMessages } = await import("./providers/pi/message-parser");
         const piResults = await searchPiMessages(q, limit - results.length);
         results.push(...piResults);
+      } else if (provider.type === "omp") {
+        const { searchOmpMessages } = await import("./providers/omp/message-parser");
+        const ompResults = await searchOmpMessages(q, limit - results.length);
+        results.push(...ompResults);
       }
     } catch (err) {
       log.debug(

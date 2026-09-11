@@ -8,7 +8,7 @@ This document covers how to set up and run Agent Town in different configuration
 
 - **Bun** (runtime): Install from https://bun.sh
 - **Terminal multiplexer**: At least one of [zellij](https://zellij.dev) or [tmux](https://github.com/tmux/tmux)
-- **AI coding agent**: At least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencode-ai/opencode), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex CLI](https://developers.openai.com/codex/cli/), or [Pi](https://pi.dev/)
+- **AI coding agent**: At least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencode-ai/opencode), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex CLI](https://developers.openai.com/codex/cli/), [Pi](https://pi.dev/), or [OMP](https://github.com/can1357/oh-my-pi)
 - **Python 3**: Required for the PTY helper (terminal relay)
 - **Linux**: Full feature set. macOS works but lacks `/proc` filesystem (process mapping is limited) and `systemd-run` (cgroup isolation unavailable)
 
@@ -259,6 +259,16 @@ The `codex` executable must be on the service `PATH`. If it was installed to a u
 | `PI_CODING_AGENT_SESSION_DIR` | `$PI_CODING_AGENT_DIR/sessions` | Native Pi session root |
 
 Install Pi using its current instructions at [pi.dev](https://pi.dev/) and ensure the `pi` executable is on the Agent Town service `PATH`. Agent Town validates the CLI help text so unrelated binaries with the short name `pi` are not registered.
+
+### OMP (agent-side)
+
+| Variable | Default | Description |
+|---|---|---|
+| `OMP_PROFILE` | unset | Selects `~/.omp/profiles/<name>/agent` instead of the default agent root |
+| `PI_PROFILE` | unset | Legacy alias for `OMP_PROFILE`; ignored when `OMP_PROFILE` is set |
+| `PI_CODING_AGENT_DIR` | `~/.omp/agent` | Overrides OMP's active agent data root; also affects Pi when both providers run in the same service |
+
+Install OMP using the current [Oh My Pi instructions](https://github.com/can1357/oh-my-pi) and put `omp` on the Agent Town service `PATH`. Agent Town reads only the active profile/root's `sessions/*/*.jsonl`; one-off `--session-dir` locations are not discovered. Current fixed-title-slot and legacy header-first histories are supported without modifying or migrating them.
 
 ### OpenCode (agent-side)
 
