@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import {
+  type AgentType,
   type CreateNodeRequest,
   createLogger,
   type Heartbeat,
@@ -383,6 +384,7 @@ async function routeRequest(
       const body = (await req.json()) as {
         machineId: string;
         sessionId: string;
+        agentType?: AgentType;
         multiplexer?: string;
         multiplexerSession?: string;
       };
@@ -414,7 +416,7 @@ async function routeRequest(
       const deleteResult = await proxyFetch(deleteUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: body.sessionId }),
+        body: JSON.stringify({ sessionId: body.sessionId, agentType: body.agentType }),
       });
 
       if (!deleteResult.ok) {
@@ -621,7 +623,13 @@ async function routeRequest(
 
       // Add a pending session so the dashboard shows it immediately
       // (before the next heartbeat discovers the real session)
-      addPendingSession(body.machineId, body.sessionName, body.projectDir, mux);
+      addPendingSession(
+        body.machineId,
+        body.sessionName,
+        body.projectDir,
+        mux,
+        body.agentType || settings.defaultAgentType,
+      );
       broadcast({
         type: "machines_update",
         payload: getAllMachines(),

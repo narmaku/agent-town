@@ -1,5 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { extractSessionIdFromArgs, matchSessionByBirthTime, type SessionCandidate } from "./process-mapper";
+import {
+  extractSessionIdFromArgs,
+  makeProcessMappingKey,
+  matchSessionByBirthTime,
+  type SessionCandidate,
+} from "./process-mapper";
+
+describe("makeProcessMappingKey", () => {
+  test("scopes session IDs and working directories by provider", () => {
+    expect(makeProcessMappingKey("claude-code", "session", "same-id")).toBe("claude-code:session:same-id");
+    expect(makeProcessMappingKey("gemini-cli", "session", "same-id")).toBe("gemini-cli:session:same-id");
+    expect(makeProcessMappingKey("claude-code", "cwd", "/workspace")).toBe("claude-code:cwd:/workspace");
+  });
+});
 
 describe("matchSessionByBirthTime", () => {
   const now = Date.now();

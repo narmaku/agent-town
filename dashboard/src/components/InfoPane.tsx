@@ -1,5 +1,5 @@
 import { formatCompactTokens, type SessionInfo } from "@agent-town/shared";
-import { AGENT_TYPE_LABELS, STATUS_CONFIG } from "../utils";
+import { getAgentTypeDisplay, STATUS_CONFIG } from "../utils";
 import { BranchIcon, ContextIcon, CwdIcon, FolderIcon, ModelIcon, TokensIcon } from "./icons";
 
 export function shouldShowCwd(cwd: string, projectPath: string): boolean {
@@ -26,7 +26,7 @@ export function InfoPane({
   actionButtons,
 }: InfoPaneProps): React.JSX.Element {
   const config = STATUS_CONFIG[session.status];
-  const agentLabel = AGENT_TYPE_LABELS[session.agentType] || session.agentType;
+  const agentLabel = getAgentTypeDisplay(session.agentType).label;
 
   return (
     <div className="info-pane-content">

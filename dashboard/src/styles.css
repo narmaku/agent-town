@@ -1093,6 +1093,12 @@ body {
   border-color: rgb(var(--contrast-rgb) / 0.2);
 }
 
+.agent-codex {
+  background: rgb(var(--accent-green-rgb) / var(--tint-chip));
+  color: var(--accent-green-fg);
+  border-color: rgb(var(--accent-green-rgb) / 0.3);
+}
+
 .tracking-badge {
   font-size: 9px;
   font-weight: 700;

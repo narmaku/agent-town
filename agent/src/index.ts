@@ -11,13 +11,13 @@ import {
   truncateId,
 } from "@agent-town/shared";
 import { configureLocalHooks } from "./hook-setup";
-import { getHookState, updateHookState } from "./hook-store";
+import { updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
 import { createPlaceholderSessions, deduplicateSessions, expirePlaceholders } from "./placeholder-sessions";
-import { discoverProcessMappings, type ProcessMapping } from "./process-mapper";
+import { discoverProcessMappings } from "./process-mapper";
 import type { OpenCodeProvider } from "./providers/opencode/index";
 import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
-import { discoverAndMapSessions } from "./session-mapping";
+import { adjustSessionStatuses, discoverAndMapSessions } from "./session-mapping";
 import { discoverSessions } from "./session-parser";
 import { writeSessionMetadata } from "./session-recovery";
 import { startTerminalServer } from "./terminal-server";
@@ -97,38 +97,6 @@ function loadSessionNames(): Record<string, string> {
 //
 // Each function handles one phase of the heartbeat pipeline.
 // They are called sequentially from sendHeartbeat().
-
-/**
- * Adjust session statuses using the priority chain:
- * 1. Hook events (real-time, accurate — if hooks are enabled)
- * 2. Process mapper (child process detection — fallback heuristic)
- * 3. JSONL file modification time (least accurate — base heuristic)
- */
-function adjustSessionStatuses(sessions: SessionInfo[], processMappings: Map<string, ProcessMapping>): void {
-  for (const session of sessions) {
-    // Check if hooks are providing real-time status for this session
-    const hookState = getHookState(session.sessionId);
-    if (hookState) {
-      session.hookEnabled = true;
-      session.status = hookState.status;
-      session.currentTool = hookState.currentTool;
-      continue;
-    }
-
-    // Fallback: process mapper + storage heuristics
-    if (session.multiplexerSession) {
-      const mapping = processMappings.get(session.sessionId);
-
-      if (mapping?.hasActiveChildren) {
-        session.status = "working";
-      } else if (session.status === "idle") {
-        session.status = "awaiting_input";
-      }
-    } else {
-      session.status = "idle";
-    }
-  }
-}
 
 /**
  * Track session-to-multiplexer associations and detect exited sessions.

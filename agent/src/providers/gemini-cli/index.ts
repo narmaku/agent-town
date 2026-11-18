@@ -9,6 +9,11 @@ export class GeminiCliProvider implements AgentProvider {
   readonly type = "gemini-cli" as const;
   readonly displayName = "Gemini CLI";
   readonly binaryName = "gemini";
+  readonly terminal = {
+    inputMode: "bracketed-paste",
+    startupMode: "cli-prompt",
+    autonomousDisclaimer: true,
+  } as const;
 
   async isAvailable(): Promise<boolean> {
     return isBinaryAvailable(this.binaryName);

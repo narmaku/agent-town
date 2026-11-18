@@ -73,7 +73,7 @@ Proxies to the agent to retrieve paginated session messages.
 |-------------|----------|----------------|----------------------------------|
 | `machineId` | Yes      | --             | Machine identifier               |
 | `sessionId` | Yes      | --             | Agent session ID                 |
-| `agentType` | No       | `"claude-code"` | Agent type (`claude-code` or `opencode`) |
+| `agentType` | No       | `"claude-code"` | Agent type (`claude-code`, `opencode`, `gemini-cli`, or `codex`) |
 | `offset`    | No       | `0`            | Pagination offset                |
 | `limit`     | No       | `10`           | Number of messages to return     |
 
@@ -158,12 +158,13 @@ Fully deletes a session: kills the multiplexer session, deletes session data (JS
 {
   "machineId": "a1b2c3d4e5f6g7h8",
   "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+  "agentType": "codex",
   "multiplexer": "zellij",
   "multiplexerSession": "my-session"
 }
 ```
 
-The `multiplexer` and `multiplexerSession` fields are optional. If omitted, the server looks them up from its stored state.
+The `agentType`, `multiplexer`, and `multiplexerSession` fields are optional. If multiplexer fields are omitted, the server looks them up from its stored state. Supplying `agentType` restricts deletion to that provider.
 
 **Response:** `200 OK`
 ```json
@@ -192,7 +193,7 @@ Sends text to a session's multiplexer (like typing into the terminal). Proxied t
 }
 ```
 
-The `agentType` field is optional (defaults to `"claude-code"`). It affects how text is delivered -- OpenCode uses bracketed paste mode for its TUI.
+The `agentType` field is optional (defaults to `"claude-code"`). It selects the provider-declared input mode; OpenCode, Gemini CLI, and Codex use bracketed paste for their TUIs.
 
 **Response:** `200 OK`
 ```json
@@ -489,7 +490,7 @@ These endpoints are exposed by the agent's terminal server on each machine. The 
 
 ### GET /api/session-messages
 
-Returns paginated session messages from the agent's local storage (JSONL files for Claude Code, SQLite for OpenCode).
+Returns paginated session messages from the provider's native local storage. Codex reads compatible versioned SQLite state and active rollout JSONL records under `CODEX_HOME`.
 
 **Query parameters:**
 | Parameter   | Required | Default        | Description                      |
@@ -525,7 +526,7 @@ Launches a new multiplexer session with an agent running inside it.
 }
 ```
 
-Creates a new zellij or tmux session, sends the agent launch command, and for Claude Code, auto-accepts the workspace trust prompt and sends an initial message to trigger JSONL creation.
+Creates a new zellij or tmux session and sends the provider's argument-array launch command through the multiplexer boundary. Codex uses `codex`, optionally with `--model` and `--dangerously-bypass-approvals-and-sandbox`.
 
 **Response:** `200 OK`
 ```json
@@ -620,7 +621,7 @@ For zellij, uses `kill-session` which terminates running processes but leaves th
 
 ### POST /api/delete-session
 
-Deletes a session's data files (JSONL for Claude Code, DB record for OpenCode).
+Deletes a session through its provider (JSONL for Claude Code, DB record for OpenCode, or `codex delete --force <uuid>` for Codex CLI).
 
 **Request body:**
 ```json
@@ -630,7 +631,7 @@ Deletes a session's data files (JSONL for Claude Code, DB record for OpenCode).
 }
 ```
 
-If `agentType` is not specified, defaults to `"claude-code"` and falls back to trying other providers.
+When `agentType` is specified, deletion is restricted to that provider. For backward compatibility, an omitted type starts with `"claude-code"` and may fall back to other registered providers.
 
 **Response:** `200 OK`
 ```json
@@ -646,7 +647,7 @@ If `agentType` is not specified, defaults to `"claude-code"` and falls back to t
 
 ### POST /api/send
 
-Sends text to a multiplexer session. Uses a PTY helper to attach to the session and write text. Handles differences between Claude Code (simple CLI) and OpenCode (Bubble Tea TUI with bracketed paste mode).
+Sends text to a multiplexer session. The provider declares direct or bracketed-paste input; Codex, Gemini CLI, and OpenCode use the TUI/bracketed-paste path.
 
 **Request body:**
 ```json
@@ -807,7 +808,7 @@ All TypeScript types used in the API are defined in `shared/src/index.ts`.
 ### Core Types
 
 ```typescript
-type AgentType = "claude-code" | "opencode";
+type AgentType = "claude-code" | "opencode" | "gemini-cli" | "codex";
 
 type SessionStatus =
   | "starting"

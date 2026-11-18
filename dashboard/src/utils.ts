@@ -47,11 +47,52 @@ export function shortenPath(path: string): string {
 
 // --- Agent type labels ---
 
-export const AGENT_TYPE_LABELS: Record<AgentType, string> = {
-  "claude-code": "Claude Code",
-  opencode: "OpenCode",
-  "gemini-cli": "Gemini CLI",
+export interface AgentTypeDisplayConfig {
+  label: string;
+  shortLabel: string;
+  autonomousHint: string;
+}
+
+export const AGENT_TYPE_CONFIG: Record<AgentType, AgentTypeDisplayConfig> = {
+  "claude-code": {
+    label: "Claude Code",
+    shortLabel: "CC",
+    autonomousHint: "Skips all permission checks (--dangerously-skip-permissions).",
+  },
+  opencode: {
+    label: "OpenCode",
+    shortLabel: "OC",
+    autonomousHint: 'OpenCode uses config-based permissions — ensure opencode.json has permission: "allow".',
+  },
+  "gemini-cli": {
+    label: "Gemini CLI",
+    shortLabel: "GE",
+    autonomousHint: "Auto-approves all actions (--yolo mode).",
+  },
+  codex: {
+    label: "Codex CLI",
+    shortLabel: "CX",
+    autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
+  },
 };
+
+/**
+ * Display metadata for an agent type reported by a machine. Agents can run a
+ * newer version than the dashboard, so unknown types fall back to the raw name
+ * instead of crashing the render.
+ */
+export function getAgentTypeDisplay(agentType: string): AgentTypeDisplayConfig {
+  if (Object.hasOwn(AGENT_TYPE_CONFIG, agentType)) return AGENT_TYPE_CONFIG[agentType as AgentType];
+  return {
+    label: agentType,
+    shortLabel: agentType,
+    autonomousHint: "Runs without permission prompts.",
+  };
+}
+
+export function resolveAvailableAgentType(preferred: AgentType, available: AgentType[]): AgentType {
+  return available.includes(preferred) ? preferred : (available[0] ?? preferred);
+}
 
 // --- API endpoints ---
 

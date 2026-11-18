@@ -8,6 +8,7 @@ import { configureLocalHooks } from "./hook-setup";
 import { clearHookSession, updateHookState } from "./hook-store";
 import { listDirectories, validateListDirsPath } from "./list-dirs";
 import { getAllProviders, getProvider } from "./providers/registry";
+import type { AgentProvider } from "./providers/types";
 import { getSessionMessages, searchSessionMessages } from "./session-messages";
 import { cleanupRecoveryBySessionId, writeWrapperScript } from "./session-recovery";
 
@@ -272,7 +273,7 @@ function buildAttachCommand(multiplexer: "zellij" | "tmux", sessionName: string)
 async function sendViaPTY(
   attachCmd: string[],
   text: string,
-  agentType: AgentType | undefined,
+  inputMode: AgentProvider["terminal"]["inputMode"],
   cleanEnv: Record<string, string | undefined>,
 ): Promise<void> {
   const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
@@ -284,7 +285,7 @@ async function sendViaPTY(
 
   await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
-  if (agentType === "opencode" || agentType === "gemini-cli") {
+  if (inputMode === "bracketed-paste") {
     // Bracketed paste for TUI apps (OpenCode Bubble Tea, Gemini CLI) —
     // handles the entire paste as one event instead of individual keystrokes.
     // \x1b[200~ = paste start, \x1b[201~ = paste end
@@ -551,7 +552,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
             // CLI agent post-launch: auto-accept trust prompt,
             // autonomous disclaimer, and send initial "hi" to trigger session file.
             // TUI agents (OpenCode) have their own interface and don't need this.
-            if (agentType === "claude-code" || agentType === "gemini-cli") {
+            if (provider.terminal.startupMode === "cli-prompt") {
               await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
               Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                 env: cleanEnv,
@@ -559,7 +560,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
                 stderr: "ignore",
               });
 
-              if (body.autonomous) {
+              if (body.autonomous && provider.terminal.autonomousDisclaimer) {
                 await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
                 Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                   env: cleanEnv,
@@ -635,7 +636,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
 
           // CLI agent post-launch: auto-accept trust prompt,
           // autonomous disclaimer, and send initial "hi" to trigger session file.
-          if (agentType === "claude-code" || agentType === "gemini-cli") {
+          if (provider.terminal.startupMode === "cli-prompt") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
               env: cleanEnv,
@@ -643,7 +644,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
               stderr: "ignore",
             });
 
-            if (body.autonomous) {
+            if (body.autonomous && provider.terminal.autonomousDisclaimer) {
               await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
               Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
                 env: cleanEnv,
@@ -744,7 +745,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
               stderr: "ignore",
             });
 
-            if (agentType === "claude-code" || agentType === "gemini-cli") {
+            if (provider.terminal.startupMode === "cli-prompt") {
               await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
               Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                 env: cleanEnv,
@@ -752,7 +753,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
                 stderr: "ignore",
               });
 
-              if (body.autonomous) {
+              if (body.autonomous && provider.terminal.autonomousDisclaimer) {
                 await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
                 Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
                   env: cleanEnv,
@@ -815,7 +816,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
             stderr: "ignore",
           });
 
-          if (agentType === "claude-code" || agentType === "gemini-cli") {
+          if (provider.terminal.startupMode === "cli-prompt") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
               env: cleanEnv,
@@ -823,7 +824,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
               stderr: "ignore",
             });
 
-            if (body.autonomous) {
+            if (body.autonomous && provider.terminal.autonomousDisclaimer) {
               await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
               Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
                 env: cleanEnv,
@@ -907,7 +908,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
           }
 
           // CLI agent: auto-accept workspace trust prompt
-          if (agentType === "claude-code" || agentType === "gemini-cli") {
+          if (provider.terminal.startupMode === "cli-prompt") {
             await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
             if (body.multiplexer === "tmux") {
               Bun.spawn(["tmux", "send-keys", "-t", body.session, "Enter"], {
@@ -994,7 +995,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
 
           log.info(`delete-session: sessionId=${truncateId(body.sessionId)}`);
 
-          // Try all providers if agentType not specified
+          // Preserve the legacy cross-provider lookup only when the caller omitted a type.
+          const hasExplicitAgentType = body.agentType !== undefined;
           const agentType = body.agentType || "claude-code";
           const provider = getProvider(agentType);
           let deleted = false;
@@ -1003,7 +1005,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
             deleted = await provider.deleteSessionData(body.sessionId);
           }
 
-          if (!deleted) {
+          if (!deleted && !hasExplicitAgentType) {
             // Try other providers as fallback
             for (const p of getAllProviders()) {
               if (p.type === agentType) continue;
@@ -1099,7 +1101,8 @@ export function startTerminalServer(port: number, machineId: string): Server {
           );
 
           const attachCmd = buildAttachCommand(body.multiplexer, body.session);
-          await sendViaPTY(attachCmd, body.text, body.agentType, cleanEnv);
+          const inputMode = getProvider(body.agentType || "claude-code")?.terminal.inputMode ?? "direct";
+          await sendViaPTY(attachCmd, body.text, inputMode, cleanEnv);
 
           // Backup Enter via native command in case PTY CR was swallowed
           await sendBackupEnter(body.multiplexer, body.session, cleanEnv);
