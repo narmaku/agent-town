@@ -1,6 +1,7 @@
 import type { GitDiffFile, GitDiffResponse } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "../auth";
 import { API } from "../utils";
 
 interface Props {
@@ -79,7 +80,7 @@ export function DiffModal({ machineId, dir, onClose }: Props): React.JSX.Element
     setState("loading");
     setError("");
     try {
-      const resp = await fetch(
+      const resp = await apiFetch(
         `${API.GIT_DIFF}?machineId=${encodeURIComponent(machineId)}&dir=${encodeURIComponent(dir)}`,
       );
       const json: unknown = await resp.json();

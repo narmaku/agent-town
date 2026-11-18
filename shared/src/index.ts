@@ -1,5 +1,7 @@
 export { SESSION_ID_DISPLAY_LENGTH, SESSION_RETENTION_MS } from "./constants";
+export { buildHookCommand, DEFAULT_TOKEN_FILE_SHELL_EXPR } from "./hook-command";
 export { createLogger, type Logger } from "./logger";
+export { ALL_INTERFACES_HOST, isLoopbackHost, LOOPBACK_HOST } from "./network";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
 export { formatCompactTokens, paginateFromEnd, safeJsonParse, truncateId } from "./utils";
 

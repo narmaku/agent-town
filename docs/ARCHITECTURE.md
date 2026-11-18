@@ -137,7 +137,7 @@ Claude Code supports configurable hooks that fire on session lifecycle events. A
 Claude Code process
   |  hook fires (PreToolUse, Stop, etc.)
   v
-curl -X POST http://localhost:4681/api/hook-event
+curl -X POST http://127.0.0.1:4681/api/hook-event -H "Authorization: Bearer $(cat ~/.agent-town/token)"
   |
   v
 Agent hook-store (in-memory, per session)

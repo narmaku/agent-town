@@ -9,6 +9,7 @@ import {
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { apiFetch } from "./auth";
 import { ActivityFeed } from "./components/ActivityFeed";
 import { ControlRoom } from "./components/ControlRoom";
 import { ActivityIcon, ControlRoomIcon, MenuIcon, SettingsIcon, SignalBoardIcon } from "./components/icons";
@@ -169,7 +170,7 @@ export function App(): React.JSX.Element {
   }, [fontSize]);
 
   const fetchSettings = useCallback(() => {
-    fetch(API.SETTINGS)
+    apiFetch(API.SETTINGS)
       .then((r) => r.json())
       .then((s: Settings) => {
         setAutoDeleteOnClose(s.autoDeleteOnClose);
@@ -212,7 +213,7 @@ export function App(): React.JSX.Element {
               query: searchQuery,
               limit: "50",
             });
-            const resp = await fetch(`${API.SEARCH_MESSAGES}?${params.toString()}`);
+            const resp = await apiFetch(`${API.SEARCH_MESSAGES}?${params.toString()}`);
             if (!resp.ok) return;
             const data = (await resp.json()) as { results?: DeepSearchResult[] };
             if (data.results) {

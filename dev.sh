@@ -31,13 +31,7 @@ echo "Building dashboard..."
 cd dashboard && bunx vite build 2>&1 && cd ..
 
 PORT="${AGENT_TOWN_PORT:-4680}"
-
-echo ""
-echo "Starting Agent Town (dev mode)..."
-echo "  Dashboard: http://localhost:$PORT"
-echo "  API:       http://localhost:$PORT/api/machines"
-echo "  Press Ctrl+C to stop"
-echo ""
+TOKEN_FILE="${AGENT_TOWN_TOKEN_FILE:-$HOME/.agent-town/token}"
 
 cleanup() {
   echo ""
@@ -56,9 +50,22 @@ echo $SERVER_PID > "$PID_DIR/server.pid"
 
 sleep 1
 
-# Start agent — uses stable hostname-based ID by default (no override needed)
-AGENT_TOWN_SERVER="http://localhost:$PORT" bun run agent/src/index.ts &
+# Start agent — uses stable hostname-based ID by default (no override needed).
+# A loopback server URL makes the agent bind to 127.0.0.1 only.
+AGENT_TOWN_SERVER="http://127.0.0.1:$PORT" bun run agent/src/index.ts &
 AGENT_PID=$!
 echo $AGENT_PID > "$PID_DIR/agent.pid"
+
+# The server creates the token on first run; the login link carries it in the
+# URL fragment, which the browser never sends to the server.
+echo ""
+echo "Starting Agent Town (dev mode)..."
+if [ -r "$TOKEN_FILE" ]; then
+  echo "  Dashboard: http://localhost:$PORT/#token=$(cat "$TOKEN_FILE")"
+else
+  echo "  Dashboard: http://localhost:$PORT (token: $TOKEN_FILE)"
+fi
+echo "  Press Ctrl+C to stop"
+echo ""
 
 wait $SERVER_PID $AGENT_PID

@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import {
+  agentProxyFetch,
   broadcastToClients,
   PROXY_LAUNCH_TIMEOUT_MS,
   PROXY_TIMEOUT_MS,
@@ -284,5 +285,53 @@ describe("broadcastToClients", () => {
     // Failed client should be removed
     expect(clients.has(failClient)).toBe(false);
     expect(clients.has(goodClient)).toBe(true);
+  });
+});
+
+describe("agentProxyFetch", () => {
+  const TOKEN = "agent-token-0123456789abcdefghijklm";
+
+  async function withStubAgent(
+    handler: (req: Request) => Response,
+    run: (baseUrl: string) => Promise<void>,
+  ): Promise<void> {
+    const stub = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: handler });
+    try {
+      await run(`http://127.0.0.1:${stub.port}`);
+    } finally {
+      stub.stop(true);
+    }
+  }
+
+  test("presents the shared token and keeps the caller's headers", async () => {
+    let seen: Headers | undefined;
+    await withStubAgent(
+      (req) => {
+        seen = req.headers;
+        return Response.json({ ok: true });
+      },
+      async (baseUrl) => {
+        const result = await agentProxyFetch(`${baseUrl}/api/send`, TOKEN, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        expect(result.ok).toBe(true);
+      },
+    );
+    expect(seen?.get("authorization")).toBe(`Bearer ${TOKEN}`);
+    expect(seen?.get("content-type")).toBe("application/json");
+  });
+
+  test("turns an agent 401 into a 502 so the dashboard keeps its own token", async () => {
+    await withStubAgent(
+      () => Response.json({ error: "Unauthorized" }, { status: 401 }),
+      async (baseUrl) => {
+        const result = await agentProxyFetch(`${baseUrl}/api/list-dirs`, TOKEN);
+        expect(result.ok).toBe(false);
+        expect(result.status).toBe(502);
+        expect(result.error).toBe("agent_unauthorized");
+      },
+    );
   });
 });

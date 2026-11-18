@@ -8,7 +8,7 @@ import {
 } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
-
+import { apiFetch } from "../auth";
 import { createBrowserLogger } from "../logger";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -88,7 +88,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
 
   const loadNodes = useCallback(async () => {
     try {
-      const resp = await fetch(API.NODES);
+      const resp = await apiFetch(API.NODES);
       if (resp.ok) setNodes(await resp.json());
     } catch (_err) {
       // ignore
@@ -97,7 +97,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
 
   useEffect(() => {
     if (open) {
-      fetch(API.SETTINGS)
+      apiFetch(API.SETTINGS)
         .then((r) => r.json())
         .then((s: Settings) => setSettings(s))
         .catch((err) => logger.warn("Failed to load settings:", err));
@@ -122,7 +122,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
       // Save notification settings to localStorage (per-device preference)
       saveNotificationSettings(notifSettings);
 
-      const resp = await fetch(API.SETTINGS, {
+      const resp = await apiFetch(API.SETTINGS, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
@@ -139,7 +139,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     setTesting(true);
     setTestResult(null);
     try {
-      const resp = await fetch(API.NODES_TEST, {
+      const resp = await apiFetch(API.NODES_TEST, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -159,7 +159,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
 
   async function handleAddNode() {
     try {
-      const resp = await fetch(API.NODES, {
+      const resp = await apiFetch(API.NODES, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -556,7 +556,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                         type="button"
                         className="action-btn resume-btn"
                         onClick={async () => {
-                          await fetch(`${API.NODES}/${node.id}/connect`, { method: "POST" });
+                          await apiFetch(`${API.NODES}/${node.id}/connect`, { method: "POST" });
                           setTimeout(loadNodes, 1000);
                         }}
                       >
@@ -567,7 +567,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                         type="button"
                         className="action-btn"
                         onClick={async () => {
-                          await fetch(`${API.NODES}/${node.id}/disconnect`, { method: "POST" });
+                          await apiFetch(`${API.NODES}/${node.id}/disconnect`, { method: "POST" });
                           await loadNodes();
                         }}
                       >
@@ -583,7 +583,7 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                       className="action-btn kill-btn"
                       onClick={async () => {
                         if (!window.confirm(`Delete node "${node.name}"?`)) return;
-                        await fetch(`${API.NODES}/${node.id}`, { method: "DELETE" });
+                        await apiFetch(`${API.NODES}/${node.id}`, { method: "DELETE" });
                         await loadNodes();
                       }}
                     >

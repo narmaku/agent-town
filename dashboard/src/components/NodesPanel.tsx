@@ -1,6 +1,7 @@
 import type { NodeStatus, RemoteNode } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "../auth";
 import { API } from "../utils";
 
 const STATUS_COLORS: Record<NodeStatus, string> = {
@@ -53,7 +54,7 @@ export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
 
   const loadNodes = useCallback(async () => {
     try {
-      const resp = await fetch(API.NODES);
+      const resp = await apiFetch(API.NODES);
       if (resp.ok) setNodes(await resp.json());
     } catch (_err) {
       // ignore
@@ -74,7 +75,7 @@ export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
     setTesting(true);
     setTestResult(null);
     try {
-      const resp = await fetch(API.NODES_TEST, {
+      const resp = await apiFetch(API.NODES_TEST, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -95,7 +96,7 @@ export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
 
   async function handleAdd() {
     try {
-      const resp = await fetch(API.NODES, {
+      const resp = await apiFetch(API.NODES, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -118,18 +119,18 @@ export function NodesPanel({ open, onClose }: Props): React.JSX.Element | null {
   }
 
   async function handleConnect(nodeId: string) {
-    await fetch(`${API.NODES}/${nodeId}/connect`, { method: "POST" });
+    await apiFetch(`${API.NODES}/${nodeId}/connect`, { method: "POST" });
     setTimeout(loadNodes, 1000);
   }
 
   async function handleDisconnect(nodeId: string) {
-    await fetch(`${API.NODES}/${nodeId}/disconnect`, { method: "POST" });
+    await apiFetch(`${API.NODES}/${nodeId}/disconnect`, { method: "POST" });
     await loadNodes();
   }
 
   async function handleDelete(nodeId: string, nodeName: string) {
     if (!window.confirm(`Delete node "${nodeName}"? This will disconnect it if connected.`)) return;
-    await fetch(`${API.NODES}/${nodeId}`, { method: "DELETE" });
+    await apiFetch(`${API.NODES}/${nodeId}`, { method: "DELETE" });
     await loadNodes();
   }
 

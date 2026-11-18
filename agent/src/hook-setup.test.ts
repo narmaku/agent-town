@@ -17,7 +17,7 @@ const HOOK_EVENTS = [
 
 describe("buildHookConfig", () => {
   test("creates correct hook config for a given port", () => {
-    const config = buildHookConfig(4681);
+    const config = buildHookConfig(4681, "/home/u/.agent-town/token");
 
     for (const event of HOOK_EVENTS) {
       expect(config[event]).toBeDefined();
@@ -26,7 +26,8 @@ describe("buildHookConfig", () => {
       expect(config[event][0].hooks).toHaveLength(1);
       expect(config[event][0].hooks[0].type).toBe("command");
       expect(config[event][0].hooks[0].command).toBe(
-        "curl -s -X POST http://localhost:4681/api/hook-event -H 'Content-Type: application/json' -d @-",
+        "curl -s -X POST http://127.0.0.1:4681/api/hook-event -H 'Content-Type: application/json' " +
+          '-H "Authorization: Bearer $(cat /home/u/.agent-town/token)" -d @-',
       );
     }
   });
@@ -40,7 +41,12 @@ describe("buildHookConfig", () => {
   test("uses the provided port number", () => {
     const config = buildHookConfig(9999);
     const command = config.PreToolUse[0].hooks[0].command;
-    expect(command).toContain("http://localhost:9999/api/hook-event");
+    expect(command).toContain("http://127.0.0.1:9999/api/hook-event");
+  });
+
+  test("reads the token from the token file at run time instead of embedding it", () => {
+    const command = buildHookConfig(4681, "/tmp/my dir/token").PreToolUse[0].hooks[0].command;
+    expect(command).toContain(`-H "Authorization: Bearer $(cat '/tmp/my dir/token')"`);
   });
 });
 
@@ -114,7 +120,7 @@ describe("configureLocalHooks", () => {
     // Should use "command" type, not "http"
     const preToolUse = content.hooks.PreToolUse[0];
     expect(preToolUse.hooks[0].type).toBe("command");
-    expect(preToolUse.hooks[0].command).toContain("curl -s -X POST http://localhost:4681/api/hook-event");
+    expect(preToolUse.hooks[0].command).toContain("curl -s -X POST http://127.0.0.1:4681/api/hook-event");
   });
 
   test("skips write when hooks are already correct (idempotent)", () => {

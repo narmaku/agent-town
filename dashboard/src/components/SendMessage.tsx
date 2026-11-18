@@ -1,6 +1,7 @@
 import type { AgentType } from "@agent-town/shared";
 import type React from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { apiFetch } from "../auth";
 import { API } from "../utils";
 
 export interface SendMessageHandle {
@@ -54,7 +55,7 @@ export const SendMessage = forwardRef<SendMessageHandle, Props>(function SendMes
     setError("");
 
     try {
-      const resp = await fetch(API.SESSIONS_SEND, {
+      const resp = await apiFetch(API.SESSIONS_SEND, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,4 +1,5 @@
 import { createLogger, type WebSocketMessage } from "@agent-town/shared";
+import { authHeaders } from "@agent-town/shared/request-guard";
 
 const log = createLogger("proxy");
 
@@ -68,6 +69,32 @@ export async function proxyFetch(
       message: errMsg,
     };
   }
+}
+
+/**
+ * proxyFetch to an agent, presenting the shared token. An agent that rejects
+ * the token yields a 502 (not a 401), so the dashboard does not mistake it
+ * for its own credentials being wrong.
+ */
+export async function agentProxyFetch(
+  url: string,
+  token: string,
+  init: RequestInit = {},
+  timeoutMs: number = PROXY_TIMEOUT_MS,
+): Promise<ProxyFetchResult> {
+  const headers = new Headers(init.headers);
+  for (const [key, value] of Object.entries(authHeaders(token))) headers.set(key, value);
+  const result = await proxyFetch(url, { ...init, headers }, timeoutMs);
+  if (result.ok && result.response.status === 401) {
+    log.error(`agent rejected the access token: ${url}`);
+    return {
+      ok: false,
+      status: 502,
+      error: "agent_unauthorized",
+      message: "Agent rejected the server's access token — both must use the same ~/.agent-town/token",
+    };
+  }
+  return result;
 }
 
 type WsClient = { ws: unknown; send: (data: string) => void };

@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
 import type { Server, Subprocess } from "bun";
+import { guardAgentRequest } from "./agent-guard";
 import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
 import { configureLocalHooks } from "./hook-setup";
 import { clearHookSession, updateHookState } from "./hook-store";
@@ -344,12 +345,28 @@ async function sendBackupEnter(
   }
 }
 
-export function startTerminalServer(port: number, machineId: string): Server {
+export interface TerminalServerOptions {
+  /** Interface to bind (see resolveAgentBindHost). */
+  hostname: string;
+  /** Shared secret the server and local hooks must present. */
+  token: string;
+  /** Token file path, written into the local hook command. */
+  tokenFile: string;
+  /** Browser origins allowed to call the agent (normally none). */
+  allowedOrigins: readonly string[];
+}
+
+export function startTerminalServer(port: number, machineId: string, opts: TerminalServerOptions): Server {
+  const guardOptions = { token: opts.token, allowedOrigins: opts.allowedOrigins };
+
   const server = Bun.serve({
     port,
-    hostname: "0.0.0.0",
+    hostname: opts.hostname,
 
     async fetch(req, server) {
+      const denied = guardAgentRequest(req, guardOptions);
+      if (denied) return denied;
+
       const url = new URL(req.url);
       if (url.pathname === "/ws/terminal") {
         const upgraded = server.upgrade(req, {
@@ -1171,7 +1188,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
       // HTTP endpoint: (re)configure local Claude Code hooks
       if (url.pathname === "/api/setup-hooks" && req.method === "POST") {
         try {
-          configureLocalHooks(port);
+          configureLocalHooks(port, undefined, opts.tokenFile);
           return Response.json({ ok: true, message: "Hooks configured" });
         } catch (err) {
           log.error(`setup-hooks: ${err instanceof Error ? err.message : String(err)}`);
@@ -1308,6 +1325,6 @@ export function startTerminalServer(port: number, machineId: string): Server {
     },
   });
 
-  log.info(`listening on ws://0.0.0.0:${port}/ws/terminal`);
+  log.info(`listening on http://${opts.hostname}:${port}`);
   return server;
 }

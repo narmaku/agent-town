@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent-type-aware text sending for Claude Code with bracketed paste (2026-03-19)
 - Strengthened validateProjectDir with path canonicalization (2026-03-18)
 
+### Security
+- Server and agent bind to `127.0.0.1` by default (`AGENT_TOWN_HOST`, `AGENT_TOWN_TERMINAL_HOST`); agents bind to all interfaces only when pointed at a non-loopback server (2026-11-18)
+- Shared access token in `~/.agent-town/token` (mode 600, generated on first run) required on every API and WebSocket request between dashboard, server, agents and hooks; compared in constant time (2026-11-18)
+- Origin allowlist on all API requests and WebSocket upgrades, blocking cross-site WebSocket hijacking and CSRF (`AGENT_TOWN_ALLOWED_ORIGINS` for extra origins) (2026-11-18)
+- POST/PUT bodies must be `application/json` (multipart on upload endpoints) (2026-11-18)
+- Dashboard sign-in via `#token=` login link or token prompt; token kept in `sessionStorage` (2026-11-18)
+- SSH nodes receive the token over SSH stdin and use loopback-only tunnels; remote hook setup no longer breaks on quoting (2026-11-18)
+
 ## [0.1.0] - 2026-03-18
 
 ### Added

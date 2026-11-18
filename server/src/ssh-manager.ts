@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { createLogger, type RemoteNode } from "@agent-town/shared";
+import { buildHookCommand, createLogger, LOOPBACK_HOST, type RemoteNode, shellEscape } from "@agent-town/shared";
 import type { Subprocess } from "bun";
 import { updateNodeStatus } from "./store";
 
@@ -29,6 +29,14 @@ const hostToTunnelPort = new Map<string, number>();
 let nextLocalPort = 14680;
 
 const HEALTH_CHECK_INTERVAL_MS = 15_000;
+
+// Shared secret copied to each remote node so its agent and the server trust each other.
+let remoteAgentToken = "";
+
+/** Set the shared token that connectNode() installs on remote nodes. */
+export function setRemoteAgentToken(token: string): void {
+  remoteAgentToken = token;
+}
 
 export function resolveHome(filePath: string): string {
   if (filePath.startsWith("~/")) {
@@ -158,6 +166,24 @@ async function deployAgent(node: RemoteNode): Promise<void> {
   });
   await writePackageJson.exited;
 
+  // Install the shared token (mode 0600) so the remote agent and its hooks can authenticate.
+  // Sent over stdin, never on a command line where `ps` could see it.
+  if (!remoteAgentToken) throw new Error("No access token configured for remote nodes");
+  const writeToken = Bun.spawn(
+    [
+      "ssh",
+      ...sshOpts,
+      sshTarget,
+      "umask 077 && mkdir -p ~/.agent-town && cat > ~/.agent-town/token && chmod 600 ~/.agent-town/token",
+    ],
+    { stdin: new TextEncoder().encode(`${remoteAgentToken}\n`), stdout: "pipe", stderr: "pipe" },
+  );
+  await writeToken.exited;
+  if (writeToken.exitCode !== 0) {
+    const stderr = await Bun.readableStreamToText(writeToken.stderr);
+    throw new Error(`Installing access token failed: ${stderr.trim()}`);
+  }
+
   // Phase 4: Run deploy script (install bun + dependencies)
   log.info(`deploy: [${node.name}] phase 4/4 — running setup script on ${sshTarget}`);
 
@@ -184,22 +210,17 @@ async function deployAgent(node: RemoteNode): Promise<void> {
 /**
  * Configure Claude Code hooks on a remote node.
  * Merges hook config into ~/.claude/settings.json without overwriting
- * other settings. Hooks point to the local agent (localhost:agentPort).
+ * other settings. Hooks point to the remote's own agent (127.0.0.1:agentPort).
  */
 async function configureHooks(node: RemoteNode): Promise<void> {
   const sshTarget = `${node.user}@${node.host}`;
   const sshOpts = buildSshOpts(node);
-  const hookUrl = `http://localhost:${node.agentPort}/api/hook-event`;
+  const command = buildHookCommand(node.agentPort);
 
-  log.info(`hooks: configuring Claude Code hooks on ${sshTarget} → ${hookUrl}`);
+  log.info(`hooks: configuring Claude Code hooks on ${sshTarget} → port ${node.agentPort}`);
 
   // Build the hook config
-  const hookEntry = [
-    {
-      matcher: "",
-      hooks: [{ type: "command", command: `curl -s -X POST ${hookUrl} -H 'Content-Type: application/json' -d @-` }],
-    },
-  ];
+  const hookEntry = [{ matcher: "", hooks: [{ type: "command", command }] }];
   const hooksConfig = {
     PreToolUse: hookEntry,
     PostToolUse: hookEntry,
@@ -210,23 +231,25 @@ async function configureHooks(node: RemoteNode): Promise<void> {
     SessionEnd: hookEntry,
   };
 
-  // Read existing settings, merge hooks, write back
-  const script = `
-import json, os
-path = os.path.expanduser("~/.claude/settings.json")
-try:
-    with open(path) as f:
-        settings = json.load(f)
-except:
-    settings = {}
-settings["hooks"] = json.loads('${JSON.stringify(hooksConfig)}')
-os.makedirs(os.path.dirname(path), exist_ok=True)
-with open(path, "w") as f:
-    json.dump(settings, f, indent=2)
-print("HOOKS: configured")
-`;
+  // Read existing settings, merge hooks (JSON arrives on stdin), write back.
+  // The script contains no single quotes, so shellEscape() keeps it intact.
+  const script = [
+    "import json, os, sys",
+    'path = os.path.expanduser("~/.claude/settings.json")',
+    "try:",
+    "    with open(path) as f:",
+    "        settings = json.load(f)",
+    "except (OSError, ValueError):",
+    "    settings = {}",
+    'settings["hooks"] = json.load(sys.stdin)',
+    "os.makedirs(os.path.dirname(path), exist_ok=True)",
+    'with open(path, "w") as f:',
+    "    json.dump(settings, f, indent=2)",
+    'print("HOOKS: configured")',
+  ].join("\n");
 
-  const proc = Bun.spawn(["ssh", ...sshOpts, sshTarget, `python3 -c ${JSON.stringify(script)}`], {
+  const proc = Bun.spawn(["ssh", ...sshOpts, sshTarget, `python3 -c ${shellEscape(script)}`], {
+    stdin: new TextEncoder().encode(JSON.stringify(hooksConfig)),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -274,7 +297,8 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
     'pkill -f "bun.*agent/src/index" 2>/dev/null || true',
     "sleep 1",
     "cd ~/.agent-town-remote",
-    `export AGENT_TOWN_SERVER="http://localhost:${serverPort}"`,
+    // Loopback server URL also makes the remote agent bind to 127.0.0.1 only (reached via the tunnel)
+    `export AGENT_TOWN_SERVER="http://${LOOPBACK_HOST}:${serverPort}"`,
     `export AGENT_TOWN_TERMINAL_PORT=${node.agentPort}`,
     "nohup bun run agent/src/index.ts >> ~/.agent-town/agent.log 2>&1 &",
     'echo "AGENT_PID=$!"',
@@ -296,9 +320,9 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
       ...sshOpts,
       "-N", // no remote command
       "-L",
-      `${localPort}:localhost:${node.agentPort}`, // forward: local → remote agent
+      `${LOOPBACK_HOST}:${localPort}:${LOOPBACK_HOST}:${node.agentPort}`, // forward: local → remote agent
       "-R",
-      `${serverPort}:localhost:${serverPort}`, // reverse: remote → local server
+      `${LOOPBACK_HOST}:${serverPort}:${LOOPBACK_HOST}:${serverPort}`, // reverse: remote → local server
       sshTarget,
     ],
     { stdout: "pipe", stderr: "pipe" },
@@ -322,9 +346,9 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
   // Monitor tunnel health
   const monitorTimer = setInterval(async () => {
     try {
-      const resp = await fetch(`http://localhost:${localPort}/`, { signal: AbortSignal.timeout(5000) });
+      const resp = await fetch(`http://${LOOPBACK_HOST}:${localPort}/`, { signal: AbortSignal.timeout(5000) });
       if (resp.ok) {
-        log.debug(`health: [${node.name}] tunnel healthy (localhost:${localPort})`);
+        log.debug(`health: [${node.name}] tunnel healthy (${LOOPBACK_HOST}:${localPort})`);
         if (node.status !== "connected") {
           log.info(`health: [${node.name}] tunnel recovered — marking connected`);
           updateNodeStatus(node.id, "connected");
@@ -424,7 +448,7 @@ export async function connectNode(nodeId: string): Promise<void> {
     conn.remoteHostname = remoteHostname;
     if (remoteHostname) {
       hostToTunnelPort.set(remoteHostname, conn.localPort);
-      log.info(`connect: mapped hostname "${remoteHostname}" → localhost:${conn.localPort}`);
+      log.info(`connect: mapped hostname "${remoteHostname}" → ${LOOPBACK_HOST}:${conn.localPort}`);
     }
 
     updateNodeStatus(nodeId, "connected");
@@ -521,7 +545,7 @@ export function getNodeLocalPort(nodeId: string): number | undefined {
  */
 export function resolveAgentEndpoint(machineHostname: string): { host: string; port: number } | null {
   const tunnelPort = hostToTunnelPort.get(machineHostname);
-  if (tunnelPort) return { host: "localhost", port: tunnelPort };
+  if (tunnelPort) return { host: LOOPBACK_HOST, port: tunnelPort };
   return null;
 }
 

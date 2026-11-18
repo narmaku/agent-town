@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { createLogger } from "@agent-town/shared";
+import { buildHookCommand, createLogger, shellEscape } from "@agent-town/shared";
+import { resolveTokenFile } from "@agent-town/shared/token-store";
 
 const log = createLogger("hook-setup");
 
@@ -30,16 +31,17 @@ interface HooksConfig {
 /**
  * Build the hook configuration object for a given agent port.
  * Each event gets a single hook entry that POSTs stdin (the event JSON)
- * to the local agent's hook-event endpoint via curl.
+ * to the local agent's hook-event endpoint via curl, authenticating with
+ * the token read from `tokenFile` at hook run time.
  */
-export function buildHookConfig(port: number): HooksConfig {
+export function buildHookConfig(port: number, tokenFile: string = resolveTokenFile()): HooksConfig {
   const hookEntry: HookEntry[] = [
     {
       matcher: "",
       hooks: [
         {
           type: "command",
-          command: `curl -s -X POST http://localhost:${port}/api/hook-event -H 'Content-Type: application/json' -d @-`,
+          command: buildHookCommand(port, shellEscape(tokenFile)),
         },
       ],
     },
@@ -62,10 +64,11 @@ export function buildHookConfig(port: number): HooksConfig {
  *
  * @param port - The agent's HTTP port (e.g. 4681)
  * @param settingsPath - Path to settings.json (defaults to ~/.claude/settings.json)
+ * @param tokenFile - Path to the shared token file the hook reads at run time
  */
-export function configureLocalHooks(port: number, settingsPath?: string): void {
+export function configureLocalHooks(port: number, settingsPath?: string, tokenFile?: string): void {
   const filePath = settingsPath ?? DEFAULT_SETTINGS_PATH;
-  const hooksConfig = buildHookConfig(port);
+  const hooksConfig = buildHookConfig(port, tokenFile);
 
   let settings: Record<string, unknown> = {};
 
@@ -95,5 +98,5 @@ export function configureLocalHooks(port: number, settingsPath?: string): void {
   const dir = dirname(filePath);
   mkdirSync(dir, { recursive: true });
   writeFileSync(filePath, JSON.stringify(settings, null, 2));
-  log.info(`hooks configured in ${filePath} → http://localhost:${port}/api/hook-event`);
+  log.info(`hooks configured in ${filePath} → http://127.0.0.1:${port}/api/hook-event`);
 }

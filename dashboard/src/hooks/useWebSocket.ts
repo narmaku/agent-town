@@ -1,6 +1,7 @@
 import type { AgentType, MachineInfo, SessionInfo, SessionStatus, WebSocketMessage } from "@agent-town/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { withTokenParam } from "../auth";
 import { createBrowserLogger } from "../logger";
 import { loadNotificationSettings } from "../notification-settings";
 import { getNotificationBody, playNotificationSound } from "../notification-sound";
@@ -181,7 +182,7 @@ export function useWebSocket(): UseWebSocketResult {
   const connect = useCallback(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(withTokenParam(wsUrl));
 
     ws.onopen = () => {
       setConnected(true);

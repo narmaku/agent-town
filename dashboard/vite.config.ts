@@ -11,9 +11,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:4680",
+      // The server binds 127.0.0.1 by default; "localhost" may resolve to ::1
+      "/api": "http://127.0.0.1:4680",
       "/ws": {
-        target: "ws://localhost:4680",
+        target: "ws://127.0.0.1:4680",
         ws: true,
       },
     },

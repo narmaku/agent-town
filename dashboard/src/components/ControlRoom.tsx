@@ -8,6 +8,7 @@ import {
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { GroupMode, SortMode, TimeFilter } from "../App";
+import { apiFetch } from "../auth";
 import { createBrowserLogger } from "../logger";
 import { buildGroups, filterIdleSessions, filterSessionsByTime, sortSessions } from "../session-grouping";
 import { API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
@@ -210,7 +211,7 @@ function ControlRoomRow({
     if (trimmed === (session.customName || "")) return;
 
     try {
-      await fetch(API.SESSIONS_RENAME, {
+      await apiFetch(API.SESSIONS_RENAME, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ machineId, sessionId: session.sessionId, name: trimmed }),
