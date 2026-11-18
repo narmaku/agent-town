@@ -1,4 +1,4 @@
-import { createLogger } from "@agent-town/shared";
+import { createLogger, errorMessage } from "@agent-town/shared";
 import type { AgentProcess } from "./types";
 
 const log = createLogger("providers:utils");
@@ -10,7 +10,7 @@ export async function isBinaryAvailable(binary: string): Promise<boolean> {
     await proc.exited;
     return proc.exitCode === 0;
   } catch (err) {
-    log.debug(`isBinaryAvailable(${binary}): ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`isBinaryAvailable(${binary}): ${errorMessage(err)}`);
     return false;
   }
 }

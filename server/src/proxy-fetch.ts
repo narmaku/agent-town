@@ -1,4 +1,4 @@
-import { createLogger, type WebSocketMessage } from "@agent-town/shared";
+import { createLogger, errorMessage, type WebSocketMessage } from "@agent-town/shared";
 
 const log = createLogger("proxy");
 
@@ -48,7 +48,7 @@ export async function proxyFetch(
     });
     return { ok: true, response };
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = errorMessage(err);
 
     if (err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError")) {
       log.warn(`proxy timeout after ${timeoutMs}ms: ${url}`);
@@ -84,7 +84,7 @@ export function broadcastToClients(wsClients: Set<WsClient>, message: WebSocketM
     try {
       client.send(data);
     } catch (err) {
-      log.debug(`broadcast: removing failed client: ${err instanceof Error ? err.message : String(err)}`);
+      log.debug(`broadcast: removing failed client: ${errorMessage(err)}`);
       wsClients.delete(client);
     }
   }

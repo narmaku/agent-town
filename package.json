@@ -16,7 +16,6 @@
     "build": "bun run --filter agent-town-dashboard build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.7",
-    "@opencode-ai/sdk": "^1.2.27"
+    "@biomejs/biome": "2.4.8"
   }
 }

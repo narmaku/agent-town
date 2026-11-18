@@ -41,7 +41,7 @@ agent-town/
   shared/   — Shared types and utilities (no runtime deps)
   agent/    — Per-machine agent (session discovery, heartbeats)
   server/   — Central server (HTTP/WS hub, dashboard serving)
-  dashboard/ — React SPA (Vite)
+  dashboard/ — React SPA (bundled with `bun build`)
 ```
 
 ### Making Changes

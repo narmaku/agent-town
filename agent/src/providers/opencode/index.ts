@@ -1,13 +1,10 @@
-import { createLogger, type SessionInfo, type SessionMessagesResponse } from "@agent-town/shared";
-import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
+import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
+import type { SearchMessageResult } from "../search";
+import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { filterProcessesByBinary, isBinaryAvailable } from "../utils";
-import { handleOpenCodeEvent, isSSEActive, startOpenCodeEventStream } from "./event-handler";
-import { getOpenCodeSessionMessages } from "./message-parser";
+import { getOpenCodeSessionMessages, searchOpenCodeMessages } from "./message-parser";
 import { extractOpenCodeSessionIdFromArgs } from "./process-mapper";
-import { getOpenCodeClient } from "./sdk-client";
 import { deleteOpenCodeSessionData, discoverOpenCodeSessions, findOpenCodeSessionByDir } from "./session-discovery";
-
-const log = createLogger("opencode:provider");
 
 export class OpenCodeProvider implements AgentProvider {
   readonly type = "opencode" as const;
@@ -31,6 +28,10 @@ export class OpenCodeProvider implements AgentProvider {
     return getOpenCodeSessionMessages(sessionId, offset, limit);
   }
 
+  async searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]> {
+    return searchOpenCodeMessages(query, maxResults);
+  }
+
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
     return filterProcessesByBinary(processes, this.binaryName);
   }
@@ -51,10 +52,6 @@ export class OpenCodeProvider implements AgentProvider {
     return parts;
   }
 
-  handleHookEvent(payload: unknown): HookEventResult | null {
-    return handleOpenCodeEvent(payload);
-  }
-
   async matchProcessToSessionId(
     cwd: string,
     _processStartMs: number,
@@ -65,29 +62,5 @@ export class OpenCodeProvider implements AgentProvider {
 
   async deleteSessionData(sessionId: string): Promise<boolean> {
     return deleteOpenCodeSessionData(sessionId);
-  }
-
-  /** Start SSE event subscription if server is available. */
-  async startEventStream(onEvent: (result: HookEventResult) => void): Promise<void> {
-    if (!isSSEActive()) {
-      await startOpenCodeEventStream(onEvent);
-    }
-  }
-
-  /** Send text to an OpenCode session via SDK TUI methods. Returns true if successful. */
-  async sendViaTUI(text: string): Promise<boolean> {
-    const client = await getOpenCodeClient();
-    if (!client) return false;
-
-    try {
-      // Clear, append text, then submit
-      await client.tui.clearPrompt();
-      await client.tui.appendPrompt({ text });
-      await client.tui.submitPrompt();
-      return true;
-    } catch (err) {
-      log.warn(`sendViaTUI: failed to send text via OpenCode TUI: ${err instanceof Error ? err.message : String(err)}`);
-      return false;
-    }
   }
 }

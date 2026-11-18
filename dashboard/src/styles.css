@@ -1114,17 +1114,7 @@ body {
   text-transform: uppercase;
 }
 
-.tracking-badge.hook {
-  background: rgb(var(--accent-green-rgb) / var(--tint-chip));
-  color: var(--accent-green-fg);
-  border: 1px solid rgb(var(--accent-green-rgb) / 0.3);
-}
 
-.tracking-badge.heuristic {
-  background: rgb(var(--accent-neutral-rgb) / var(--tint-chip));
-  color: var(--accent-neutral-fg);
-  border: 1px solid rgb(var(--accent-neutral-rgb) / 0.3);
-}
 
 .tracking-badge.standalone {
   background: rgb(var(--accent-neutral-rgb) / var(--tint-chip));
@@ -1132,15 +1122,6 @@ body {
   border: 1px solid rgb(var(--accent-neutral-rgb) / 0.3);
 }
 
-.current-tool-badge {
-  font-size: 10px;
-  font-family: "SF Mono", "Fira Code", monospace;
-  color: var(--accent-violet-fg);
-  background: rgb(var(--accent-violet-rgb) / var(--tint-soft));
-  border: 1px solid rgb(var(--accent-violet-rgb) / 0.2);
-  padding: 1px 6px;
-  border-radius: 4px;
-}
 
 .session-time {
   font-size: 11px;

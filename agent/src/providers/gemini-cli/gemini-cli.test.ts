@@ -58,12 +58,6 @@ describe("GeminiCliProvider", () => {
     ]);
   });
 
-  test("handleHookEvent always returns null (no hook support)", () => {
-    expect(provider.handleHookEvent(null)).toBeNull();
-    expect(provider.handleHookEvent({})).toBeNull();
-    expect(provider.handleHookEvent({ session_id: "s1" })).toBeNull();
-  });
-
   test("filterAgentProcesses filters only gemini binaries", () => {
     const processes = [
       { pid: 1, ppid: 0, etimes: 100, args: "/usr/bin/gemini --resume abc" },

@@ -1,7 +1,12 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
-import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
+import {
+  createLogger,
+  errorMessage,
+  SESSION_RETENTION_MS,
+  type SessionInfo,
+  type SessionStatus,
+} from "@agent-town/shared";
 
 const log = createLogger("opencode:sessions");
 
@@ -14,100 +19,10 @@ function getOpenCodeDataDir(): string {
 
 const OPENCODE_DB_PATH = join(getOpenCodeDataDir(), "opencode.db");
 
-/**
- * Discover OpenCode sessions.
- * Uses the SDK REST API if the server is running, falls back to SQLite.
- */
+/** Discover OpenCode sessions by reading its local SQLite database (read-only). */
 export async function discoverOpenCodeSessions(): Promise<SessionInfo[]> {
-  // Try SDK first
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
-      return await discoverViaSDK(client);
-    } catch (err) {
-      log.debug(
-        `SDK session discovery failed, falling back to SQLite: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      resetOpenCodeClient();
-    }
-  }
-
-  // Fallback: direct SQLite
   return discoverViaSQLite();
 }
-
-async function discoverViaSDK(
-  client: NonNullable<Awaited<ReturnType<typeof getOpenCodeClient>>>,
-): Promise<SessionInfo[]> {
-  const { data: sessions } = await client.session.list({ roots: true });
-  if (!sessions) return [];
-
-  const sevenDaysAgoMs = Date.now() - SESSION_RETENTION_MS;
-
-  // Get session statuses for all sessions
-  const { data: statuses } = await client.session.status();
-
-  const results: SessionInfo[] = [];
-  for (const s of sessions) {
-    const timeUpdated = s.time?.updated ?? 0;
-    if (timeUpdated < sevenDaysAgoMs) continue;
-
-    // SDK status: { type: "idle" } | { type: "busy" } | { type: "retry" }
-    const sdkStatus = statuses?.[s.id];
-    const status = mapSDKStatus(sdkStatus, timeUpdated);
-
-    // Extract token usage from SDK session metadata if available
-    const sdkSession = s as Record<string, unknown>;
-    const tokens = sdkSession.tokens as { input?: number; output?: number } | undefined;
-    let totalInputTokens: number | undefined;
-    let totalOutputTokens: number | undefined;
-    if (tokens) {
-      if (typeof tokens.input === "number" && tokens.input > 0) totalInputTokens = tokens.input;
-      if (typeof tokens.output === "number" && tokens.output > 0) totalOutputTokens = tokens.output;
-    }
-    const model = (sdkSession.modelID as string) || undefined;
-
-    results.push({
-      sessionId: s.id,
-      agentType: "opencode",
-      slug: s.id.replace(/^ses_/, "").slice(0, 8),
-      projectPath: s.directory || "",
-      projectName: s.directory?.split("/").pop() || "unknown",
-      gitBranch: "",
-      status,
-      lastActivity: new Date(timeUpdated).toISOString(),
-      lastMessage: s.title || "OpenCode session",
-      cwd: s.directory || "",
-      model,
-      totalInputTokens,
-      totalOutputTokens,
-    });
-  }
-
-  log.debug(`discoverViaSDK: found ${results.length} session(s)`);
-  return results;
-}
-
-function mapSDKStatus(sdkStatus: { type: string } | undefined, timeUpdated: number): SessionStatus {
-  if (sdkStatus) {
-    switch (sdkStatus.type) {
-      case "busy":
-        return "working";
-      case "retry":
-        return "working";
-      case "idle":
-        return "awaiting_input";
-    }
-  }
-
-  // Fallback: time-based heuristic
-  const ageMs = Date.now() - timeUpdated;
-  if (ageMs < 5_000) return "working";
-  if (ageMs < 10 * 60 * 1000) return "awaiting_input";
-  return "done";
-}
-
-// --- SQLite fallback ---
 
 interface SessionRow {
   id: string;
@@ -197,28 +112,14 @@ async function discoverViaSQLite(): Promise<SessionInfo[]> {
 
     db.close();
   } catch (err) {
-    log.debug(`discoverViaSQLite: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`discoverViaSQLite: ${errorMessage(err)}`);
   }
 
   return sessions;
 }
 
-/** Delete an OpenCode session. Uses SDK if available, falls back to SQLite. */
+/** Delete an OpenCode session from its local SQLite database. */
 export async function deleteOpenCodeSessionData(sessionId: string): Promise<boolean> {
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
-      const { data } = await client.session.delete({ sessionID: sessionId });
-      if (data) {
-        log.info(`deleted OpenCode session via SDK: ${sessionId}`);
-        return true;
-      }
-    } catch (err) {
-      log.debug(`SDK delete failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  // Fallback: SQLite
   try {
     const { Database } = await import("bun:sqlite");
     const db = new Database(OPENCODE_DB_PATH);
@@ -229,7 +130,7 @@ export async function deleteOpenCodeSessionData(sessionId: string): Promise<bool
       return true;
     }
   } catch (err) {
-    log.warn(`deleteOpenCodeSessionData: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`deleteOpenCodeSessionData: ${errorMessage(err)}`);
   }
   return false;
 }
@@ -239,24 +140,6 @@ export async function findOpenCodeSessionByDir(
   directory: string,
   claimedIds: Set<string>,
 ): Promise<string | undefined> {
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
-      const { data: sessions } = await client.session.list({ roots: true });
-      if (sessions) {
-        const sorted = sessions
-          .filter((s) => s.directory === directory && !claimedIds.has(s.id))
-          .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0));
-        if (sorted.length > 0) return sorted[0].id;
-      }
-    } catch (err) {
-      log.debug(
-        `findOpenCodeSessionByDir: SDK lookup failed, falling back to SQLite: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-
-  // Fallback: SQLite
   try {
     const { Database } = await import("bun:sqlite");
     const db = new Database(OPENCODE_DB_PATH, { readonly: true });
@@ -273,7 +156,7 @@ export async function findOpenCodeSessionByDir(
       if (!claimedIds.has(row.id)) return row.id;
     }
   } catch (err) {
-    log.debug(`findOpenCodeSessionByDir: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`findOpenCodeSessionByDir: ${errorMessage(err)}`);
   }
   return undefined;
 }

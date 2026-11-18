@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { filterProcessesByBinary } from "../utils";
-import { handleOpenCodeEvent } from "./event-handler";
 import { OpenCodeProvider } from "./index";
 import { extractOpenCodeSessionIdFromArgs } from "./process-mapper";
 
@@ -74,95 +73,5 @@ describe("extractOpenCodeSessionIdFromArgs", () => {
     expect(
       extractOpenCodeSessionIdFromArgs("/usr/bin/opencode --session ses_abc123 --model anthropic/claude-opus-4-6"),
     ).toBe("ses_abc123");
-  });
-});
-
-describe("handleOpenCodeEvent", () => {
-  test("returns null for non-OpenCode payloads", () => {
-    expect(handleOpenCodeEvent(null)).toBeNull();
-    expect(handleOpenCodeEvent({})).toBeNull();
-    expect(handleOpenCodeEvent({ session_id: "s1", hook_event_name: "Stop" })).toBeNull();
-  });
-
-  test("handles session.created", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "session.created",
-      agent_type: "opencode",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "awaiting_input", currentTool: undefined });
-  });
-
-  test("handles session.idle", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "session.idle",
-      agent_type: "opencode",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "awaiting_input", currentTool: undefined });
-  });
-
-  test("handles tool.execute.before with tool name", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "tool.execute.before",
-      agent_type: "opencode",
-      tool_name: "edit",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "working", currentTool: "edit" });
-  });
-
-  test("handles tool.execute.after", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "tool.execute.after",
-      agent_type: "opencode",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "working", currentTool: undefined });
-  });
-
-  test("handles permission.asked", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "permission.asked",
-      agent_type: "opencode",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "action_required", currentTool: undefined });
-  });
-
-  test("handles session.error", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "session.error",
-      agent_type: "opencode",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "error", currentTool: undefined });
-  });
-
-  test("handles session.deleted", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "session.deleted",
-      agent_type: "opencode",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "done", currentTool: undefined });
-  });
-
-  test("returns null for unknown event type", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "s1",
-      event_type: "unknown.event",
-      agent_type: "opencode",
-    });
-    expect(result).toBeNull();
-  });
-
-  test("returns null for empty session_id", () => {
-    const result = handleOpenCodeEvent({
-      session_id: "",
-      event_type: "session.idle",
-      agent_type: "opencode",
-    });
-    expect(result).toBeNull();
   });
 });

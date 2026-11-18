@@ -27,7 +27,7 @@ Log levels (least to most verbose): `error`, `warn`, `info`, `debug`.
 At `debug` level, you will see:
 - Every heartbeat summary (session counts, mapping results)
 - Process mapper decisions (which PIDs matched which sessions)
-- Hook event processing
+- Screen capture failures (`screen-status`)
 - WebSocket connection/disconnection events
 - SSH tunnel health checks
 - Multiplexer session enumeration
@@ -119,19 +119,15 @@ ps aux | grep -E "claude|opencode|gemini|codex|pi" | grep -v grep
 
 **Symptom:** Session shows "idle" when the agent is actively working, or "working" when it is actually waiting for input.
 
-**Cause:** Without hook events, status is derived from heuristics (JSONL file modification time, child process detection). These are less accurate.
+**Cause:** Agent Town does not install hooks into agents. Status comes from the visible
+terminal screen (approval prompts and "esc to interrupt" hints), child-process activity, and
+session file modification times. It updates once per heartbeat, and only sessions running inside
+a tmux or zellij session get screen-based detection.
 
-**Solution:** Enable Claude Code hooks for more accurate real-time status:
-
-```bash
-# Create or update ~/.claude/settings.json
-# The agent automatically configures hooks for remote nodes (if enableHooks=true)
-# For local machines, add hooks manually:
-```
-
-Check if hooks are active in the dashboard -- sessions with hooks show more granular status updates (including the current tool being used).
-
-For OpenCode, ensure the OpenCode server is running (`opencode serve --port 4096`) so the SSE event stream works.
+**Solution:**
+- Run agents inside tmux or zellij (or launch them from the dashboard) so the screen can be read.
+- Check that `tmux capture-pane -p -t <session>` (or `zellij --session <session> action dump-screen /tmp/x`) works as the agent's user.
+- If an agent changed the wording of its approval prompt, update `APPROVAL_PATTERNS` in `agent/src/screen-status.ts`.
 
 ---
 
@@ -139,11 +135,11 @@ For OpenCode, ensure the OpenCode server is running (`opencode serve --port 4096
 
 **Symptom:** Clicking "Open Terminal" shows a blank screen or an error message.
 
-**Check 1: PTY helper is available**
+**Check 1: Bun version**
 
-The terminal relay requires Python 3:
+The terminal relay uses Bun's built-in pseudo-terminal support (`Bun.spawn` with `terminal`), which needs Bun 1.3.5 or newer:
 ```bash
-which python3
+bun --version
 ```
 
 **Check 2: Multiplexer session exists**
@@ -186,7 +182,7 @@ If the Agent Town agent itself is running inside a zellij or tmux session, attac
 
 **Claude Code:** Text is written to the PTY and submitted with Enter. If Claude Code is in the middle of a tool execution, it may not accept input until it stops.
 
-**OpenCode:** Text is sent via bracketed paste mode through the PTY. The OpenCode TUI (Bubble Tea) requires specific handling. If the OpenCode SDK is available, the provider also attempts to use `tui.appendPrompt` / `tui.submitPrompt` for more reliable delivery.
+**OpenCode:** Text is sent via bracketed paste mode through the PTY. The OpenCode TUI (Bubble Tea) handles a paste as a single event, then Enter submits it.
 
 **Codex CLI:** Text is sent through the same bracketed-paste TUI path. A busy turn may defer input until Codex is ready.
 
@@ -311,14 +307,12 @@ If neither matches, the session will show as "idle".
 
 ### OpenCode
 
-- Requires the OpenCode server to be running (`opencode serve --port 4096`) for SDK features.
-- The SDK client retries every 30 seconds if the server is unavailable.
-- SSE event stream may disconnect and needs to reconnect.
+- Agent Town reads OpenCode's SQLite database read-only; no OpenCode server or SDK is needed.
 
 ### Codex CLI
 
 - Local storage is private and versioned; an incompatible database falls back to active rollout JSONL discovery.
-- Status is activity/process based because Agent Town does not install Codex hooks.
+- Status is based on activity, process mapping, and the terminal screen; Agent Town installs no hooks.
 - Resume and native delete require a full UUID. Delete failures are reported and Agent Town does not guess or unlink transcript paths.
 
 ### Pi

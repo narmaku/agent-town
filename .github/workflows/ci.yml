@@ -31,4 +31,4 @@ jobs:
         continue-on-error: true
 
       - name: Build dashboard
-        run: cd dashboard && bunx vite build
+        run: cd dashboard && bun run build

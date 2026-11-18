@@ -3,7 +3,16 @@ import type { Dirent } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+import {
+  createLogger,
+  errorMessage,
+  isRecord,
+  numberValue,
+  SESSION_RETENTION_MS,
+  type SessionInfo,
+  type SessionStatus,
+  stringValue,
+} from "@agent-town/shared";
 
 const log = createLogger("codex:sessions");
 
@@ -77,7 +86,7 @@ export async function findCodexDatabasePaths(codexHome = getCodexHome()): Promis
     const withMtime = await Promise.all(paths.map(async (path) => ({ path, mtimeMs: (await stat(path)).mtimeMs })));
     return withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs).map((entry) => entry.path);
   } catch (err) {
-    log.debug(`database scan unavailable: ${formatError(err)}`);
+    log.debug(`database scan unavailable: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -92,7 +101,7 @@ async function findRolloutPaths(codexHome: string, nowMs: number): Promise<strin
     try {
       entries = await readdir(directory, { withFileTypes: true });
     } catch (err) {
-      log.debug(`rollout directory unavailable: ${formatError(err)}`);
+      log.debug(`rollout directory unavailable: ${errorMessage(err)}`);
       return;
     }
     for (const entry of entries) {
@@ -105,7 +114,7 @@ async function findRolloutPaths(codexHome: string, nowMs: number): Promise<strin
           const metadata = await stat(path);
           if (nowMs - metadata.mtimeMs <= SESSION_RETENTION_MS) paths.push({ path, mtimeMs: metadata.mtimeMs });
         } catch (err) {
-          log.debug(`rollout metadata unavailable: ${formatError(err)}`);
+          log.debug(`rollout metadata unavailable: ${errorMessage(err)}`);
         }
       }
     }
@@ -122,7 +131,7 @@ async function buildFingerprint(paths: string[]): Promise<string> {
       const metadata = await stat(path);
       parts.push(`${path}:${metadata.mtimeMs}:${metadata.size}`);
     } catch (err) {
-      log.debug(`fingerprint metadata unavailable: ${formatError(err)}`);
+      log.debug(`fingerprint metadata unavailable: ${errorMessage(err)}`);
     }
   }
   return parts.join("|");
@@ -149,7 +158,7 @@ function discoverFromDatabases(paths: string[], nowMs: number): SessionInfo[] | 
         return session ? [session] : [];
       });
     } catch (err) {
-      log.debug(`incompatible Codex database ${basename(path)}: ${formatError(err)}`);
+      log.debug(`incompatible Codex database ${basename(path)}: ${errorMessage(err)}`);
     } finally {
       db?.close();
     }
@@ -199,7 +208,7 @@ async function discoverFromRollouts(paths: string[], nowMs: number): Promise<Ses
       const session = parseRolloutCatalogEntry(text, metadata.mtimeMs, nowMs);
       if (session) sessions.push(session);
     } catch (err) {
-      log.debug(`rollout discovery skipped ${basename(path)}: ${formatError(err)}`);
+      log.debug(`rollout discovery skipped ${basename(path)}: ${errorMessage(err)}`);
     }
   }
   return sessions;
@@ -292,7 +301,7 @@ export async function findCodexRolloutPath(sessionId: string, codexHome = getCod
         .find((record) => record?.type === "session_meta");
       if (isRecord(metadata?.payload) && metadata.payload.id === sessionId) return path;
     } catch (err) {
-      log.debug(`rollout lookup skipped ${basename(path)}: ${formatError(err)}`);
+      log.debug(`rollout lookup skipped ${basename(path)}: ${errorMessage(err)}`);
     }
   }
   return null;
@@ -314,7 +323,7 @@ export async function deleteCodexSessionData(
     if (exitCode !== 0) log.warn(`native delete failed: session=${sessionId.slice(0, 8)} exit=${exitCode}`);
     return exitCode === 0;
   } catch (err) {
-    log.warn(`native delete failed: session=${sessionId.slice(0, 8)} error=${formatError(err)}`);
+    log.warn(`native delete failed: session=${sessionId.slice(0, 8)} error=${errorMessage(err)}`);
     return false;
   }
 }
@@ -340,18 +349,6 @@ function parseRecord(line: string): Record<string, unknown> | undefined {
   } catch (_err) {
     return undefined;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function timestampMs(value: unknown): number {
@@ -385,8 +382,4 @@ function extractText(content: unknown): string {
       return text ? [text] : [];
     })
     .join("\n\n");
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -1,8 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { join } from "node:path";
 
-import { handleClaudeHookEvent } from "./hook-handler";
-
 // Mock process-mapper to control findSessionCandidates in matchProcessToSessionId tests
 const PROCESS_MAPPER_PATH = join(import.meta.dir, "process-mapper.ts");
 
@@ -128,47 +126,5 @@ describe("ClaudeCodeProvider", () => {
 
     const result = await provider.matchProcessToSessionId("/some/project", processStartMs, new Set());
     expect(result).toBe("matching-session");
-  });
-});
-
-describe("handleClaudeHookEvent", () => {
-  test("returns null for non-Claude payloads", () => {
-    expect(handleClaudeHookEvent(null)).toBeNull();
-    expect(handleClaudeHookEvent({})).toBeNull();
-    expect(handleClaudeHookEvent({ event_type: "session.idle", agent_type: "opencode" })).toBeNull();
-  });
-
-  test("handles UserPromptSubmit", () => {
-    const result = handleClaudeHookEvent({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
-    expect(result).toEqual({ sessionId: "s1", status: "working", currentTool: undefined });
-  });
-
-  test("handles PreToolUse with tool name", () => {
-    const result = handleClaudeHookEvent({ session_id: "s1", hook_event_name: "PreToolUse", tool_name: "Bash" });
-    expect(result).toEqual({ sessionId: "s1", status: "working", currentTool: "Bash" });
-  });
-
-  test("handles Stop", () => {
-    const result = handleClaudeHookEvent({ session_id: "s1", hook_event_name: "Stop" });
-    expect(result).toEqual({ sessionId: "s1", status: "awaiting_input", currentTool: undefined });
-  });
-
-  test("handles SessionEnd", () => {
-    const result = handleClaudeHookEvent({ session_id: "s1", hook_event_name: "SessionEnd" });
-    expect(result).toEqual({ sessionId: "s1", status: "done", currentTool: undefined });
-  });
-
-  test("handles Notification:permission_prompt", () => {
-    const result = handleClaudeHookEvent({
-      session_id: "s1",
-      hook_event_name: "Notification",
-      notification_type: "permission_prompt",
-    });
-    expect(result).toEqual({ sessionId: "s1", status: "action_required", currentTool: undefined });
-  });
-
-  test("returns null for empty session_id", () => {
-    const result = handleClaudeHookEvent({ session_id: "", hook_event_name: "Stop" });
-    expect(result).toBeNull();
   });
 });

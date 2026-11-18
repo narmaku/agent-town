@@ -33,13 +33,8 @@ export function createPlaceholderSessions(
     }
     if (!activeMuxNames.has(mapping.session)) continue; // multiplexer session doesn't exist
 
-    const scopedCwdMarker = mapping.agentType ? `${mapping.agentType}:cwd:` : "";
-    const cwd =
-      scopedCwdMarker && key.startsWith(scopedCwdMarker)
-        ? key.slice(scopedCwdMarker.length)
-        : key.startsWith("cwd:")
-          ? key.slice(4)
-          : "";
+    const cwdMarker = `${mapping.agentType}:cwd:`;
+    const cwd = key.startsWith(cwdMarker) ? key.slice(cwdMarker.length) : "";
     if (!cwd) continue; // session ID-based key but no matching session — skip
 
     const placeholderId = `pending-${mapping.session}`;
@@ -51,7 +46,7 @@ export function createPlaceholderSessions(
 
     const placeholder: SessionInfo = {
       sessionId: placeholderId,
-      agentType: mapping.agentType ?? "claude-code",
+      agentType: mapping.agentType,
       slug: mapping.session,
       projectPath: cwd,
       projectName: basename(cwd),

@@ -1,4 +1,4 @@
-import { createLogger, type MultiplexerSessionInfo, type TerminalMultiplexer } from "@agent-town/shared";
+import { createLogger, errorMessage, type MultiplexerSessionInfo, type TerminalMultiplexer } from "@agent-town/shared";
 
 const log = createLogger("multiplexer");
 
@@ -18,7 +18,7 @@ async function isAvailable(binary: string): Promise<boolean> {
     await proc.exited;
     return proc.exitCode === 0;
   } catch (err) {
-    log.debug(`which ${binary} failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`which ${binary} failed: ${errorMessage(err)}`);
     return false;
   }
 }
@@ -56,7 +56,7 @@ export async function listZellijSessions(): Promise<MultiplexerSessionInfo[]> {
     log.debug(`zellij: found ${sessions.length} session(s)`);
     return sessions;
   } catch (err) {
-    log.debug(`zellij list-sessions failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`zellij list-sessions failed: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -79,7 +79,7 @@ export async function listTmuxSessions(): Promise<MultiplexerSessionInfo[]> {
     log.debug(`tmux: found ${sessions.length} session(s)`);
     return sessions;
   } catch (err) {
-    log.debug(`tmux list-sessions failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`tmux list-sessions failed: ${errorMessage(err)}`);
     return [];
   }
 }

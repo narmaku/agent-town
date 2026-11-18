@@ -6,10 +6,9 @@ This document covers how to set up and run Agent Town in different configuration
 
 ## Prerequisites
 
-- **Bun** (runtime): Install from https://bun.sh
+- **Bun** 1.3.5 or newer (runtime, bundler, and pseudo-terminal): Install from https://bun.sh
 - **Terminal multiplexer**: At least one of [zellij](https://zellij.dev) or [tmux](https://github.com/tmux/tmux)
 - **AI coding agent**: At least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencode-ai/opencode), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex CLI](https://developers.openai.com/codex/cli/), or [Pi](https://pi.dev/)
-- **Python 3**: Required for the PTY helper (terminal relay)
 - **Linux**: Full feature set. macOS works but lacks `/proc` filesystem (process mapping is limited) and `systemd-run` (cgroup isolation unavailable)
 
 ---
@@ -33,7 +32,7 @@ bun install
 This script:
 1. Kills any previously running Agent Town processes (using PID files in `~/.agent-town/pids/`)
 2. Installs dependencies if `node_modules/` doesn't exist
-3. Builds the dashboard (`bunx vite build`)
+3. Builds the dashboard (`bun run build`, using Bun's bundler)
 4. Starts the server on port 4680
 5. Starts the agent pointing at `http://localhost:4680`
 
@@ -190,7 +189,6 @@ Central server (machine A, port 4680)
    - Path to SSH private key on the server machine
    - Agent port (default: 4681)
    - Auto-connect on startup (optional)
-   - Enable Claude Code hooks (optional)
 
 4. Click "Test Connection" to verify SSH access, then "Connect".
 
@@ -198,7 +196,6 @@ The server will:
 - Deploy the agent code to `~/.agent-town-remote/` on the remote
 - Install bun if needed
 - Install dependencies
-- Configure Claude Code hooks (if enabled)
 - Start the agent process
 - Establish SSH tunnels (forward + reverse)
 
@@ -259,13 +256,6 @@ The `codex` executable must be on the service `PATH`. If it was installed to a u
 | `PI_CODING_AGENT_SESSION_DIR` | `$PI_CODING_AGENT_DIR/sessions` | Native Pi session root |
 
 Install Pi using its current instructions at [pi.dev](https://pi.dev/) and ensure the `pi` executable is on the Agent Town service `PATH`. Agent Town validates the CLI help text so unrelated binaries with the short name `pi` are not registered.
-
-### OpenCode (agent-side)
-
-| Variable        | Default       | Description                              |
-|-----------------|---------------|------------------------------------------|
-| `OPENCODE_PORT` | `4096`        | OpenCode server port                     |
-| `OPENCODE_HOST` | `127.0.0.1`   | OpenCode server host                     |
 
 ### Logging
 

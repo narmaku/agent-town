@@ -1,30 +1,43 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { type AgentType, buildShellCommand, createLogger, truncateId } from "@agent-town/shared";
-import type { Server, Subprocess } from "bun";
+import {
+  type AgentType,
+  buildShellCommand,
+  createLogger,
+  errorMessage,
+  type TerminalMultiplexer,
+  truncateId,
+} from "@agent-town/shared";
+import type { Server } from "bun";
 import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
-import { configureLocalHooks } from "./hook-setup";
-import { clearHookSession, updateHookState } from "./hook-store";
 import { listDirectories, validateListDirsPath } from "./list-dirs";
+import {
+  buildAttachCommand,
+  cleanMultiplexerEnv,
+  createMuxSession,
+  killMuxSession,
+  type MuxEnv,
+  renameMuxSession,
+  typeLine,
+} from "./mux-control";
 import { getAllProviders, getProvider } from "./providers/registry";
 import type { AgentProvider } from "./providers/types";
+import { type PtyProcess, spawnPty } from "./pty";
 import { getSessionMessages, searchSessionMessages } from "./session-messages";
 import { cleanupRecoveryBySessionId, writeWrapperScript } from "./session-recovery";
 
 const log = createLogger("terminal");
 
-const PTY_HELPER = join(import.meta.dir, "pty-helper.py");
-
 // --- Timing constants ---
 const TRUST_PROMPT_DELAY_MS = 3000;
 const AUTONOMOUS_DISCLAIMER_DELAY_MS = 2000;
 const INITIAL_MESSAGE_DELAY_MS = 3000;
-const SESSION_READY_POLL_MS = 300;
-const SESSION_READY_TIMEOUT_MS = 5000;
 const PTY_INIT_DELAY_MS = 1000;
 const PTY_INPUT_BASE_DELAY_MS = 500;
 const BRACKETED_PASTE_DELAY_MS = 100;
+const SEND_PTY_COLS = 120;
+const SEND_PTY_ROWS = 40;
 const BACKUP_ENTER_DELAY_MS = 300;
 
 // --- Terminal defaults ---
@@ -67,60 +80,7 @@ export function validateSessionId(id: string): string | null {
 
 // --- Environment helpers ---
 
-function cleanMultiplexerEnv(): Record<string, string | undefined> {
-  const env = { ...process.env };
-  delete env.ZELLIJ;
-  delete env.ZELLIJ_SESSION_NAME;
-  delete env.ZELLIJ_PANE_ID;
-  delete env.TMUX;
-  delete env.TMUX_PANE;
-  delete env.CLAUDECODE;
-  return env;
-}
-
-/**
- * Remove any EXITED zellij session with the given name.
- * Zellij keeps killed sessions in (EXITED) state, blocking creation
- * of a new session with the same name.
- */
-/**
- * Clean up before creating a zellij session:
- * 1. Delete any EXITED zellij session with the same name
- * 2. Stop any lingering systemd scope units from previous sessions
- */
-async function cleanupBeforeZellijCreate(name: string, env: Record<string, string | undefined>): Promise<void> {
-  // Remove EXITED zellij session remnant
-  const del = Bun.spawn(["zellij", "delete-session", name, "--force"], {
-    env,
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  await del.exited;
-
-  // Stop any lingering systemd scope units with matching name prefix
-  if (systemdRunAvailable) {
-    const list = Bun.spawn(["systemctl", "--user", "list-units", "--type=scope", "--plain", "--no-legend"], {
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    const output = await Bun.readableStreamToText(list.stdout);
-    await list.exited;
-
-    for (const line of output.split("\n")) {
-      const unit = line.trim().split(/\s+/)[0];
-      if (unit?.startsWith(`agent-town-mux-${name}`)) {
-        const stop = Bun.spawn(["systemctl", "--user", "stop", unit], {
-          stdout: "ignore",
-          stderr: "ignore",
-        });
-        await stop.exited;
-        log.debug(`cleanup: stopped lingering scope ${unit}`);
-      }
-    }
-  }
-}
-
-function cleanTerminalEnv(): Record<string, string | undefined> {
+function cleanTerminalEnv(): MuxEnv {
   const env = cleanMultiplexerEnv();
   env.TERM = "xterm-256color";
   env.COLORTERM = "truecolor";
@@ -128,60 +88,8 @@ function cleanTerminalEnv(): Record<string, string | undefined> {
   return env;
 }
 
-// --- Cgroup isolation ---
-//
-// Launched multiplexer sessions must NOT be children of the agent-town
-// systemd service. If they are, `systemctl restart agent-town` kills
-// every zellij/tmux session (and Claude + anything it spawned).
-//
-// systemd-run --user --scope creates a separate cgroup scope so the
-// launched session survives agent restarts.
-
-let systemdRunAvailable: boolean | null = null;
-
-async function checkSystemdRun(): Promise<boolean> {
-  if (systemdRunAvailable !== null) return systemdRunAvailable;
-  try {
-    // Test actual scope creation, not just --version.
-    // --version succeeds even when the user session isn't available
-    // (e.g., agent started via SSH nohup without a login session).
-    const proc = Bun.spawn(["systemd-run", "--user", "--scope", "--unit=agent-town-test-scope", "true"], {
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    await proc.exited;
-    systemdRunAvailable = proc.exitCode === 0;
-  } catch (err) {
-    log.debug(`systemd-run check failed: ${err instanceof Error ? err.message : String(err)}`);
-    systemdRunAvailable = false;
-  }
-  if (systemdRunAvailable) {
-    log.info("cgroup isolation: systemd-run --scope works");
-  } else {
-    log.info("cgroup isolation: systemd-run --scope not available, using direct spawn");
-  }
-  return systemdRunAvailable;
-}
-
-// Check on module load (non-blocking)
-checkSystemdRun();
-
-/**
- * Wrap a command in systemd-run --scope so it runs in its own cgroup,
- * surviving agent-town service restarts. Falls back to direct spawn
- * if systemd-run is not available (e.g., macOS).
- */
-function buildScopeCommand(sessionName: string, cmd: string[]): string[] {
-  if (!systemdRunAvailable) return cmd;
-  // Use a timestamp suffix to avoid conflicts with lingering scope units
-  // from previous sessions with the same name.
-  const suffix = Date.now().toString(36);
-  const scopeUnit = `agent-town-mux-${sessionName}-${suffix}`;
-  return ["systemd-run", "--user", "--scope", `--unit=${scopeUnit}`, ...cmd];
-}
-
 interface TerminalSession {
-  process: Subprocess;
+  process: PtyProcess;
   machineId: string;
   identifier: string;
 }
@@ -207,7 +115,7 @@ function loadRenameMap(): void {
     }
     log.debug(`loaded ${sessionRenameMap.size} rename mapping(s)`);
   } catch (err) {
-    log.debug(`rename map not loaded: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`rename map not loaded: ${errorMessage(err)}`);
   }
 }
 
@@ -220,7 +128,7 @@ function saveRenameMap(): void {
     }
     writeFileSync(RENAME_MAP_FILE, JSON.stringify(obj, null, 2));
   } catch (err) {
-    log.warn(`failed to save rename map: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`failed to save rename map: ${errorMessage(err)}`);
   }
 }
 
@@ -256,13 +164,6 @@ export function resolveSessionName(name: string): string {
   return resolved;
 }
 
-function buildAttachCommand(multiplexer: "zellij" | "tmux", sessionName: string): string[] {
-  if (multiplexer === "zellij") {
-    return ["zellij", "attach", sessionName];
-  }
-  return ["tmux", "attach-session", "-t", sessionName];
-}
-
 // --- Send-text helpers ---
 
 /**
@@ -276,12 +177,7 @@ async function sendViaPTY(
   inputMode: AgentProvider["terminal"]["inputMode"],
   cleanEnv: Record<string, string | undefined>,
 ): Promise<void> {
-  const proc = Bun.spawn(["python3", PTY_HELPER, "120", "40", ...attachCmd], {
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-    env: cleanEnv,
-  });
+  const proc = spawnPty(attachCmd, { cols: SEND_PTY_COLS, rows: SEND_PTY_ROWS, env: cleanEnv });
 
   await new Promise((r) => setTimeout(r, PTY_INIT_DELAY_MS));
 
@@ -289,24 +185,18 @@ async function sendViaPTY(
     // Bracketed paste for TUI apps (OpenCode Bubble Tea, Gemini CLI) —
     // handles the entire paste as one event instead of individual keystrokes.
     // \x1b[200~ = paste start, \x1b[201~ = paste end
-    proc.stdin.write(`\x1b[200~${text}\x1b[201~`);
-    proc.stdin.flush();
+    proc.write(`\x1b[200~${text}\x1b[201~`);
     await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
-    proc.stdin.write("\r");
-    proc.stdin.flush();
+    proc.write("\r");
   } else {
     // Claude Code: write text then Enter separately so the TUI
     // processes them as distinct events (not a single paste).
-    proc.stdin.write(text);
-    proc.stdin.flush();
+    proc.write(text);
     await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
-    proc.stdin.write("\r");
-    proc.stdin.flush();
+    proc.write("\r");
   }
 
   await new Promise((r) => setTimeout(r, PTY_INPUT_BASE_DELAY_MS));
-  proc.stdin.end();
-  await new Promise((r) => setTimeout(r, BRACKETED_PASTE_DELAY_MS));
   proc.kill();
 }
 
@@ -314,35 +204,64 @@ async function sendViaPTY(
  * Send a backup Enter keystroke via native multiplexer command
  * in case the PTY carriage return was swallowed.
  */
-async function sendBackupEnter(
-  multiplexer: "zellij" | "tmux",
-  session: string,
-  cleanEnv: Record<string, string | undefined>,
-): Promise<void> {
-  await new Promise((r) => setTimeout(r, BACKUP_ENTER_DELAY_MS));
-  if (multiplexer === "zellij") {
-    // Use write-chars (input pipeline) instead of write (raw bytes)
-    // to match how the launch flow sends Enter (lines 605, 621).
-    const enter = Bun.spawn(["zellij", "--session", session, "action", "write-chars", "\n"], {
-      env: cleanEnv,
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    await enter.exited;
-    if (enter.exitCode !== 0) {
-      log.debug(`sendBackupEnter: zellij write-chars failed with exit code ${enter.exitCode}`);
-    }
-  } else {
-    const enter = Bun.spawn(["tmux", "send-keys", "-t", session, "Enter"], {
-      env: cleanEnv,
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    await enter.exited;
-    if (enter.exitCode !== 0) {
-      log.debug(`sendBackupEnter: tmux send-keys failed with exit code ${enter.exitCode}`);
-    }
+async function sendBackupEnter(multiplexer: TerminalMultiplexer, session: string, env: MuxEnv): Promise<void> {
+  await Bun.sleep(BACKUP_ENTER_DELAY_MS);
+  if (!(await typeLine(multiplexer, session, "", env))) log.debug(`sendBackupEnter: ${multiplexer} failed`);
+}
+
+// --- Launch helpers ---
+
+interface StartAgentOptions {
+  multiplexer: TerminalMultiplexer;
+  session: string;
+  command: string;
+  provider: AgentProvider;
+  autonomous?: boolean;
+  /** Send "hi" so CLI agents write their session file right away (new sessions only). */
+  sendInitialMessage: boolean;
+  env: MuxEnv;
+}
+
+/**
+ * Type the agent command into a session's shell, then get CLI agents past
+ * their startup prompts: accept workspace trust, the autonomous-mode
+ * disclaimer, and optionally send a first message. TUI agents need none of it.
+ */
+async function startAgentInSession(opts: StartAgentOptions): Promise<void> {
+  if (!(await typeLine(opts.multiplexer, opts.session, opts.command, opts.env))) {
+    throw new Error("Failed to send command to session");
   }
+  if (opts.provider.terminal.startupMode !== "cli-prompt") return;
+
+  await Bun.sleep(TRUST_PROMPT_DELAY_MS);
+  await typeLine(opts.multiplexer, opts.session, "", opts.env);
+  if (opts.autonomous && opts.provider.terminal.autonomousDisclaimer) {
+    await Bun.sleep(AUTONOMOUS_DISCLAIMER_DELAY_MS);
+    await typeLine(opts.multiplexer, opts.session, "", opts.env);
+  }
+  if (opts.sendInitialMessage) {
+    await Bun.sleep(INITIAL_MESSAGE_DELAY_MS);
+    await typeLine(opts.multiplexer, opts.session, "hi", opts.env);
+  }
+}
+
+interface NewSessionRequest {
+  sessionName: string;
+  projectDir: string;
+  multiplexer: TerminalMultiplexer;
+  agentType?: AgentType;
+  zellijLayout?: string;
+  model?: string;
+  autonomous?: boolean;
+}
+
+/** Validate the fields shared by launch and resume; returns an error message or null. */
+function validateNewSessionRequest(body: NewSessionRequest): string | null {
+  return (
+    validateSessionName(body.sessionName) ??
+    validateProjectDir(body.projectDir) ??
+    (body.model ? validateModel(body.model) : null)
+  );
 }
 
 export function startTerminalServer(port: number, machineId: string): Server {
@@ -463,16 +382,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
       // HTTP endpoint: launch a new multiplexer session with an agent
       if (url.pathname === "/api/launch" && req.method === "POST") {
         try {
-          const body = (await req.json()) as {
-            sessionName: string;
-            projectDir: string;
-            multiplexer: "zellij" | "tmux";
-            agentType?: AgentType;
-            zellijLayout?: string;
-            model?: string;
-            autonomous?: boolean;
-          };
-
+          const body = (await req.json()) as NewSessionRequest;
           const agentType = body.agentType || "claude-code";
           const provider = getProvider(agentType);
           if (!provider) {
@@ -482,207 +392,46 @@ export function startTerminalServer(port: number, machineId: string): Server {
           log.info(
             `launch: name=${body.sessionName} agent=${agentType} mux=${body.multiplexer} dir=${body.projectDir} model=${body.model || "default"} autonomous=${body.autonomous || false}`,
           );
+          const validationError = validateNewSessionRequest(body);
+          if (validationError) return Response.json({ error: validationError }, { status: 400 });
 
-          const nameErr = validateSessionName(body.sessionName);
-          if (nameErr) return Response.json({ error: nameErr }, { status: 400 });
+          // Claude Code runs through a wrapper script so that multiplexer session
+          // recovery after a reboot resumes the session instead of starting fresh.
+          const command =
+            agentType === "claude-code"
+              ? await writeWrapperScript(body.sessionName, {
+                  muxSessionName: body.sessionName,
+                  projectDir: body.projectDir,
+                  model: body.model,
+                  autonomous: body.autonomous,
+                })
+              : buildShellCommand(
+                  provider.buildLaunchCommand({ model: body.model, autonomous: body.autonomous }),
+                  body.projectDir,
+                );
 
-          const dirErr = validateProjectDir(body.projectDir);
-          if (dirErr) return Response.json({ error: dirErr }, { status: 400 });
-
-          if (body.model) {
-            const modelErr = validateModel(body.model);
-            if (modelErr) return Response.json({ error: modelErr }, { status: 400 });
-          }
-
-          const cleanEnv = cleanMultiplexerEnv();
-
-          // For Claude Code, generate a wrapper script so that multiplexer
-          // session recovery after reboot automatically resumes the session
-          // instead of starting fresh.
-          const useWrapper = agentType === "claude-code";
-          let launchCmd: string;
-
-          if (useWrapper) {
-            const scriptPath = await writeWrapperScript(body.sessionName, {
-              muxSessionName: body.sessionName,
-              projectDir: body.projectDir,
-              model: body.model,
-              autonomous: body.autonomous,
-            });
-            launchCmd = scriptPath;
-          } else {
-            const agentParts = provider.buildLaunchCommand({
-              model: body.model,
-              autonomous: body.autonomous,
-            });
-            launchCmd = buildShellCommand(agentParts, body.projectDir);
-          }
-
-          if (body.multiplexer === "tmux") {
-            // Create tmux session in its own cgroup scope (survives agent restarts)
-            const tmuxCmd = buildScopeCommand(body.sessionName, [
-              "tmux",
-              "new-session",
-              "-d",
-              "-s",
-              body.sessionName,
-              "-c",
-              body.projectDir,
-            ]);
-            const newSession = Bun.spawn(tmuxCmd, {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "pipe",
-            });
-            await newSession.exited;
-            if (newSession.exitCode !== 0) {
-              const stderr = await Bun.readableStreamToText(newSession.stderr);
-              log.error(`tmux new-session failed: ${stderr}`);
-              return Response.json({ error: "Failed to create multiplexer session" }, { status: 500 });
-            }
-
-            // Send agent command (wrapper script path or raw command)
-            const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, launchCmd, "Enter"], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-            });
-            await sendKeys.exited;
-
-            // CLI agent post-launch: auto-accept trust prompt,
-            // autonomous disclaimer, and send initial "hi" to trigger session file.
-            // TUI agents (OpenCode) have their own interface and don't need this.
-            if (provider.terminal.startupMode === "cli-prompt") {
-              await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
-              Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
-                env: cleanEnv,
-                stdout: "ignore",
-                stderr: "ignore",
-              });
-
-              if (body.autonomous && provider.terminal.autonomousDisclaimer) {
-                await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
-                Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
-                  env: cleanEnv,
-                  stdout: "ignore",
-                  stderr: "ignore",
-                });
-              }
-
-              await new Promise((r) => setTimeout(r, INITIAL_MESSAGE_DELAY_MS));
-              Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "hi", "Enter"], {
-                env: cleanEnv,
-                stdout: "ignore",
-                stderr: "ignore",
-              });
-            }
-
-            return Response.json({ ok: true });
-          }
-
-          // Clean up EXITED sessions and lingering scope units
-          await cleanupBeforeZellijCreate(body.sessionName, cleanEnv);
-
-          // Zellij: create session in its own cgroup scope (survives agent restarts)
-          // Note: zellij -s panics with ENOTTY when spawned without a TTY,
-          // but it still creates the session successfully.
-          async function tryCreateZellijSession(layout?: string): Promise<boolean> {
-            const args = ["zellij", "-s", body.sessionName];
-            if (layout) args.push("-n", layout);
-            Bun.spawn(buildScopeCommand(body.sessionName, args), {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-              cwd: body.projectDir,
-            });
-            let elapsed = 0;
-            while (elapsed < SESSION_READY_TIMEOUT_MS) {
-              await new Promise((r) => setTimeout(r, SESSION_READY_POLL_MS));
-              elapsed += SESSION_READY_POLL_MS;
-              const listProc = Bun.spawn(["zellij", "list-sessions", "--short"], {
-                env: cleanEnv,
-                stdout: "pipe",
-                stderr: "ignore",
-              });
-              const listOutput = await Bun.readableStreamToText(listProc.stdout);
-              await listProc.exited;
-              if (listOutput.split("\n").some((l) => l.trim() === body.sessionName)) return true;
-            }
-            return false;
-          }
-
-          // Try with layout first, then without (layout may not exist on remote machines)
-          let sessionReady = await tryCreateZellijSession(body.zellijLayout);
-          if (!sessionReady && body.zellijLayout) {
-            log.warn(`launch: layout "${body.zellijLayout}" failed, retrying without layout`);
-            sessionReady = await tryCreateZellijSession();
-          }
-
-          if (!sessionReady) {
-            return Response.json(
-              { error: `Zellij session "${body.sessionName}" did not start within ${SESSION_READY_TIMEOUT_MS}ms` },
-              { status: 500 },
-            );
-          }
-
-          // Send the launch command (wrapper script path or cd + agent command)
-          const fullCmd = `${launchCmd}\n`;
-          const writeChars = Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
-            env: cleanEnv,
-            stdout: "ignore",
-            stderr: "ignore",
+          const env = cleanMultiplexerEnv();
+          await createMuxSession(body.multiplexer, body.sessionName, body.projectDir, env, body.zellijLayout);
+          await startAgentInSession({
+            multiplexer: body.multiplexer,
+            session: body.sessionName,
+            command,
+            provider,
+            autonomous: body.autonomous,
+            sendInitialMessage: true,
+            env,
           });
-          await writeChars.exited;
-
-          // CLI agent post-launch: auto-accept trust prompt,
-          // autonomous disclaimer, and send initial "hi" to trigger session file.
-          if (provider.terminal.startupMode === "cli-prompt") {
-            await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
-            Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-            });
-
-            if (body.autonomous && provider.terminal.autonomousDisclaimer) {
-              await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
-              Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
-                env: cleanEnv,
-                stdout: "ignore",
-                stderr: "ignore",
-              });
-            }
-
-            await new Promise((r) => setTimeout(r, INITIAL_MESSAGE_DELAY_MS));
-            Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "hi\n"], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-            });
-          }
-
           return Response.json({ ok: true });
         } catch (err) {
-          log.error(`launch failed: ${err instanceof Error ? err.message : String(err)}`);
-          const message = err instanceof Error ? err.message : String(err);
-          return Response.json({ error: `Failed to launch session: ${message}` }, { status: 500 });
+          log.error(`launch failed: ${errorMessage(err)}`);
+          return Response.json({ error: `Failed to launch session: ${errorMessage(err)}` }, { status: 500 });
         }
       }
 
       // HTTP endpoint: resume an existing session in a new multiplexer session
       if (url.pathname === "/api/resume" && req.method === "POST") {
         try {
-          const body = (await req.json()) as {
-            sessionName: string;
-            sessionId: string;
-            projectDir: string;
-            multiplexer: "zellij" | "tmux";
-            agentType?: AgentType;
-            zellijLayout?: string;
-            model?: string;
-            autonomous?: boolean;
-          };
-
+          const body = (await req.json()) as NewSessionRequest & { sessionId: string };
           const agentType = body.agentType || "claude-code";
           const provider = getProvider(agentType);
           if (!provider) {
@@ -692,153 +441,28 @@ export function startTerminalServer(port: number, machineId: string): Server {
           log.info(
             `resume: session=${truncateId(body.sessionId)} agent=${agentType} name=${body.sessionName} mux=${body.multiplexer} dir=${body.projectDir}`,
           );
+          const validationError = validateSessionId(body.sessionId) ?? validateNewSessionRequest(body);
+          if (validationError) return Response.json({ error: validationError }, { status: 400 });
 
-          const nameErr = validateSessionName(body.sessionName);
-          if (nameErr) return Response.json({ error: nameErr }, { status: 400 });
-
-          const sidErr = validateSessionId(body.sessionId);
-          if (sidErr) return Response.json({ error: sidErr }, { status: 400 });
-
-          const dirErr = validateProjectDir(body.projectDir);
-          if (dirErr) return Response.json({ error: dirErr }, { status: 400 });
-
-          if (body.model) {
-            const modelErr = validateModel(body.model);
-            if (modelErr) return Response.json({ error: modelErr }, { status: 400 });
-          }
-
-          const cleanEnv = cleanMultiplexerEnv();
-
-          const agentParts = provider.buildResumeCommand({
-            sessionId: body.sessionId,
-            model: body.model,
+          const command = buildShellCommand(
+            provider.buildResumeCommand({ sessionId: body.sessionId, model: body.model, autonomous: body.autonomous }),
+            body.projectDir,
+          );
+          const env = cleanMultiplexerEnv();
+          await createMuxSession(body.multiplexer, body.sessionName, body.projectDir, env, body.zellijLayout);
+          await startAgentInSession({
+            multiplexer: body.multiplexer,
+            session: body.sessionName,
+            command,
+            provider,
             autonomous: body.autonomous,
+            sendInitialMessage: false,
+            env,
           });
-
-          if (body.multiplexer === "tmux") {
-            // Create tmux session in its own cgroup scope (survives agent restarts)
-            const tmuxCmd = buildScopeCommand(body.sessionName, [
-              "tmux",
-              "new-session",
-              "-d",
-              "-s",
-              body.sessionName,
-              "-c",
-              body.projectDir,
-            ]);
-            const newSession = Bun.spawn(tmuxCmd, {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "pipe",
-            });
-            await newSession.exited;
-            if (newSession.exitCode !== 0) {
-              const stderr = await Bun.readableStreamToText(newSession.stderr);
-              log.error(`tmux new-session failed: ${stderr}`);
-              return Response.json({ error: "Failed to create multiplexer session" }, { status: 500 });
-            }
-
-            const agentCmd = buildShellCommand(agentParts);
-            Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, agentCmd, "Enter"], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-            });
-
-            if (provider.terminal.startupMode === "cli-prompt") {
-              await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
-              Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
-                env: cleanEnv,
-                stdout: "ignore",
-                stderr: "ignore",
-              });
-
-              if (body.autonomous && provider.terminal.autonomousDisclaimer) {
-                await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
-                Bun.spawn(["tmux", "send-keys", "-t", body.sessionName, "Enter"], {
-                  env: cleanEnv,
-                  stdout: "ignore",
-                  stderr: "ignore",
-                });
-              }
-            }
-
-            return Response.json({ ok: true });
-          }
-
-          // Clean up EXITED sessions and lingering scope units
-          await cleanupBeforeZellijCreate(body.sessionName, cleanEnv);
-
-          // Create zellij session — try with layout, fallback without
-          async function tryCreateZellijSession2(layout?: string): Promise<boolean> {
-            const args = ["zellij", "-s", body.sessionName];
-            if (layout) args.push("-n", layout);
-            Bun.spawn(buildScopeCommand(body.sessionName, args), {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-              cwd: body.projectDir,
-            });
-            let el = 0;
-            while (el < SESSION_READY_TIMEOUT_MS) {
-              await new Promise((r) => setTimeout(r, SESSION_READY_POLL_MS));
-              el += SESSION_READY_POLL_MS;
-              const listProc = Bun.spawn(["zellij", "list-sessions", "--short"], {
-                env: cleanEnv,
-                stdout: "pipe",
-                stderr: "ignore",
-              });
-              const listOutput = await Bun.readableStreamToText(listProc.stdout);
-              await listProc.exited;
-              if (listOutput.split("\n").some((l) => l.trim() === body.sessionName)) return true;
-            }
-            return false;
-          }
-
-          let sessionReady = await tryCreateZellijSession2(body.zellijLayout);
-          if (!sessionReady && body.zellijLayout) {
-            log.warn(`resume: layout "${body.zellijLayout}" failed, retrying without layout`);
-            sessionReady = await tryCreateZellijSession2();
-          }
-
-          if (!sessionReady) {
-            return Response.json(
-              { error: `Zellij session "${body.sessionName}" did not start within ${SESSION_READY_TIMEOUT_MS}ms` },
-              { status: 500 },
-            );
-          }
-
-          // Send resume command
-          const fullCmd = `${buildShellCommand(agentParts, body.projectDir)}\n`;
-          Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", fullCmd], {
-            env: cleanEnv,
-            stdout: "ignore",
-            stderr: "ignore",
-          });
-
-          if (provider.terminal.startupMode === "cli-prompt") {
-            await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
-            Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-            });
-
-            if (body.autonomous && provider.terminal.autonomousDisclaimer) {
-              await new Promise((r) => setTimeout(r, AUTONOMOUS_DISCLAIMER_DELAY_MS));
-              Bun.spawn(["zellij", "--session", body.sessionName, "action", "write-chars", "\n"], {
-                env: cleanEnv,
-                stdout: "ignore",
-                stderr: "ignore",
-              });
-            }
-          }
-
           return Response.json({ ok: true });
         } catch (err) {
-          log.error(`resume failed: ${err instanceof Error ? err.message : String(err)}`);
-          const message = err instanceof Error ? err.message : String(err);
-          return Response.json({ error: `Failed to resume session: ${message}` }, { status: 500 });
+          log.error(`resume failed: ${errorMessage(err)}`);
+          return Response.json({ error: `Failed to resume session: ${errorMessage(err)}` }, { status: 500 });
         }
       }
 
@@ -849,7 +473,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
       if (url.pathname === "/api/reconnect" && req.method === "POST") {
         try {
           const body = (await req.json()) as {
-            multiplexer: "zellij" | "tmux";
+            multiplexer: TerminalMultiplexer;
             session: string;
             sessionId: string;
             agentType?: AgentType;
@@ -866,71 +490,23 @@ export function startTerminalServer(port: number, machineId: string): Server {
             return Response.json({ error: `Agent type "${agentType}" is not available` }, { status: 400 });
           }
 
-          const sidErr = validateSessionId(body.sessionId);
-          if (sidErr) return Response.json({ error: sidErr }, { status: 400 });
+          const validationError = validateSessionId(body.sessionId) ?? (body.model ? validateModel(body.model) : null);
+          if (validationError) return Response.json({ error: validationError }, { status: 400 });
 
-          if (body.model) {
-            const modelErr = validateModel(body.model);
-            if (modelErr) return Response.json({ error: modelErr }, { status: 400 });
-          }
-
-          const cleanEnv = cleanMultiplexerEnv();
-
-          const agentParts = provider.buildResumeCommand({
-            sessionId: body.sessionId,
-            model: body.model,
+          await startAgentInSession({
+            multiplexer: body.multiplexer,
+            session: body.session,
+            command: buildShellCommand(provider.buildResumeCommand({ sessionId: body.sessionId, model: body.model })),
+            provider,
+            sendInitialMessage: false,
+            env: cleanMultiplexerEnv(),
           });
-          const agentCmd = buildShellCommand(agentParts);
-
-          if (body.multiplexer === "tmux") {
-            const sendKeys = Bun.spawn(["tmux", "send-keys", "-t", body.session, agentCmd, "Enter"], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "pipe",
-            });
-            await sendKeys.exited;
-            if (sendKeys.exitCode !== 0) {
-              const stderr = await Bun.readableStreamToText(sendKeys.stderr);
-              log.error(`tmux send-keys failed: ${stderr}`);
-              return Response.json({ error: "Failed to send command to session" }, { status: 500 });
-            }
-          } else {
-            const writeChars = Bun.spawn(
-              ["zellij", "--session", body.session, "action", "write-chars", `${agentCmd}\n`],
-              { env: cleanEnv, stdout: "ignore", stderr: "pipe" },
-            );
-            await writeChars.exited;
-            if (writeChars.exitCode !== 0) {
-              const stderr = await Bun.readableStreamToText(writeChars.stderr);
-              log.error(`zellij write-chars failed: ${stderr}`);
-              return Response.json({ error: "Failed to send command to session" }, { status: 500 });
-            }
-          }
-
-          // CLI agent: auto-accept workspace trust prompt
-          if (provider.terminal.startupMode === "cli-prompt") {
-            await new Promise((r) => setTimeout(r, TRUST_PROMPT_DELAY_MS));
-            if (body.multiplexer === "tmux") {
-              Bun.spawn(["tmux", "send-keys", "-t", body.session, "Enter"], {
-                env: cleanEnv,
-                stdout: "ignore",
-                stderr: "ignore",
-              });
-            } else {
-              Bun.spawn(["zellij", "--session", body.session, "action", "write-chars", "\n"], {
-                env: cleanEnv,
-                stdout: "ignore",
-                stderr: "ignore",
-              });
-            }
-          }
 
           log.info(`reconnect: session=${truncateId(body.sessionId)} agent=${agentType} mux=${body.session}`);
           return Response.json({ ok: true });
         } catch (err) {
-          log.error(`reconnect failed: ${err instanceof Error ? err.message : String(err)}`);
-          const message = err instanceof Error ? err.message : String(err);
-          return Response.json({ error: `Failed to reconnect: ${message}` }, { status: 500 });
+          log.error(`reconnect failed: ${errorMessage(err)}`);
+          return Response.json({ error: `Failed to reconnect: ${errorMessage(err)}` }, { status: 500 });
         }
       }
 
@@ -938,7 +514,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
       if (url.pathname === "/api/kill" && req.method === "POST") {
         try {
           const body = (await req.json()) as {
-            multiplexer: "zellij" | "tmux";
+            multiplexer: TerminalMultiplexer;
             session: string;
           };
 
@@ -947,36 +523,14 @@ export function startTerminalServer(port: number, machineId: string): Server {
           }
 
           log.info(`kill: session=${body.session} mux=${body.multiplexer}`);
-          const cleanEnv = cleanMultiplexerEnv();
-
-          if (body.multiplexer === "tmux") {
-            const proc = Bun.spawn(["tmux", "kill-session", "-t", body.session], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "pipe",
-            });
-            await proc.exited;
-            if (proc.exitCode !== 0) {
-              const stderr = await Bun.readableStreamToText(proc.stderr);
-              log.error(`kill failed: tmux kill-session exit=${proc.exitCode} ${stderr}`);
-              return Response.json({ error: "Failed to kill session" }, { status: 500 });
-            }
-          } else {
-            // delete-session kills running processes and removes the session.
-            // The Claude session can be resumed in a new zellij session via
-            // the Resume button (which uses cleanupBeforeZellijCreate + --resume).
-            // --force ensures it works even if the session is active.
-            const del = Bun.spawn(["zellij", "delete-session", body.session, "--force"], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "ignore",
-            });
-            await del.exited;
+          if (!(await killMuxSession(body.multiplexer, body.session, cleanMultiplexerEnv()))) {
+            log.error(`kill failed: ${body.multiplexer} session=${body.session}`);
+            return Response.json({ error: "Failed to kill session" }, { status: 500 });
           }
 
           return Response.json({ ok: true });
         } catch (err) {
-          log.error(`kill failed: ${err instanceof Error ? err.message : String(err)}`);
+          log.error(`kill failed: ${errorMessage(err)}`);
           return Response.json({ error: "Failed to kill session" }, { status: 500 });
         }
       }
@@ -1018,15 +572,13 @@ export function startTerminalServer(port: number, machineId: string): Server {
             return Response.json({ error: "Session data not found" }, { status: 404 });
           }
 
-          clearHookSession(body.sessionId);
-
           // Clean up session recovery wrapper script and metadata
           cleanupRecoveryBySessionId(body.sessionId);
 
           return Response.json({ ok: true });
         } catch (err) {
-          log.error(`delete-session failed: ${err instanceof Error ? err.message : String(err)}`);
-          const message = err instanceof Error ? err.message : String(err);
+          log.error(`delete-session failed: ${errorMessage(err)}`);
+          const message = errorMessage(err);
           return Response.json({ error: `Failed to delete session: ${message}` }, { status: 500 });
         }
       }
@@ -1083,7 +635,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
       if (url.pathname === "/api/send" && req.method === "POST") {
         try {
           const body = (await req.json()) as {
-            multiplexer: "zellij" | "tmux";
+            multiplexer: TerminalMultiplexer;
             session: string;
             text: string;
             agentType?: AgentType;
@@ -1120,7 +672,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
       if (url.pathname === "/api/rename-session" && req.method === "POST") {
         try {
           const body = (await req.json()) as {
-            multiplexer: "zellij" | "tmux";
+            multiplexer: TerminalMultiplexer;
             currentName: string;
             newName: string;
           };
@@ -1129,32 +681,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
             return Response.json({ error: "Missing currentName or newName" }, { status: 400 });
           }
 
-          const cleanEnv = cleanMultiplexerEnv();
-
-          if (body.multiplexer === "tmux") {
-            const proc = Bun.spawn(["tmux", "rename-session", "-t", body.currentName, body.newName], {
-              env: cleanEnv,
-              stdout: "ignore",
-              stderr: "pipe",
-            });
-            await proc.exited;
-            if (proc.exitCode !== 0) {
-              const stderr = await Bun.readableStreamToText(proc.stderr);
-              log.error(`tmux rename failed: ${stderr}`);
-              return Response.json({ error: "Failed to rename session" }, { status: 500 });
-            }
-          } else {
-            // zellij: rename-session action requires targeting the session
-            const proc = Bun.spawn(
-              ["zellij", "--session", body.currentName, "action", "rename-session", body.newName],
-              { env: cleanEnv, stdout: "ignore", stderr: "pipe" },
-            );
-            await proc.exited;
-            if (proc.exitCode !== 0) {
-              const stderr = await Bun.readableStreamToText(proc.stderr);
-              log.error(`zellij rename failed: ${stderr}`);
-              return Response.json({ error: "Failed to rename session" }, { status: 500 });
-            }
+          if (!(await renameMuxSession(body.multiplexer, body.currentName, body.newName, cleanMultiplexerEnv()))) {
+            log.error(`rename failed: ${body.multiplexer} ${body.currentName} → ${body.newName}`);
+            return Response.json({ error: "Failed to rename session" }, { status: 500 });
           }
 
           // Store the rename mapping so the process mapper can resolve
@@ -1166,42 +695,9 @@ export function startTerminalServer(port: number, machineId: string): Server {
 
           return Response.json({ ok: true });
         } catch (err) {
-          log.error(`rename failed: ${err instanceof Error ? err.message : String(err)}`);
+          log.error(`rename failed: ${errorMessage(err)}`);
           return Response.json({ error: "Failed to rename session" }, { status: 500 });
         }
-      }
-
-      // HTTP endpoint: (re)configure local Claude Code hooks
-      if (url.pathname === "/api/setup-hooks" && req.method === "POST") {
-        try {
-          configureLocalHooks(port);
-          return Response.json({ ok: true, message: "Hooks configured" });
-        } catch (err) {
-          log.error(`setup-hooks: ${err instanceof Error ? err.message : String(err)}`);
-          return Response.json({ error: "Failed to configure hooks" }, { status: 500 });
-        }
-      }
-
-      // HTTP endpoint: receive hook/event data from any agent
-      // Responds immediately so we don't slow down the agent.
-      if (url.pathname === "/api/hook-event" && req.method === "POST") {
-        try {
-          const body = await req.json();
-          // Try each provider's hook handler until one recognizes the payload
-          for (const provider of getAllProviders()) {
-            const result = provider.handleHookEvent(body);
-            if (result) {
-              updateHookState(result);
-              log.debug(
-                `hook: agent=${provider.type} session=${truncateId(result.sessionId)} status=${result.status}${result.currentTool ? ` tool=${result.currentTool}` : ""}`,
-              );
-              break;
-            }
-          }
-        } catch (err) {
-          log.debug(`hook-event: failed to process: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        return Response.json({ exit: 0 });
       }
 
       return new Response("Agent Town Terminal Server", { status: 200 });
@@ -1210,7 +706,7 @@ export function startTerminalServer(port: number, machineId: string): Server {
     websocket: {
       open(ws) {
         const { multiplexer, session, cols, rows } = ws.data as {
-          multiplexer: "zellij" | "tmux";
+          multiplexer: TerminalMultiplexer;
           session: string;
           cols: number;
           rows: number;
@@ -1228,54 +724,28 @@ export function startTerminalServer(port: number, machineId: string): Server {
 
         const cleanEnv = cleanTerminalEnv();
 
-        const proc = Bun.spawn(["python3", PTY_HELPER, String(cols), String(rows), ...cmd], {
-          stdin: "pipe",
-          stdout: "pipe",
-          stderr: "pipe",
+        const proc = spawnPty(cmd, {
+          cols,
+          rows,
           env: cleanEnv,
+          onData: (data) => {
+            try {
+              ws.send(data);
+            } catch (err) {
+              log.debug(`terminal:${session} ws send failed: ${errorMessage(err)}`);
+            }
+          },
         });
 
         activeTerminals.set(ws, { process: proc, machineId, identifier: session });
 
-        // Read stdout and send to WebSocket
-        (async () => {
-          const reader = proc.stdout.getReader();
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              try {
-                ws.send(value);
-              } catch (err) {
-                log.debug(
-                  `terminal:${session} ws send failed, stopping reader: ${err instanceof Error ? err.message : String(err)}`,
-                );
-                break;
-              }
-            }
-          } catch (err) {
-            log.debug(`terminal:${session} stdout reader ended: ${err instanceof Error ? err.message : String(err)}`);
-          }
+        proc.exited.then(() => {
           try {
             ws.close();
           } catch (err) {
-            log.debug(`terminal:${session} ws already closed: ${err instanceof Error ? err.message : String(err)}`);
+            log.debug(`terminal:${session} ws already closed: ${errorMessage(err)}`);
           }
-        })();
-
-        // Read stderr for debugging
-        (async () => {
-          const reader = proc.stderr.getReader();
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              log.debug(`terminal:${session} stderr: ${new TextDecoder().decode(value).trim()}`);
-            }
-          } catch (err) {
-            log.debug(`terminal:${session} stderr reader ended: ${err instanceof Error ? err.message : String(err)}`);
-          }
-        })();
+        });
       },
 
       message(ws, message) {
@@ -1286,17 +756,19 @@ export function startTerminalServer(port: number, machineId: string): Server {
           try {
             const parsed = JSON.parse(message);
             if (parsed.type === "resize") {
-              terminal.process.stdin.write(
-                `${JSON.stringify({ type: "resize", cols: parsed.cols, rows: parsed.rows })}\n`,
-              );
+              const cols = Number(parsed.cols);
+              const rows = Number(parsed.rows);
+              if (Number.isInteger(cols) && Number.isInteger(rows) && cols > 0 && rows > 0) {
+                terminal.process.resize(cols, rows);
+              }
               return;
             }
           } catch (_err) {
             // Not JSON, treat as terminal input
           }
-          terminal.process.stdin.write(message);
+          terminal.process.write(message);
         } else {
-          terminal.process.stdin.write(message as Uint8Array);
+          terminal.process.write(message as Uint8Array);
         }
       },
 

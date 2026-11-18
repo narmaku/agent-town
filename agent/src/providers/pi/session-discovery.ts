@@ -2,7 +2,14 @@ import type { Dirent } from "node:fs";
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+import {
+  createLogger,
+  errorMessage,
+  SESSION_RETENTION_MS,
+  type SessionInfo,
+  type SessionStatus,
+  stringValue,
+} from "@agent-town/shared";
 
 import { parseTreeSession } from "../tree-session";
 
@@ -83,7 +90,7 @@ export async function discoverPiSessions(options: PiDiscoveryOptions = {}): Prom
       sessionPaths.set(key, path);
       sessionCreatedAt.set(key, cached.createdAtMs ?? metadata.birthtimeMs ?? metadata.mtimeMs);
     } catch (err) {
-      log.debug(`session discovery skipped ${basename(path)}: ${formatError(err)}`);
+      log.debug(`session discovery skipped ${basename(path)}: ${errorMessage(err)}`);
     }
   }
 
@@ -115,7 +122,7 @@ export async function findPiSessionPath(sessionId: string, sessionsDir = getPiSe
       const text = await Bun.file(path).text();
       if (parseTreeSession(text)?.header.id === sessionId) return path;
     } catch (err) {
-      log.debug(`session lookup skipped ${basename(path)}: ${formatError(err)}`);
+      log.debug(`session lookup skipped ${basename(path)}: ${errorMessage(err)}`);
     }
   }
   return null;
@@ -132,7 +139,7 @@ export async function deletePiSessionData(sessionId: string, sessionsDir = getPi
     sessionCreatedAt.delete(key);
     return true;
   } catch (err) {
-    log.warn(`session delete failed: session=${sessionId.slice(0, 8)} error=${formatError(err)}`);
+    log.warn(`session delete failed: session=${sessionId.slice(0, 8)} error=${errorMessage(err)}`);
     return false;
   }
 }
@@ -161,7 +168,7 @@ async function findPiSessionFiles(sessionsDir: string): Promise<string[]> {
       try {
         return { path, mtimeMs: (await stat(path)).mtimeMs };
       } catch (err) {
-        log.debug(`session metadata unavailable ${basename(path)}: ${formatError(err)}`);
+        log.debug(`session metadata unavailable ${basename(path)}: ${errorMessage(err)}`);
         return null;
       }
     }),
@@ -177,7 +184,7 @@ async function safeReadDir(path: string): Promise<Dirent[]> {
   try {
     return await readdir(path, { withFileTypes: true });
   } catch (err) {
-    log.debug(`session directory unavailable: ${formatError(err)}`);
+    log.debug(`session directory unavailable: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -247,14 +254,6 @@ function findCurrentModel(records: Record<string, unknown>[], fallback: string |
     if (message.role === "assistant") model = stringValue(message.model) || model;
   }
   return model;
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function findLastItem<T>(items: T[], predicate: (item: T) => boolean): T | undefined {

@@ -1,10 +1,6 @@
-import type {
-  AgentType,
-  SessionInfo,
-  SessionMessagesResponse,
-  SessionStatus,
-  TerminalMultiplexer,
-} from "@agent-town/shared";
+import type { AgentType, SessionInfo, SessionMessagesResponse, TerminalMultiplexer } from "@agent-town/shared";
+
+import type { SearchMessageResult } from "./search";
 
 export interface AgentProcess {
   pid: number;
@@ -30,12 +26,6 @@ export interface ResumeOptions {
   sessionId: string;
   model?: string;
   autonomous?: boolean;
-}
-
-export interface HookEventResult {
-  sessionId: string;
-  status: SessionStatus;
-  currentTool?: string;
 }
 
 export interface TerminalCapabilities {
@@ -65,6 +55,9 @@ export interface AgentProvider {
   /** Get paginated messages for a session. */
   getSessionMessages(sessionId: string, offset: number, limit: number): Promise<SessionMessagesResponse>;
 
+  /** Find sessions whose messages contain `query` (already lower-cased), up to `maxResults`. */
+  searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]>;
+
   /** Find running agent processes from ps output. */
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[];
 
@@ -76,9 +69,6 @@ export interface AgentProvider {
 
   /** Build the CLI command parts to resume an existing session. Returns an array of arguments. */
   buildResumeCommand(opts: ResumeOptions): string[];
-
-  /** Parse an incoming hook/event payload and return normalized status. */
-  handleHookEvent(payload: unknown): HookEventResult | null;
 
   /**
    * Match a running process to a session ID using provider-specific storage.

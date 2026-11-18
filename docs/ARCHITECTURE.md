@@ -37,7 +37,7 @@ This document describes the internal architecture, data flows, and key subsystem
 
 ### Components
 
-**Dashboard** (`dashboard/`): A React 19 SPA built with Vite. Connects to the server via WebSocket for real-time state updates. Provides terminal access via xterm.js. Served as static files by the server.
+**Dashboard** (`dashboard/`): A React 19 SPA bundled with `bun build`. Connects to the server via WebSocket for real-time state updates. Provides terminal access via xterm.js. Served as static files by the server.
 
 **Server** (`server/`): Central hub running on port 4680. Receives heartbeats from agents, stores machine/session state in memory, broadcasts updates to dashboard clients, proxies API calls and terminal connections to agents. Manages SSH tunnels for remote nodes.
 
@@ -64,10 +64,10 @@ discoverSessions()        detectMultiplexers()      listAllSessions()       disc
 Calls `discoverSessions()` on all registered providers in parallel. Each provider reads its native storage:
 
 - **Claude Code:** Scans `~/.claude/projects/*/` for JSONL files. Parses the first and last few lines of each file to extract session metadata (ID, project path, status, last message, model).
-- **OpenCode:** Calls `session.list()` via the SDK (or reads SQLite at `~/.opencode/data.db` as fallback).
+- **OpenCode:** Reads its SQLite database (`~/.local/share/opencode/opencode.db`) in read-only mode.
 - **Gemini CLI:** Scans `~/.gemini/tmp/<project_hash>/chats/` for JSON session files. Resolves project paths via `~/.gemini/projects.json` or `.project_root` files. Status is inferred from file modification times.
-- **Codex CLI:** Honors `CODEX_HOME` (default `~/.codex`), reads compatible versioned state databases in read-only mode, and falls back to bounded scans of active rollout JSONL files. Archived and subagent sessions are excluded. Because Codex has no Agent Town hook integration, status is inferred from activity and process mapping.
-- **Pi:** Scans direct and working-directory buckets under `PI_CODING_AGENT_SESSION_DIR` (default `~/.pi/agent/sessions`). Tree-format sessions are reduced to the ancestry of the latest active leaf; legacy v1 sessions remain linear. Status is inferred from activity and process mapping because Pi has no hook integration.
+- **Codex CLI:** Honors `CODEX_HOME` (default `~/.codex`), reads compatible versioned state databases in read-only mode, and falls back to bounded scans of active rollout JSONL files. Archived and subagent sessions are excluded. Status is inferred from activity, process mapping, and the terminal screen.
+- **Pi:** Scans direct and working-directory buckets under `PI_CODING_AGENT_SESSION_DIR` (default `~/.pi/agent/sessions`). Tree-format sessions are reduced to the ancestry of the latest active leaf; legacy v1 sessions remain linear. Status is inferred from activity, process mapping, and the terminal screen.
 
 Returns a flat array of `SessionInfo[]` -- at this point, no multiplexer mapping exists.
 
@@ -99,7 +99,7 @@ After parallel discovery completes, the agent merges the results:
 
 1. **Apply process mappings** to sessions: sets `multiplexer` and `multiplexerSession` fields.
 2. **Validate mappings** against active multiplexer sessions -- rejects mappings to non-existent sessions (zombie process protection).
-3. **Adjust statuses** using priority: hook events > process mapper > storage heuristics.
+3. **Adjust statuses** using priority: terminal screen > process mapper > storage heuristics.
 4. **Detect exited sessions** by comparing current mappings against historical tracking (`lastKnownMux`).
 5. **Create placeholder sessions** for agent processes that have no JSONL yet (freshly launched).
 
@@ -127,73 +127,26 @@ For tmux, the session name requires additional resolution: read the process's co
 
 ---
 
-## Real-Time Status Updates
+## Status Detection (no hooks)
 
-Agent Town uses two complementary mechanisms for real-time session status:
+Agent Town never installs hooks, plugins, or event subscriptions into the agents it monitors.
+Status comes only from what is already observable on the machine:
 
-### Hook Events (Claude Code)
+1. **Terminal screen** -- Most specific. For every session attached to a multiplexer, the agent
+   reads the visible screen (`tmux capture-pane -p`, or `zellij action dump-screen`) on each
+   heartbeat and looks at the bottom 25 lines (`agent/src/screen-status.ts`):
+   - An approval prompt ("Do you want to proceed?", "Would you like to run the following
+     command?", "Allow execution?", "Permission required", ...) sets `action_required`.
+   - An interrupt hint ("esc to interrupt", "ctrl+c to interrupt") sets `working`.
+   - Anything else leaves the lower-priority status in place.
+2. **Process mapper** -- If an agent process has active child processes (within 600s), status is
+   set to `working`. If no active children, set to `awaiting_input`.
+3. **Storage heuristics** -- Base status derived from session file modification times. Least
+   accurate.
 
-Claude Code supports configurable hooks that fire on session lifecycle events. Agent Town configures these hooks (in `~/.claude/settings.json`) to POST event data to the agent's `/api/hook-event` endpoint:
-
-```
-Claude Code process
-  |  hook fires (PreToolUse, Stop, etc.)
-  v
-curl -X POST http://localhost:4681/api/hook-event
-  |
-  v
-Agent hook-store (in-memory, per session)
-  |  next heartbeat includes hook-derived status
-  v
-Server broadcasts to dashboard
-```
-
-Hook events supported:
-| Event              | Mapped Status       |
-|--------------------|---------------------|
-| `UserPromptSubmit` | `working`           |
-| `PreToolUse`       | `working` + tool    |
-| `PostToolUse`      | `working`           |
-| `Stop`             | `awaiting_input`    |
-| `Notification`     | `action_required` or `awaiting_input` |
-| `SessionStart`     | `awaiting_input`    |
-| `SessionEnd`       | `done`              |
-
-### SSE Events (OpenCode)
-
-The OpenCode provider subscribes to Server-Sent Events (SSE) via the OpenCode SDK for real-time status:
-
-```
-OpenCode server (port 4096)
-  |  SSE stream (event.subscribe)
-  v
-Agent OpenCode provider
-  |  maps to HookEventResult
-  v
-Agent hook-store
-  |  next heartbeat includes SSE-derived status
-  v
-Server broadcasts to dashboard
-```
-
-SSE events mapped:
-| Event Type              | Mapped Status     |
-|-------------------------|-------------------|
-| `session.status` (busy) | `working`         |
-| `session.status` (idle) | `awaiting_input`  |
-| `session.created`       | `awaiting_input`  |
-| `session.deleted`       | `done`            |
-| `session.error`         | `error`           |
-| `message.part.updated`  | `working`         |
-| `permission.updated`    | `action_required` |
-
-### Status Priority
-
-When building the heartbeat, statuses are resolved with this priority (highest first):
-
-1. **Hook/SSE events** -- Most accurate. If a hook state exists and is not stale (>60s for `working` status), it overrides everything.
-2. **Process mapper** -- If an agent process has active child processes (within 600s), status is set to `working`. If no active children, set to `awaiting_input`.
-3. **Storage heuristics** -- Base status derived from JSONL file modification times or SDK responses. Least accurate.
+This is less immediate than hooks (it updates once per heartbeat) and depends on the wording of
+each agent's TUI, but it needs no changes to the agents' configuration and adds no code path
+that agents call into.
 
 ---
 
@@ -244,23 +197,18 @@ Server WebSocket proxy
   |  ws://agent:4681/ws/terminal?session=Y
   v
 Agent Terminal Server
-  |  spawns PTY helper
-  v
-python3 pty-helper.py <cols> <rows> <multiplexer-attach-command>
-  |  forks a pseudo-terminal
+  |  Bun.spawn with a pseudo-terminal (agent/src/pty.ts)
   v
 zellij attach <session> / tmux attach-session -t <session>
 ```
 
-### PTY Helper
+### Pseudo-Terminal
 
-The agent uses a Python PTY helper (`agent/src/pty-helper.py`) to create a proper pseudo-terminal for the multiplexer attach command. This is necessary because multiplexers require a TTY to attach.
-
-The PTY helper:
-- Creates a pseudo-terminal with the specified dimensions
-- Spawns the attach command inside it
-- Forwards stdin/stdout over pipes
-- Handles terminal resize events (received as JSON on stdin)
+Multiplexers need a TTY to attach, so the agent runs the attach command inside a
+pseudo-terminal using Bun's built-in PTY support (`Bun.spawn` with the `terminal` option,
+wrapped by `agent/src/pty.ts`). Browser keystrokes are written to the PTY, its output is
+relayed back over the WebSocket, and `{"type":"resize"}` messages resize it. No Python or
+native addon is required.
 
 ### Data Flow
 
@@ -294,7 +242,6 @@ All state is held in memory with JSON file persistence for specific data:
 
 | Data               | Storage                              | Persistence |
 |--------------------|--------------------------------------|-------------|
-| Hook states        | In-memory `Map` (hook-store.ts)      | None |
 | Last-known mux     | `~/.agent-town/last-known-mux.json`  | Survives restarts |
 | Rename mappings    | `~/.agent-town/rename-map.json`      | Survives restarts |
 | Session names      | `~/.agent-town/session-names.json`   | Survives restarts |
@@ -322,10 +269,9 @@ Server machine (port 4680)
 1. **Test SSH connectivity** -- Runs `ssh echo ok` to verify access.
 2. **Deploy agent code** -- Uses `rsync` to sync `agent/` and `shared/` directories to `~/.agent-town-remote/` on the remote.
 3. **Install dependencies** -- Runs `bun install` on the remote (installs bun first if needed).
-4. **Configure hooks** -- If `enableHooks` is set, merges Claude Code hook config into remote `~/.claude/settings.json`.
-5. **Start agent** -- Runs the agent process on the remote via `nohup bun run agent/src/index.ts`.
-6. **Establish SSH tunnel** -- Sets up forward tunnel (server-to-agent) and reverse tunnel (agent-to-server).
-7. **Health monitoring** -- Pings the tunnel every 15 seconds. Auto-reconnects on failure.
+4. **Start agent** -- Runs the agent process on the remote via `nohup bun run agent/src/index.ts`.
+5. **Establish SSH tunnel** -- Sets up forward tunnel (server-to-agent) and reverse tunnel (agent-to-server).
+6. **Health monitoring** -- Pings the tunnel every 15 seconds. Auto-reconnects on failure.
 
 ### Routing
 
