@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { MultiplexerSessionInfo, SessionInfo } from "@agent-town/shared";
-import type { ProcessMapping } from "./process-mapper";
-import { discoverAndMapSessions } from "./session-mapping";
+import { makeProcessMappingKey, type ProcessMapping } from "./process-mapper";
+import { adjustSessionStatuses, discoverAndMapSessions } from "./session-mapping";
 
 function makeSession(overrides: Partial<SessionInfo> = {}): SessionInfo {
   return {
@@ -44,6 +44,20 @@ describe("discoverAndMapSessions", () => {
 
     expect(sessions[0].multiplexerSession).toBe("agent-1");
     expect(sessions[0].multiplexer).toBe("zellij");
+  });
+
+  test("does not cross-map identical session IDs owned by different providers", () => {
+    const sessions = [makeSession({ sessionId: "same-id", agentType: "claude-code" })];
+    const muxSessions = [makeMuxSession("gemini-session")];
+    const mappings = new Map<string, ProcessMapping>();
+    mappings.set(
+      makeProcessMappingKey("gemini-cli", "session", "same-id"),
+      makeMapping({ agentType: "gemini-cli", session: "gemini-session" }),
+    );
+
+    discoverAndMapSessions(sessions, muxSessions, mappings);
+
+    expect(sessions[0].multiplexerSession).toBeUndefined();
   });
 
   test("rejects mapping when mux session is not active", () => {
@@ -149,5 +163,32 @@ describe("discoverAndMapSessions", () => {
 
     expect(sessions[0].multiplexerSession).toBe("strategies");
     expect(sessions[1].multiplexerSession).toBeUndefined();
+  });
+});
+
+describe("adjustSessionStatuses", () => {
+  test("uses provider-scoped mappings for active-child status detection", () => {
+    const sessions = [
+      makeSession({
+        sessionId: "same-id",
+        agentType: "codex",
+        status: "idle",
+        multiplexerSession: "codex-session",
+      }),
+    ];
+    const mappings = new Map<string, ProcessMapping>([
+      [
+        makeProcessMappingKey("claude-code", "session", "same-id"),
+        makeMapping({ agentType: "claude-code", session: "claude-session", hasActiveChildren: false }),
+      ],
+      [
+        makeProcessMappingKey("codex", "session", "same-id"),
+        makeMapping({ agentType: "codex", session: "codex-session", hasActiveChildren: true }),
+      ],
+    ]);
+
+    adjustSessionStatuses(sessions, mappings);
+
+    expect(sessions[0].status).toBe("working");
   });
 });

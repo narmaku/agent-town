@@ -5,7 +5,7 @@ export { ALL_INTERFACES_HOST, isLoopbackHost, LOOPBACK_HOST } from "./network";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
 export { formatCompactTokens, paginateFromEnd, safeJsonParse, truncateId } from "./utils";
 
-export type AgentType = "claude-code" | "opencode" | "gemini-cli";
+export type AgentType = "claude-code" | "opencode" | "gemini-cli" | "codex" | "pi";
 
 export type SessionStatus =
   | "starting"

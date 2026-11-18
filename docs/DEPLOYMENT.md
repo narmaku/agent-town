@@ -8,7 +8,7 @@ This document covers how to set up and run Agent Town in different configuration
 
 - **Bun** (runtime): Install from https://bun.sh
 - **Terminal multiplexer**: At least one of [zellij](https://zellij.dev) or [tmux](https://github.com/tmux/tmux)
-- **AI coding agent**: At least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencode-ai/opencode), or [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+- **AI coding agent**: At least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencode-ai/opencode), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex CLI](https://developers.openai.com/codex/cli/), or [Pi](https://pi.dev/)
 - **Python 3**: Required for the PTY helper (terminal relay)
 - **Linux**: Full feature set. macOS works but lacks `/proc` filesystem (process mapping is limited) and `systemd-run` (cgroup isolation unavailable)
 
@@ -280,6 +280,23 @@ to the server's IP with a firewall where you can.
 | `AGENT_TOWN_TOKEN_FILE`     | `~/.agent-town/token`      | Shared access token; must match the server's |
 | `AGENT_TOWN_ALLOWED_ORIGINS`| *(empty)*                  | Browser origins allowed to call the agent (normally none) |
 | `AGENT_TOWN_MACHINE_ID`     | SHA-256 hash of hostname   | Stable machine identifier                |
+
+### Codex CLI (agent-side)
+
+| Variable     | Default    | Description                         |
+|--------------|------------|-------------------------------------|
+| `CODEX_HOME` | `~/.codex` | Codex state and active session root |
+
+The `codex` executable must be on the service `PATH`. If it was installed to a user-specific directory, add that directory to both Agent Town service `Environment=PATH=...` entries.
+
+### Pi (agent-side)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PI_CODING_AGENT_DIR` | `~/.pi/agent` | Pi agent data root |
+| `PI_CODING_AGENT_SESSION_DIR` | `$PI_CODING_AGENT_DIR/sessions` | Native Pi session root |
+
+Install Pi using its current instructions at [pi.dev](https://pi.dev/) and ensure the `pi` executable is on the Agent Town service `PATH`. Agent Town validates the CLI help text so unrelated binaries with the short name `pi` are not registered.
 
 ### OpenCode (agent-side)
 

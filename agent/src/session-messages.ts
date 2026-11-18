@@ -66,6 +66,14 @@ export async function searchSessionMessages(
       } else if (provider.type === "gemini-cli") {
         const geminiResults = await searchGeminiJsonFiles(q, limit - results.length);
         results.push(...geminiResults);
+      } else if (provider.type === "codex") {
+        const { searchCodexMessages } = await import("./providers/codex/message-parser");
+        const codexResults = await searchCodexMessages(q, limit - results.length);
+        results.push(...codexResults);
+      } else if (provider.type === "pi") {
+        const { searchPiMessages } = await import("./providers/pi/message-parser");
+        const piResults = await searchPiMessages(q, limit - results.length);
+        results.push(...piResults);
       }
     } catch (err) {
       log.debug(

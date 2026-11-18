@@ -10,6 +10,11 @@ export class ClaudeCodeProvider implements AgentProvider {
   readonly type = "claude-code" as const;
   readonly displayName = "Claude Code";
   readonly binaryName = "claude";
+  readonly terminal = {
+    inputMode: "direct",
+    startupMode: "cli-prompt",
+    autonomousDisclaimer: true,
+  } as const;
 
   async isAvailable(): Promise<boolean> {
     return isBinaryAvailable(this.binaryName);

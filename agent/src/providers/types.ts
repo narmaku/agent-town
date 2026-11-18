@@ -38,6 +38,12 @@ export interface HookEventResult {
   currentTool?: string;
 }
 
+export interface TerminalCapabilities {
+  inputMode: "direct" | "bracketed-paste";
+  startupMode: "cli-prompt" | "tui";
+  autonomousDisclaimer: boolean;
+}
+
 /**
  * Agent provider interface.
  *
@@ -48,6 +54,7 @@ export interface AgentProvider {
   readonly type: AgentType;
   readonly displayName: string;
   readonly binaryName: string;
+  readonly terminal: TerminalCapabilities;
 
   /** Check if this agent's binary is installed on the machine. */
   isAvailable(): Promise<boolean>;

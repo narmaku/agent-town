@@ -128,6 +128,10 @@ describe("validateSessionId", () => {
     expect(validateSessionId("ses_abc123")).toBeNull();
   });
 
+  test("accepts dotted Pi custom session IDs", () => {
+    expect(validateSessionId("project.session-7")).toBeNull();
+  });
+
   test("rejects empty ID", () => {
     expect(validateSessionId("")).not.toBeNull();
   });

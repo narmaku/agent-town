@@ -47,11 +47,68 @@ export function shortenPath(path: string): string {
 
 // --- Agent type labels ---
 
-export const AGENT_TYPE_LABELS: Record<AgentType, string> = {
-  "claude-code": "Claude Code",
-  opencode: "OpenCode",
-  "gemini-cli": "Gemini CLI",
+export interface AgentTypeDisplayConfig {
+  label: string;
+  shortLabel: string;
+  autonomousHint: string;
+  autonomousSupported: boolean;
+}
+
+export const AGENT_TYPE_CONFIG: Record<AgentType, AgentTypeDisplayConfig> = {
+  "claude-code": {
+    label: "Claude Code",
+    shortLabel: "CC",
+    autonomousHint: "Skips all permission checks (--dangerously-skip-permissions).",
+    autonomousSupported: true,
+  },
+  opencode: {
+    label: "OpenCode",
+    shortLabel: "OC",
+    autonomousHint: 'OpenCode uses config-based permissions — ensure opencode.json has permission: "allow".',
+    autonomousSupported: true,
+  },
+  "gemini-cli": {
+    label: "Gemini CLI",
+    shortLabel: "GE",
+    autonomousHint: "Auto-approves all actions (--yolo mode).",
+    autonomousSupported: true,
+  },
+  codex: {
+    label: "Codex CLI",
+    shortLabel: "CX",
+    autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
+    autonomousSupported: true,
+  },
+  pi: {
+    label: "Pi",
+    shortLabel: "PI",
+    autonomousHint: "Pi has no tool-approval or built-in sandbox layer; Autonomous does not apply.",
+    autonomousSupported: false,
+  },
 };
+
+/**
+ * Display metadata for an agent type reported by a machine. Agents can run a
+ * newer version than the dashboard, so unknown types fall back to the raw name
+ * instead of crashing the render.
+ */
+export function getAgentTypeDisplay(agentType: string): AgentTypeDisplayConfig {
+  if (Object.hasOwn(AGENT_TYPE_CONFIG, agentType)) return AGENT_TYPE_CONFIG[agentType as AgentType];
+  return {
+    label: agentType,
+    shortLabel: agentType,
+    autonomousHint: "This dashboard doesn't recognize this agent type, so Autonomous mode is unavailable.",
+    autonomousSupported: false,
+  };
+}
+
+export function resolveAvailableAgentType(preferred: AgentType, available: AgentType[]): AgentType {
+  return available.includes(preferred) ? preferred : (available[0] ?? preferred);
+}
+
+export function normalizeAutonomousSetting(agentType: AgentType, requested: boolean): boolean {
+  return getAgentTypeDisplay(agentType).autonomousSupported && requested;
+}
 
 // --- API endpoints ---
 

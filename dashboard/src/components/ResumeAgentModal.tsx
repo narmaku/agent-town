@@ -2,7 +2,7 @@ import type { AgentType } from "@agent-town/shared";
 import type React from "react";
 import { useState } from "react";
 import { apiFetch } from "../auth";
-import { API } from "../utils";
+import { API, getAgentTypeDisplay, normalizeAutonomousSetting } from "../utils";
 
 interface Props {
   open: boolean;
@@ -24,6 +24,8 @@ export function ResumeAgentModal({
   const [autonomous, setAutonomous] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState("");
+  const agentConfig = getAgentTypeDisplay(agentType);
+  const effectiveAutonomous = normalizeAutonomousSetting(agentType, autonomous);
 
   if (!open) return null;
 
@@ -38,7 +40,7 @@ export function ResumeAgentModal({
           machineId,
           sessionId,
           projectDir,
-          autonomous,
+          autonomous: effectiveAutonomous,
           agentType,
         }),
       });
@@ -101,13 +103,18 @@ export function ResumeAgentModal({
           </div>
           <div className="form-group">
             <label className="form-toggle-row">
-              <input type="checkbox" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={effectiveAutonomous}
+                disabled={!agentConfig.autonomousSupported}
+                onChange={(e) => setAutonomous(e.target.checked)}
+              />
               <span className="form-toggle-label">Autonomous</span>
             </label>
-            {autonomous && (
+            {(effectiveAutonomous || !agentConfig.autonomousSupported) && (
               <span className="form-hint" style={{ color: "var(--yellow)" }}>
-                Skips all permission checks (--dangerously-skip-permissions). The agent will run without human approval
-                for tool use.
+                {agentConfig.autonomousHint}
+                {agentConfig.autonomousSupported && " The agent will run without human approval for tool use."}
               </span>
             )}
           </div>

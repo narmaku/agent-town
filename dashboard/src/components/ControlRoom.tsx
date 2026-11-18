@@ -11,7 +11,7 @@ import type { GroupMode, SortMode, TimeFilter } from "../App";
 import { apiFetch } from "../auth";
 import { createBrowserLogger } from "../logger";
 import { buildGroups, filterIdleSessions, filterSessionsByTime, sortSessions } from "../session-grouping";
-import { API, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
+import { API, getAgentTypeDisplay, STATUS_CONFIG, shortenPath, timeAgo } from "../utils";
 import { SessionExpanded } from "./SessionExpanded";
 
 const logger = createBrowserLogger("ControlRoom");
@@ -259,7 +259,7 @@ function ControlRoomRow({
         <span className="status-label">{config.label}</span>
         {session.agentType && session.agentType !== "claude-code" && (
           <span className={`agent-type-badge agent-${session.agentType}`} title={`Agent: ${session.agentType}`}>
-            {session.agentType === "opencode" ? "OC" : session.agentType === "gemini-cli" ? "GE" : session.agentType}
+            {getAgentTypeDisplay(session.agentType).shortLabel}
           </span>
         )}
       </div>
