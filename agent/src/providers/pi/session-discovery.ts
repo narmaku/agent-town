@@ -137,11 +137,14 @@ export async function deletePiSessionData(sessionId: string, sessionsDir = getPi
   }
 }
 
+/**
+ * List session files newest first, capped at MAX_SESSION_FILES. The cap is
+ * applied after sorting by mtime so old history can never crowd out the
+ * sessions that are actually active.
+ */
 async function findPiSessionFiles(sessionsDir: string): Promise<string[]> {
   const paths: string[] = [];
-  const rootEntries = await safeReadDir(sessionsDir);
-  for (const entry of rootEntries) {
-    if (paths.length >= MAX_SESSION_FILES) break;
+  for (const entry of await safeReadDir(sessionsDir)) {
     const path = join(sessionsDir, entry.name);
     if (entry.isFile() && entry.name.endsWith(".jsonl")) {
       paths.push(path);
@@ -149,11 +152,25 @@ async function findPiSessionFiles(sessionsDir: string): Promise<string[]> {
     }
     if (!entry.isDirectory()) continue;
     for (const child of await safeReadDir(path)) {
-      if (paths.length >= MAX_SESSION_FILES) break;
       if (child.isFile() && child.name.endsWith(".jsonl")) paths.push(join(path, child.name));
     }
   }
-  return paths;
+
+  const withMtime = await Promise.all(
+    paths.map(async (path) => {
+      try {
+        return { path, mtimeMs: (await stat(path)).mtimeMs };
+      } catch (err) {
+        log.debug(`session metadata unavailable ${basename(path)}: ${formatError(err)}`);
+        return null;
+      }
+    }),
+  );
+  return withMtime
+    .filter((entry): entry is { path: string; mtimeMs: number } => entry !== null)
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .slice(0, MAX_SESSION_FILES)
+    .map((entry) => entry.path);
 }
 
 async function safeReadDir(path: string): Promise<Dirent[]> {

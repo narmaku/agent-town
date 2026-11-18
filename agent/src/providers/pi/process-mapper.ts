@@ -54,6 +54,8 @@ function isPiCommand(args: string): boolean {
   if (executable === "env" && basename(tokens[1] ?? "") === "pi") return true;
   if ((executable === "node" || executable === "bun") && tokens[1]) {
     const script = tokens[1].replace(/\\/g, "/");
+    // A global npm install runs the `pi` bin shim, which shows up as `node /usr/local/bin/pi`.
+    if (basename(script) === "pi") return true;
     return script.includes("/pi-coding-agent/") && /\/(?:cli|pi)\.(?:js|mjs|cjs|ts)$/.test(script);
   }
   return false;

@@ -10,9 +10,10 @@ describe("Pi process mapping", () => {
       { pid: 3, ppid: 0, etimes: 10, args: "node /opt/node_modules/@mariozechner/pi-coding-agent/dist/cli.js" },
       { pid: 4, ppid: 0, etimes: 10, args: "bun /repo/pi-coding-agent/src/cli.ts" },
       { pid: 5, ppid: 0, etimes: 10, args: "/usr/bin/env pi --session abc" },
+      { pid: 6, ppid: 0, etimes: 10, args: "node /usr/local/bin/pi --model model" },
     ];
 
-    expect(filterPiProcesses(processes).map((process) => process.pid)).toEqual([1, 2, 3, 4, 5]);
+    expect(filterPiProcesses(processes).map((process) => process.pid)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   test("rejects short-name and command-text collisions", () => {

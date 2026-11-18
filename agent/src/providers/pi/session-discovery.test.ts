@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -113,6 +113,25 @@ describe("Pi session discovery", () => {
       nowMs: metadata.mtimeMs + 31 * 24 * 60 * 60 * 1000,
     });
     expect(expired).toEqual([]);
+  });
+
+  test("keeps recent sessions visible when old history exceeds the file cap", async () => {
+    const root = await makeRoot();
+    await writeSession(join(root, "--work-current--", "current.jsonl"), { id: "current" });
+    const oldBucket = join(root, "--work-old--");
+    await mkdir(oldBucket, { recursive: true });
+    const oldTime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await Promise.all(
+      Array.from({ length: 1_000 }, async (_, index) => {
+        const path = join(oldBucket, `old-${index}.jsonl`);
+        await writeFile(path, "");
+        await utimes(path, oldTime, oldTime);
+      }),
+    );
+
+    const sessions = await discoverPiSessions({ sessionsDir: root, nowMs: Date.now() });
+
+    expect(sessions.map((session) => session.sessionId)).toEqual(["current"]);
   });
 
   test("finds and deletes only the file whose header has the exact session ID", async () => {
