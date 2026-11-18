@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 import {
   AGENT_TYPE_CONFIG,
-  AGENT_TYPE_LABELS,
   API,
+  getAgentTypeDisplay,
   resolveAvailableAgentType,
   STATUS_CONFIG,
   shortenPath,
@@ -20,7 +20,12 @@ describe("agent type metadata", () => {
       shortLabel: "CX",
       autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
     });
-    expect(AGENT_TYPE_LABELS.codex).toBe("Codex CLI");
+    expect(getAgentTypeDisplay("codex").label).toBe("Codex CLI");
+  });
+
+  test("falls back to the raw name for agent types this dashboard does not know", () => {
+    expect(getAgentTypeDisplay("future-agent")).toMatchObject({ label: "future-agent", shortLabel: "future-agent" });
+    expect(getAgentTypeDisplay("toString").label).toBe("toString");
   });
 
   test("falls back when the preferred provider is unavailable on a machine", () => {

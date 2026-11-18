@@ -15,9 +15,37 @@ const log = createLogger("codex:messages");
 const TOOL_CONTENT_MAX_LENGTH = 2_000;
 const SEARCH_SNIPPET_LENGTH = 120;
 
+/**
+ * Prefixes of user-role messages that Codex injects into the model context
+ * (environment details, AGENTS.md instructions) rather than text the user typed.
+ */
+const INJECTED_CONTEXT_PREFIXES = [
+  "<environment_context>",
+  "<user_instructions>",
+  "# AGENTS.md instructions for ",
+] as const;
+
+function isInjectedContextMessage(content: string): boolean {
+  const trimmed = content.trimStart();
+  return INJECTED_CONTEXT_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
+function hasResponseItem(records: Record<string, unknown>[], payloadType: string): boolean {
+  return records.some(
+    (record) => record.type === "response_item" && isRecord(record.payload) && record.payload.type === payloadType,
+  );
+}
+
 export function parseCodexTranscript(text: string): SessionMessage[] {
   const messages: SessionMessage[] = [];
   let pendingToolMessage: SessionMessage | undefined;
+  const records = text.split("\n").flatMap((line) => parseRecord(line) ?? []);
+
+  // Current rollouts persist each turn twice: as model-facing `response_item`
+  // records and as UI-facing `event_msg` mirrors. Prefer the response items and
+  // only fall back to the event mirrors for legacy rollouts that lack them.
+  const useEventMessages = !hasResponseItem(records, "message");
+  const useEventReasoning = !hasResponseItem(records, "reasoning");
 
   const flushPendingToolMessage = (): void => {
     if (!pendingToolMessage) return;
@@ -25,9 +53,7 @@ export function parseCodexTranscript(text: string): SessionMessage[] {
     pendingToolMessage = undefined;
   };
 
-  for (const line of text.split("\n")) {
-    const record = parseRecord(line);
-    if (!record) continue;
+  for (const record of records) {
     const payload = isRecord(record.payload) ? record.payload : undefined;
     if (!payload) continue;
     const timestamp = normalizeTimestamp(record.timestamp);
@@ -39,6 +65,7 @@ export function parseCodexTranscript(text: string): SessionMessage[] {
       flushPendingToolMessage();
       const content = extractText(payload.content);
       if (!content) continue;
+      if (role === "user" && isInjectedContextMessage(content)) continue;
       messages.push({
         role,
         timestamp,
@@ -86,6 +113,7 @@ export function parseCodexTranscript(text: string): SessionMessage[] {
     if (record.type !== "event_msg") continue;
 
     if (payloadType === "user_message" || payloadType === "agent_message") {
+      if (!useEventMessages) continue;
       flushPendingToolMessage();
       const content = stringValue(payload.message) || extractText(payload.content);
       if (!content) continue;
@@ -99,6 +127,7 @@ export function parseCodexTranscript(text: string): SessionMessage[] {
     }
 
     if (payloadType === "agent_reasoning") {
+      if (!useEventReasoning) continue;
       flushPendingToolMessage();
       const thinking = stringValue(payload.text) || stringValue(payload.message) || extractText(payload.content);
       if (thinking) messages.push({ role: "assistant", timestamp, content: "", thinking });

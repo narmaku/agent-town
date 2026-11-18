@@ -17,6 +17,21 @@ describe("Codex process mapping", () => {
     expect(filterCodexProcesses(processes).map((process) => process.pid)).toEqual([1, 2, 3]);
   });
 
+  test("tracks the native binary instead of the npm launcher that wraps it", () => {
+    const processes = [
+      { pid: 10, ppid: 1, etimes: 30, args: `node /usr/local/bin/codex resume ${SESSION_ID}` },
+      {
+        pid: 11,
+        ppid: 10,
+        etimes: 29,
+        args: `/usr/lib/node_modules/@openai/codex/vendor/x86_64-unknown-linux-musl/codex/codex resume ${SESSION_ID}`,
+      },
+      { pid: 12, ppid: 11, etimes: 2, args: "bash -lc 'bun test'" },
+    ];
+
+    expect(filterCodexProcesses(processes).map((process) => process.pid)).toEqual([11]);
+  });
+
   test("extracts only a UUID after the resume subcommand", () => {
     expect(extractCodexSessionIdFromArgs(`codex resume ${SESSION_ID} --model gpt-5.3-codex`)).toBe(SESSION_ID);
     expect(extractCodexSessionIdFromArgs(`codex --model gpt-5.3-codex resume ${SESSION_ID}`)).toBe(SESSION_ID);
