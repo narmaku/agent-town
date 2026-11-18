@@ -51,6 +51,7 @@ export interface AgentTypeDisplayConfig {
   label: string;
   shortLabel: string;
   autonomousHint: string;
+  autonomousSupported: boolean;
 }
 
 export const AGENT_TYPE_CONFIG: Record<AgentType, AgentTypeDisplayConfig> = {
@@ -58,21 +59,31 @@ export const AGENT_TYPE_CONFIG: Record<AgentType, AgentTypeDisplayConfig> = {
     label: "Claude Code",
     shortLabel: "CC",
     autonomousHint: "Skips all permission checks (--dangerously-skip-permissions).",
+    autonomousSupported: true,
   },
   opencode: {
     label: "OpenCode",
     shortLabel: "OC",
     autonomousHint: 'OpenCode uses config-based permissions — ensure opencode.json has permission: "allow".',
+    autonomousSupported: true,
   },
   "gemini-cli": {
     label: "Gemini CLI",
     shortLabel: "GE",
     autonomousHint: "Auto-approves all actions (--yolo mode).",
+    autonomousSupported: true,
   },
   codex: {
     label: "Codex CLI",
     shortLabel: "CX",
     autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
+    autonomousSupported: true,
+  },
+  pi: {
+    label: "Pi",
+    shortLabel: "PI",
+    autonomousHint: "Pi has no tool-approval or built-in sandbox layer; Autonomous does not apply.",
+    autonomousSupported: false,
   },
 };
 
@@ -86,12 +97,17 @@ export function getAgentTypeDisplay(agentType: string): AgentTypeDisplayConfig {
   return {
     label: agentType,
     shortLabel: agentType,
-    autonomousHint: "Runs without permission prompts.",
+    autonomousHint: "This dashboard doesn't recognize this agent type, so Autonomous mode is unavailable.",
+    autonomousSupported: false,
   };
 }
 
 export function resolveAvailableAgentType(preferred: AgentType, available: AgentType[]): AgentType {
   return available.includes(preferred) ? preferred : (available[0] ?? preferred);
+}
+
+export function normalizeAutonomousSetting(agentType: AgentType, requested: boolean): boolean {
+  return getAgentTypeDisplay(agentType).autonomousSupported && requested;
 }
 
 // --- API endpoints ---

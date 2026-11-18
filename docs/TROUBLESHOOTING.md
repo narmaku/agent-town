@@ -62,6 +62,7 @@ On startup, the agent logs which providers are available:
 [info] registry: registered provider: Claude Code (claude-code)
 [info] registry: registered provider: OpenCode (opencode)
 [info] registry: registered provider: Codex CLI (codex)
+[info] registry: registered provider: Pi (pi)
 ```
 
 If a provider is not available:
@@ -69,7 +70,7 @@ If a provider is not available:
 [info] registry: provider not available: Claude Code (claude not found)
 ```
 
-Ensure the agent binary (`claude`, `opencode`, `gemini`, or `codex`) is in the agent process's `$PATH`. When running as a systemd service, the `PATH` must be explicitly set in the service file.
+Ensure the agent binary (`claude`, `opencode`, `gemini`, `codex`, or `pi`) is in the agent process's `$PATH`. When running as a systemd service, the `PATH` must be explicitly set in the service file. Pi's help output must identify it as the Pi coding agent; an unrelated system utility named `pi` is intentionally rejected.
 
 **Check 3: Session data exists**
 
@@ -93,6 +94,13 @@ ls "${CODEX_HOME:-$HOME/.codex}"/sessions/*/*/*/*.jsonl
 
 Agent Town reads a compatible database schema in read-only mode and otherwise falls back to bounded rollout scanning. Archived and subagent sessions are intentionally hidden.
 
+For Pi, check the native session root without editing the files:
+```bash
+ls "${PI_CODING_AGENT_SESSION_DIR:-${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/sessions}"/*/*.jsonl
+```
+
+Pi sessions form a tree. Agent Town displays only the ancestry of the last active leaf, so messages on an abandoned branch are intentionally absent. Current status is estimated from file activity and the running process.
+
 **Check 4: Process mapper is working**
 
 With `LOG_LEVEL=debug`, look for process mapper output:
@@ -102,7 +110,7 @@ With `LOG_LEVEL=debug`, look for process mapper output:
 
 If no agent processes are found, the mapper logs nothing. Verify the agent is actually running:
 ```bash
-ps aux | grep -E "claude|opencode|gemini|codex" | grep -v grep
+ps aux | grep -E "claude|opencode|gemini|codex|pi" | grep -v grep
 ```
 
 ---
@@ -181,6 +189,8 @@ If the Agent Town agent itself is running inside a zellij or tmux session, attac
 **OpenCode:** Text is sent via bracketed paste mode through the PTY. The OpenCode TUI (Bubble Tea) requires specific handling. If the OpenCode SDK is available, the provider also attempts to use `tui.appendPrompt` / `tui.submitPrompt` for more reliable delivery.
 
 **Codex CLI:** Text is sent through the same bracketed-paste TUI path. A busy turn may defer input until Codex is ready.
+
+**Pi:** Text is sent through bracketed-paste mode. Agent Town does not send a synthetic initial prompt or attempt to accept unrelated trust/disclaimer dialogs.
 
 For multi-line text, a backup Enter is sent via native multiplexer commands (`zellij action write 13` or `tmux send-keys Enter`) after the PTY write, in case the PTY carriage return was swallowed.
 
@@ -311,6 +321,13 @@ If neither matches, the session will show as "idle".
 - Status is activity/process based because Agent Town does not install Codex hooks.
 - Resume and native delete require a full UUID. Delete failures are reported and Agent Town does not guess or unlink transcript paths.
 
+### Pi
+
+- Resume uses `pi --session <id>`; `pi --resume` is the interactive picker and is not used by Agent Town.
+- Pi has no tool-approval or built-in sandbox layer, so Agent Town disables and ignores its generic Autonomous option. Pi's separate project-trust prompt may still appear for project-local resources.
+- Deletion locates the exact session header ID rather than guessing from timestamped filenames.
+- `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` must be visible to the Agent Town service environment.
+
 ---
 
 ## How to Report Bugs
@@ -321,7 +338,7 @@ If neither matches, the session will show as "idle".
    - Operating system and version
    - Bun version (`bun --version`)
    - Multiplexer and version (`zellij --version` / `tmux -V`)
-   - Agent type and version (`claude --version` / `opencode --version` / `gemini --version` / `codex --version`)
+   - Agent type and version (`claude --version` / `opencode --version` / `gemini --version` / `codex --version` / `pi --version`)
 4. Open an issue at https://github.com/narmaku/agent-town/issues with:
    - Steps to reproduce
    - Expected behavior

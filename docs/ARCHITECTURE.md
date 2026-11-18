@@ -41,7 +41,7 @@ This document describes the internal architecture, data flows, and key subsystem
 
 **Server** (`server/`): Central hub running on port 4680. Receives heartbeats from agents, stores machine/session state in memory, broadcasts updates to dashboard clients, proxies API calls and terminal connections to agents. Manages SSH tunnels for remote nodes.
 
-**Agent** (`agent/`): Runs on each machine (local or remote) on port 4681. Discovers AI coding agent sessions (Claude Code, OpenCode, Gemini CLI, Codex CLI) through the provider plugin system, maps running processes to multiplexer sessions, sends heartbeats to the server, and provides terminal relay and session management APIs.
+**Agent** (`agent/`): Runs on each machine (local or remote) on port 4681. Discovers AI coding agent sessions (Claude Code, OpenCode, Gemini CLI, Codex CLI, Pi) through the provider plugin system, maps running processes to multiplexer sessions, sends heartbeats to the server, and provides terminal relay and session management APIs.
 
 **Shared** (`shared/`): TypeScript type definitions and the logger utility. No runtime dependencies. Used by both server and agent.
 
@@ -67,6 +67,7 @@ Calls `discoverSessions()` on all registered providers in parallel. Each provide
 - **OpenCode:** Calls `session.list()` via the SDK (or reads SQLite at `~/.opencode/data.db` as fallback).
 - **Gemini CLI:** Scans `~/.gemini/tmp/<project_hash>/chats/` for JSON session files. Resolves project paths via `~/.gemini/projects.json` or `.project_root` files. Status is inferred from file modification times.
 - **Codex CLI:** Honors `CODEX_HOME` (default `~/.codex`), reads compatible versioned state databases in read-only mode, and falls back to bounded scans of active rollout JSONL files. Archived and subagent sessions are excluded. Because Codex has no Agent Town hook integration, status is inferred from activity and process mapping.
+- **Pi:** Scans direct and working-directory buckets under `PI_CODING_AGENT_SESSION_DIR` (default `~/.pi/agent/sessions`). Tree-format sessions are reduced to the ancestry of the latest active leaf; legacy v1 sessions remain linear. Status is inferred from activity and process mapping because Pi has no hook integration.
 
 Returns a flat array of `SessionInfo[]` -- at this point, no multiplexer mapping exists.
 

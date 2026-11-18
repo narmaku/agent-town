@@ -6,6 +6,7 @@ import {
   AGENT_TYPE_CONFIG,
   API,
   getAgentTypeDisplay,
+  normalizeAutonomousSetting,
   resolveAvailableAgentType,
   STATUS_CONFIG,
   shortenPath,
@@ -14,11 +15,12 @@ import {
 
 describe("agent type metadata", () => {
   test("defines labels, badges, and autonomy help for every provider", () => {
-    expect(Object.keys(AGENT_TYPE_CONFIG).sort()).toEqual(["claude-code", "codex", "gemini-cli", "opencode"]);
+    expect(Object.keys(AGENT_TYPE_CONFIG).sort()).toEqual(["claude-code", "codex", "gemini-cli", "opencode", "pi"]);
     expect(AGENT_TYPE_CONFIG.codex).toEqual({
       label: "Codex CLI",
       shortLabel: "CX",
       autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
+      autonomousSupported: true,
     });
     expect(getAgentTypeDisplay("codex").label).toBe("Codex CLI");
   });
@@ -28,9 +30,26 @@ describe("agent type metadata", () => {
     expect(getAgentTypeDisplay("toString").label).toBe("toString");
   });
 
+  test("defines Pi metadata without autonomy support", () => {
+    expect(AGENT_TYPE_CONFIG.pi).toEqual({
+      label: "Pi",
+      shortLabel: "PI",
+      autonomousHint: "Pi has no tool-approval or built-in sandbox layer; Autonomous does not apply.",
+      autonomousSupported: false,
+    });
+    expect(getAgentTypeDisplay("pi").label).toBe("Pi");
+    expect(readFileSync(join(import.meta.dir, "styles.css"), "utf8")).toContain(".agent-pi");
+  });
+
   test("falls back when the preferred provider is unavailable on a machine", () => {
     expect(resolveAvailableAgentType("codex", ["claude-code", "opencode"])).toBe("claude-code");
     expect(resolveAvailableAgentType("codex", ["claude-code", "codex"])).toBe("codex");
+  });
+
+  test("forces unsupported Pi autonomous requests off", () => {
+    expect(normalizeAutonomousSetting("pi", true)).toBe(false);
+    expect(normalizeAutonomousSetting("codex", true)).toBe(true);
+    expect(normalizeAutonomousSetting("codex", false)).toBe(false);
   });
 });
 
