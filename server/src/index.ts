@@ -5,15 +5,28 @@ import {
   createLogger,
   errorMessage,
   type Heartbeat,
+  isLoopbackHost,
   type LaunchAgentRequest,
+  LOOPBACK_HOST,
   type RenameSessionRequest,
   type ResumeAgentRequest,
   type Settings,
   type UpdateNodeRequest,
   type WebSocketMessage,
 } from "@agent-town/shared";
-import { broadcastToClients, PROXY_LAUNCH_TIMEOUT_MS, proxyFetch, WS_CONNECT_TIMEOUT_MS } from "./proxy-fetch";
-import { connectAutoNodes, connectNode, disconnectNode, resolveAgentEndpoint, testNodeConnection } from "./ssh-manager";
+import { authHeaders, parseOriginList } from "@agent-town/shared/request-guard";
+import { loadOrCreateToken } from "@agent-town/shared/token-store";
+import type { Server } from "bun";
+import { agentProxyFetch, broadcastToClients, PROXY_LAUNCH_TIMEOUT_MS, WS_CONNECT_TIMEOUT_MS } from "./proxy-fetch";
+import { guardServerRequest } from "./server-guard";
+import {
+  connectAutoNodes,
+  connectNode,
+  disconnectNode,
+  resolveAgentEndpoint,
+  setRemoteAgentToken,
+  testNodeConnection,
+} from "./ssh-manager";
 import {
   addPendingSession,
   createNode,
@@ -36,8 +49,26 @@ import {
 
 const log = createLogger("server");
 
-const PORT = Number(process.env.AGENT_TOWN_PORT || "4680");
+const DEFAULT_PORT = 4680;
 const DASHBOARD_DIR = join(import.meta.dir, "../../dashboard/dist");
+
+export interface ServerOptions {
+  port: number;
+  /** Interface to bind. Defaults to loopback; use 0.0.0.0 to serve the LAN. */
+  hostname: string;
+  /** Shared secret required from the dashboard and from agents. */
+  token: string;
+  /** Extra browser origins allowed besides the dashboard's own. */
+  allowedOrigins: readonly string[];
+}
+
+// Shared secret, set by startServer(); attached to every server→agent request.
+let agentToken = "";
+
+/** Fetch from an agent with the shared token (see agentProxyFetch). */
+function agentFetch(url: string, init?: RequestInit, timeoutMs?: number): ReturnType<typeof agentProxyFetch> {
+  return agentProxyFetch(url, agentToken, init, timeoutMs);
+}
 
 // Track connected dashboard WebSocket clients
 const wsClients = new Set<{ ws: unknown; send: (data: string) => void }>();
@@ -150,15 +181,14 @@ async function routeRequest(
       // Uses socket IP for direct agent connections. If deployed behind a reverse proxy,
       // this will return the proxy's IP — configure trusted proxy headers in that case.
       const socketIP = server.requestIP(req);
-      const agentAddress = socketIP?.address || "localhost";
+      const agentAddress = socketIP?.address || LOOPBACK_HOST;
       upsertMachine(heartbeat);
 
       // Update the agent address after upsert
       const machine = getMachine(heartbeat.machineId);
       if (machine) {
-        // For local connections, use localhost
-        const isLocal = agentAddress === "127.0.0.1" || agentAddress === "::1" || agentAddress === "localhost";
-        machine.agentAddress = isLocal ? "localhost" : agentAddress;
+        // Local agents bind to 127.0.0.1 by default; dial that, not "localhost" (which may resolve to ::1)
+        machine.agentAddress = isLoopbackHost(agentAddress) ? LOOPBACK_HOST : agentAddress;
       }
 
       broadcast({
@@ -194,7 +224,7 @@ async function routeRequest(
       getAgentUrl(machine, "/api/session-messages") +
       `?sessionId=${encodeURIComponent(sessionId)}&agentType=${agentType}&offset=${offset}&limit=${limit}`;
 
-    const result = await proxyFetch(agentUrl);
+    const result = await agentFetch(agentUrl);
     if (!result.ok) {
       return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
@@ -221,7 +251,7 @@ async function routeRequest(
       getAgentUrl(machine, "/api/search-messages") +
       `?query=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`;
 
-    const result = await proxyFetch(agentUrl);
+    const result = await agentFetch(agentUrl);
     if (!result.ok) {
       return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
@@ -245,7 +275,7 @@ async function routeRequest(
 
     const agentUrl = `${getAgentUrl(machine, "/api/git-diff")}?dir=${encodeURIComponent(dir)}`;
 
-    const result = await proxyFetch(agentUrl);
+    const result = await agentFetch(agentUrl);
     if (!result.ok) {
       return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
@@ -269,7 +299,7 @@ async function routeRequest(
 
     const agentUrl = `${getAgentUrl(machine, "/api/list-dirs")}?dir=${encodeURIComponent(dir)}`;
 
-    const result = await proxyFetch(agentUrl);
+    const result = await agentFetch(agentUrl);
     if (!result.ok) {
       return Response.json({ error: result.error, message: result.message }, { status: result.status });
     }
@@ -300,7 +330,7 @@ async function routeRequest(
           const machine = getMachine(body.machineId);
           if (machine?.terminalPort) {
             const agentUrl = getAgentUrl(machine, "/api/rename-session");
-            const renameResult = await proxyFetch(agentUrl, {
+            const renameResult = await agentFetch(agentUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -357,7 +387,7 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/kill");
 
-      const result = await proxyFetch(agentUrl, {
+      const result = await agentFetch(agentUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -402,7 +432,7 @@ async function routeRequest(
       if (muxSession && muxType) {
         log.info(`delete: killing mux session=${muxSession} type=${muxType}`);
         const killUrl = getAgentUrl(machine, "/api/kill");
-        const killResult = await proxyFetch(killUrl, {
+        const killResult = await agentFetch(killUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ multiplexer: muxType, session: muxSession }),
@@ -414,7 +444,7 @@ async function routeRequest(
 
       // Step 3: Delete the JSONL file
       const deleteUrl = getAgentUrl(machine, "/api/delete-session");
-      const deleteResult = await proxyFetch(deleteUrl, {
+      const deleteResult = await agentFetch(deleteUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: body.sessionId, agentType: body.agentType }),
@@ -459,7 +489,7 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/send");
 
-      const result = await proxyFetch(agentUrl, {
+      const result = await agentFetch(agentUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -499,7 +529,7 @@ async function routeRequest(
       const agentUrl = getAgentUrl(machine, "/api/upload");
       const contentType = req.headers.get("content-type");
 
-      const result = await proxyFetch(agentUrl, {
+      const result = await agentFetch(agentUrl, {
         method: "POST",
         headers: contentType ? { "content-type": contentType } : {},
         body: req.body,
@@ -539,7 +569,7 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/reconnect");
 
-      const result = await proxyFetch(agentUrl, {
+      const result = await agentFetch(agentUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -596,7 +626,7 @@ async function routeRequest(
 
       const agentUrl = getAgentUrl(machine, "/api/launch");
 
-      const result = await proxyFetch(
+      const result = await agentFetch(
         agentUrl,
         {
           method: "POST",
@@ -669,7 +699,7 @@ async function routeRequest(
       const rawName = savedName || slug || body.sessionId.slice(0, 8);
       const sessionName = rawName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 50);
 
-      const result = await proxyFetch(
+      const result = await agentFetch(
         agentUrl,
         {
           method: "POST",
@@ -821,152 +851,178 @@ async function routeRequest(
   return new Response("Not found", { status: 404 });
 }
 
-const _server = Bun.serve({
-  port: PORT,
-  hostname: "0.0.0.0",
+/** Start the HTTP/WebSocket server. Every /api and /ws request must pass the request guards. */
+export function startServer(opts: ServerOptions): Server {
+  agentToken = opts.token;
+  setRemoteAgentToken(opts.token);
+  const guardOptions = { token: opts.token, allowedOrigins: opts.allowedOrigins };
 
-  async fetch(req, server) {
-    const response = await routeRequest(req, server);
-    return response ? withSecurityHeaders(response) : undefined;
-  },
+  const server = Bun.serve({
+    port: opts.port,
+    hostname: opts.hostname,
 
-  websocket: {
-    open(ws) {
-      const data = ws.data as { type: string; [key: string]: unknown };
+    async fetch(req, server) {
+      const denied = guardServerRequest(req, guardOptions);
+      if (denied) return withSecurityHeaders(denied);
+      const response = await routeRequest(req, server);
+      return response ? withSecurityHeaders(response) : undefined;
+    },
 
-      if (data.type === "dashboard") {
-        log.debug(`ws: dashboard client connected (total=${wsClients.size + 1})`);
-        const client = {
-          ws,
-          send: (d: string) => ws.send(d),
-        };
-        wsClients.add(client);
-        ws.send(
-          JSON.stringify({
-            type: "machines_update",
-            payload: getAllMachines(),
-          }),
-        );
-        return;
-      }
+    websocket: {
+      open(ws) {
+        const data = ws.data as { type: string; [key: string]: unknown };
 
-      if (data.type === "terminal") {
-        const { agentHost, agentPort, session, multiplexer, cols, rows } = data as {
-          agentHost: string;
-          agentPort: number;
-          session: string;
-          multiplexer: string;
-          cols: string;
-          rows: string;
-        };
+        if (data.type === "dashboard") {
+          log.debug(`ws: dashboard client connected (total=${wsClients.size + 1})`);
+          const client = {
+            ws,
+            send: (d: string) => ws.send(d),
+          };
+          wsClients.add(client);
+          ws.send(
+            JSON.stringify({
+              type: "machines_update",
+              payload: getAllMachines(),
+            }),
+          );
+          return;
+        }
 
-        // Connect to the agent's terminal WebSocket
-        const agentUrl =
-          `ws://${agentHost}:${agentPort}/ws/terminal` +
-          `?session=${encodeURIComponent(session)}` +
-          `&multiplexer=${multiplexer}` +
-          `&cols=${cols}&rows=${rows}`;
+        if (data.type === "terminal") {
+          const { agentHost, agentPort, session, multiplexer, cols, rows } = data as {
+            agentHost: string;
+            agentPort: number;
+            session: string;
+            multiplexer: string;
+            cols: string;
+            rows: string;
+          };
 
-        const agentWs = new WebSocket(agentUrl);
+          // Connect to the agent's terminal WebSocket
+          const agentUrl =
+            `ws://${agentHost}:${agentPort}/ws/terminal` +
+            `?session=${encodeURIComponent(session)}` +
+            `&multiplexer=${multiplexer}` +
+            `&cols=${cols}&rows=${rows}`;
 
-        agentWs.binaryType = "arraybuffer";
+          // Bun's WebSocket client accepts headers, so the token never appears in the URL
+          const agentWs = new WebSocket(agentUrl, { headers: authHeaders(agentToken) });
 
-        // Connection timeout — close if agent doesn't respond within WS_CONNECT_TIMEOUT_MS
-        const connectTimeout = setTimeout(() => {
-          if (agentWs.readyState !== WebSocket.OPEN) {
-            log.warn(`ws: terminal proxy connection timeout for session=${session} agent=${agentHost}:${agentPort}`);
+          agentWs.binaryType = "arraybuffer";
+
+          // Connection timeout — close if agent doesn't respond within WS_CONNECT_TIMEOUT_MS
+          const connectTimeout = setTimeout(() => {
+            if (agentWs.readyState !== WebSocket.OPEN) {
+              log.warn(`ws: terminal proxy connection timeout for session=${session} agent=${agentHost}:${agentPort}`);
+              try {
+                ws.send("\r\n\x1b[31mConnection to agent terminal timed out\x1b[0m\r\n");
+                ws.close();
+              } catch (_err) {
+                // already closed
+              }
+              agentWs.close();
+            }
+          }, WS_CONNECT_TIMEOUT_MS);
+
+          agentWs.onopen = () => {
+            clearTimeout(connectTimeout);
+            log.debug(`ws: terminal proxy established for session=${session}`);
+          };
+
+          agentWs.onmessage = (event) => {
             try {
-              ws.send("\r\n\x1b[31mConnection to agent terminal timed out\x1b[0m\r\n");
+              if (event.data instanceof ArrayBuffer) {
+                ws.send(new Uint8Array(event.data));
+              } else {
+                ws.send(event.data);
+              }
+            } catch (_err) {
+              agentWs.close();
+            }
+          };
+
+          agentWs.onclose = () => {
+            clearTimeout(connectTimeout);
+            try {
               ws.close();
             } catch (_err) {
               // already closed
             }
-            agentWs.close();
-          }
-        }, WS_CONNECT_TIMEOUT_MS);
+            terminalProxies.delete(ws);
+          };
 
-        agentWs.onopen = () => {
-          clearTimeout(connectTimeout);
-          log.debug(`ws: terminal proxy established for session=${session}`);
-        };
-
-        agentWs.onmessage = (event) => {
-          try {
-            if (event.data instanceof ArrayBuffer) {
-              ws.send(new Uint8Array(event.data));
-            } else {
-              ws.send(event.data);
+          agentWs.onerror = () => {
+            clearTimeout(connectTimeout);
+            log.warn(`ws: terminal proxy error for session=${session} agent=${agentHost}:${agentPort}`);
+            try {
+              ws.send("\r\n\x1b[31mFailed to connect to agent terminal server\x1b[0m\r\n");
+              ws.close();
+            } catch (_err) {
+              // already closed
             }
-          } catch (_err) {
-            agentWs.close();
-          }
-        };
+          };
 
-        agentWs.onclose = () => {
-          clearTimeout(connectTimeout);
-          try {
-            ws.close();
-          } catch (_err) {
-            // already closed
+          terminalProxies.set(ws, agentWs);
+        }
+      },
+
+      message(ws, message) {
+        // Forward terminal data from browser to agent
+        const agentWs = terminalProxies.get(ws);
+        if (agentWs && agentWs.readyState === WebSocket.OPEN) {
+          if (typeof message === "string") {
+            agentWs.send(message);
+          } else {
+            agentWs.send(message);
           }
+        }
+      },
+
+      close(ws) {
+        // Clean up dashboard clients — copy to array to avoid mutation during iteration
+        for (const client of [...wsClients]) {
+          if (client.ws === ws) {
+            wsClients.delete(client);
+            break;
+          }
+        }
+
+        // Clean up terminal proxies
+        const agentWs = terminalProxies.get(ws);
+        if (agentWs) {
+          agentWs.close();
           terminalProxies.delete(ws);
-        };
-
-        agentWs.onerror = () => {
-          clearTimeout(connectTimeout);
-          log.warn(`ws: terminal proxy error for session=${session} agent=${agentHost}:${agentPort}`);
-          try {
-            ws.send("\r\n\x1b[31mFailed to connect to agent terminal server\x1b[0m\r\n");
-            ws.close();
-          } catch (_err) {
-            // already closed
-          }
-        };
-
-        terminalProxies.set(ws, agentWs);
-      }
-    },
-
-    message(ws, message) {
-      // Forward terminal data from browser to agent
-      const agentWs = terminalProxies.get(ws);
-      if (agentWs && agentWs.readyState === WebSocket.OPEN) {
-        if (typeof message === "string") {
-          agentWs.send(message);
-        } else {
-          agentWs.send(message);
         }
-      }
+      },
     },
-
-    close(ws) {
-      // Clean up dashboard clients — copy to array to avoid mutation during iteration
-      for (const client of [...wsClients]) {
-        if (client.ws === ws) {
-          wsClients.delete(client);
-          break;
-        }
-      }
-
-      // Clean up terminal proxies
-      const agentWs = terminalProxies.get(ws);
-      if (agentWs) {
-        agentWs.close();
-        terminalProxies.delete(ws);
-      }
-    },
-  },
-});
-
-log.info(`listening on http://0.0.0.0:${PORT} — dashboard: http://localhost:${PORT}`);
-
-// Auto-connect to nodes marked with autoConnect
-connectAutoNodes();
-
-// Periodically clean up stale machines and broadcast removals
-startStaleCleanupLoop(() => {
-  broadcast({
-    type: "machines_update",
-    payload: getAllMachines(),
   });
-});
+
+  log.info(`listening on http://${opts.hostname}:${opts.port}`);
+  return server;
+}
+
+if (import.meta.main) {
+  const hostname = process.env.AGENT_TOWN_HOST || LOOPBACK_HOST;
+  const port = Number(process.env.AGENT_TOWN_PORT || DEFAULT_PORT);
+  startServer({
+    port,
+    hostname,
+    token: loadOrCreateToken(),
+    allowedOrigins: parseOriginList(process.env.AGENT_TOWN_ALLOWED_ORIGINS),
+  });
+  log.info(`dashboard: http://localhost:${port}/#token=<contents of ~/.agent-town/token>`);
+  if (!isLoopbackHost(hostname)) {
+    log.warn(`bound to ${hostname}: the API is reachable from the network (token-protected)`);
+  }
+
+  // Auto-connect to nodes marked with autoConnect
+  connectAutoNodes();
+
+  // Periodically clean up stale machines and broadcast removals
+  startStaleCleanupLoop(() => {
+    broadcast({
+      type: "machines_update",
+      payload: getAllMachines(),
+    });
+  });
+}

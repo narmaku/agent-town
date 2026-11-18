@@ -1,6 +1,7 @@
 import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiFetch } from "../auth";
 import { AGENT_TYPE_CONFIG, API, normalizeAutonomousSetting, resolveAvailableAgentType } from "../utils";
 import { DirectoryBrowserModal } from "./DirectoryBrowserModal";
 
@@ -81,7 +82,7 @@ export function LaunchAgentModal({
 
   useEffect(() => {
     if (open) {
-      fetch(API.SETTINGS)
+      apiFetch(API.SETTINGS)
         .then((r) => r.json())
         .then((s: Settings) => {
           setGlobalSettings(s);
@@ -185,7 +186,7 @@ export function LaunchAgentModal({
     setLaunching(true);
     setError("");
     try {
-      const resp = await fetch(API.AGENTS_LAUNCH, {
+      const resp = await apiFetch(API.AGENTS_LAUNCH, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

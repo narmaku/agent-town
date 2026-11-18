@@ -1,7 +1,7 @@
 import type { AgentType, SessionInfo, TerminalMultiplexer } from "@agent-town/shared";
 import type React from "react";
 import { useState } from "react";
-
+import { apiFetch } from "../auth";
 import { createBrowserLogger } from "../logger";
 import { API } from "../utils";
 import { DiffModal } from "./DiffModal";
@@ -64,7 +64,7 @@ export function SessionExpanded({
     if (!window.confirm(`Close session "${session.multiplexerSession}"? This will terminate the agent.`)) return;
 
     try {
-      const resp = await fetch(API.SESSIONS_KILL, {
+      const resp = await apiFetch(API.SESSIONS_KILL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -85,7 +85,7 @@ export function SessionExpanded({
 
   async function deleteSession() {
     try {
-      await fetch(API.SESSIONS_DELETE, {
+      await apiFetch(API.SESSIONS_DELETE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

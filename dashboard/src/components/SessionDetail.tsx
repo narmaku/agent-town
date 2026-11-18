@@ -1,5 +1,6 @@
 import type { AgentType, SessionInfo, SessionMessage, TerminalMultiplexer } from "@agent-town/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch } from "../auth";
 import { useResizable } from "../hooks/useResizable";
 import { useWindowWidth } from "../hooks/useWindowWidth";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
@@ -165,7 +166,7 @@ export function SessionDetail({
     async (currentOffset: number) => {
       setLoadingHistory(true);
       try {
-        const resp = await fetch(
+        const resp = await apiFetch(
           `${API.SESSION_MESSAGES}?machineId=${machineId}` +
             `&sessionId=${session.sessionId}` +
             `&agentType=${session.agentType || DEFAULT_AGENT_TYPE}` +
@@ -193,7 +194,7 @@ export function SessionDetail({
 
   const refreshLatest = useCallback(async () => {
     try {
-      const resp = await fetch(
+      const resp = await apiFetch(
         `${API.SESSION_MESSAGES}?machineId=${machineId}` +
           `&sessionId=${session.sessionId}` +
           `&agentType=${session.agentType || DEFAULT_AGENT_TYPE}` +
@@ -256,7 +257,7 @@ export function SessionDetail({
   async function loadAll() {
     setLoadingHistory(true);
     try {
-      const resp = await fetch(
+      const resp = await apiFetch(
         `${API.SESSION_MESSAGES}?machineId=${machineId}` +
           `&sessionId=${session.sessionId}` +
           `&agentType=${session.agentType || DEFAULT_AGENT_TYPE}` +
@@ -289,7 +290,7 @@ export function SessionDetail({
     if (!window.confirm(`Close session "${session.multiplexerSession}"? This will terminate the agent.`)) return;
 
     try {
-      const resp = await fetch(API.SESSIONS_KILL, {
+      const resp = await apiFetch(API.SESSIONS_KILL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -301,7 +302,7 @@ export function SessionDetail({
 
       if (resp.ok && autoDeleteOnClose) {
         try {
-          await fetch(API.SESSIONS_DELETE, {
+          await apiFetch(API.SESSIONS_DELETE, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -333,7 +334,7 @@ export function SessionDetail({
   async function handleResumeForTerminal() {
     setResuming(true);
     try {
-      const resp = await fetch(API.AGENTS_RESUME, {
+      const resp = await apiFetch(API.AGENTS_RESUME, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

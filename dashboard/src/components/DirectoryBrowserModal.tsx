@@ -1,5 +1,6 @@
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "../auth";
 import { API } from "../utils";
 import { FolderIcon } from "./icons";
 
@@ -35,7 +36,7 @@ export function DirectoryBrowserModal({
       setLoading(true);
       setError("");
       try {
-        const resp = await fetch(
+        const resp = await apiFetch(
           `${API.LIST_DIRS}?machineId=${encodeURIComponent(machineId)}&dir=${encodeURIComponent(dir)}`,
         );
         const data: ListDirsResponse = await resp.json();

@@ -143,15 +143,25 @@ describe("validateSessionId", () => {
   });
 });
 
+const TEST_TOKEN = "test-token-0123456789abcdefghijklmnop";
+const AUTH = { Authorization: `Bearer ${TEST_TOKEN}` };
+
+function startTestServer(): { server: Server; baseUrl: string } {
+  // Port 0 lets the OS pick a free port
+  const server = startTerminalServer(0, "test-machine", {
+    hostname: "127.0.0.1",
+    token: TEST_TOKEN,
+    allowedOrigins: [],
+  });
+  return { server, baseUrl: `http://127.0.0.1:${server.port}` };
+}
+
 describe("/api/send endpoint", () => {
   let server: Server;
   let baseUrl: string;
 
   beforeAll(() => {
-    // Use a random high port to avoid conflicts
-    const port = 14680 + Math.floor(Math.random() * 1000);
-    server = startTerminalServer(port, "test-machine");
-    baseUrl = `http://localhost:${port}`;
+    ({ server, baseUrl } = startTestServer());
   });
 
   afterAll(() => {
@@ -161,7 +171,7 @@ describe("/api/send endpoint", () => {
   test("rejects missing session", async () => {
     const res = await fetch(`${baseUrl}/api/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH },
       body: JSON.stringify({ text: "hello" }),
     });
     expect(res.status).toBe(400);
@@ -172,7 +182,7 @@ describe("/api/send endpoint", () => {
   test("rejects missing text", async () => {
     const res = await fetch(`${baseUrl}/api/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH },
       body: JSON.stringify({ session: "test-session" }),
     });
     expect(res.status).toBe(400);
@@ -183,7 +193,7 @@ describe("/api/send endpoint", () => {
   test("rejects empty session and text", async () => {
     const res = await fetch(`${baseUrl}/api/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH },
       body: JSON.stringify({ session: "", text: "" }),
     });
     expect(res.status).toBe(400);
@@ -194,11 +204,124 @@ describe("/api/send endpoint", () => {
   test("handles malformed JSON body", async () => {
     const res = await fetch(`${baseUrl}/api/send`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH },
       body: "not-json",
     });
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBeDefined();
+  });
+});
+
+describe("agent request guards", () => {
+  let server: Server;
+  let baseUrl: string;
+
+  beforeAll(() => {
+    ({ server, baseUrl } = startTestServer());
+  });
+
+  afterAll(() => {
+    server.stop(true);
+  });
+
+  function postSend(headers: Record<string, string>, body = JSON.stringify({ text: "hi" })): Promise<Response> {
+    return fetch(`${baseUrl}/api/send`, { method: "POST", headers, body });
+  }
+
+  test("binds only to the requested interface", () => {
+    expect(server.hostname).toBe("127.0.0.1");
+  });
+
+  test("rejects API requests without a token", async () => {
+    const res = await postSend({ "Content-Type": "application/json" });
+    expect(res.status).toBe(401);
+  });
+
+  test("rejects API requests with a wrong token", async () => {
+    const res = await postSend({ "Content-Type": "application/json", Authorization: "Bearer wrong" });
+    expect(res.status).toBe(401);
+  });
+
+  test("rejects GET endpoints such as list-dirs without a token", async () => {
+    const res = await fetch(`${baseUrl}/api/list-dirs?dir=/`);
+    expect(res.status).toBe(401);
+  });
+
+  test("ignores a token in the query string on plain HTTP requests", async () => {
+    const res = await fetch(`${baseUrl}/api/list-dirs?dir=/&token=${TEST_TOKEN}`);
+    expect(res.status).toBe(401);
+  });
+
+  test("rejects any browser origin, even with a valid token", async () => {
+    const res = await postSend({ "Content-Type": "application/json", Origin: "http://127.0.0.1:4680", ...AUTH });
+    expect(res.status).toBe(403);
+  });
+
+  test("rejects form-encoded POST bodies", async () => {
+    const res = await postSend({ "Content-Type": "application/x-www-form-urlencoded", ...AUTH }, "text=hi");
+    expect(res.status).toBe(415);
+  });
+
+  test("rejects text/plain POST bodies", async () => {
+    const res = await postSend({ "Content-Type": "text/plain", ...AUTH });
+    expect(res.status).toBe(415);
+  });
+
+  test("passes authenticated JSON requests through to the handler", async () => {
+    const res = await postSend({ "Content-Type": "application/json; charset=utf-8", ...AUTH });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("Missing session or text");
+  });
+
+  test("requires multipart on the upload endpoint", async () => {
+    const res = await fetch(`${baseUrl}/api/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...AUTH },
+      body: "{}",
+    });
+    expect(res.status).toBe(415);
+  });
+
+  test("leaves the root health check open for tunnel monitoring", async () => {
+    const res = await fetch(`${baseUrl}/`);
+    expect(res.status).toBe(200);
+  });
+
+  test("rejects terminal WebSocket upgrades without a token", async () => {
+    const res = await fetch(`${baseUrl}/ws/terminal?session=x`, {
+      headers: {
+        Upgrade: "websocket",
+        Connection: "Upgrade",
+        "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+      },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("rejects terminal WebSocket upgrades from a browser origin", async () => {
+    const res = await fetch(`${baseUrl}/ws/terminal?session=x&token=${TEST_TOKEN}`, {
+      headers: {
+        Upgrade: "websocket",
+        Connection: "Upgrade",
+        "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+        Origin: "https://evil.example",
+      },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("accepts a terminal WebSocket that presents the token in a header", async () => {
+    const ws = new WebSocket(`ws://127.0.0.1:${server.port}/ws/terminal`, { headers: AUTH });
+    const outcome = await new Promise<string>((resolve) => {
+      ws.onmessage = (event) => resolve(String(event.data));
+      ws.onerror = () => resolve("error");
+    });
+    // No session given, so the handler (not the guard) answers and closes
+    expect(outcome).toContain("No session specified");
+    ws.close();
   });
 });

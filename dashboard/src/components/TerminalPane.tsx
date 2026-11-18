@@ -3,6 +3,7 @@ import type React from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalMultiplexer } from "@agent-town/shared";
+import { withTokenParam } from "../auth";
 
 import { fitTerminal } from "../terminal/fit";
 import { registerLinks } from "../terminal/links";
@@ -92,7 +93,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(function Termi
       rows: String(term.rows),
     });
     const wsUrl = `${protocol}//${window.location.host}/ws/terminal?${params}`;
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(withTokenParam(wsUrl));
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
 

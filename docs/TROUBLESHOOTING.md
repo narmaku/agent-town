@@ -36,6 +36,79 @@ At `debug` level, you will see:
 
 ## Common Issues
 
+### Dashboard asks for an access token / "The access token was rejected"
+
+**Cause:** The dashboard holds no token for this tab, or the server's token changed.
+The token lives in the tab's `sessionStorage`, so each new tab or browser needs it once.
+
+**Fix:** Open the login link again (`./dev.sh` prints it), or build it yourself on the
+server machine and paste the token into the prompt:
+```bash
+echo "http://localhost:4680/#token=$(cat ~/.agent-town/token)"
+```
+
+If you deleted `~/.agent-town/token` to rotate it, restart both server and agent so
+they read the new one, and recopy it to any LAN agents.
+
+---
+
+### API calls fail with 401, 403 or 415
+
+Server and agent log every rejected request at `warn` level:
+```
+[warn] guard: rejected GET /api/machines: missing or invalid token
+[warn] guard: rejected POST /api/agents/launch: origin not allowed (https://evil.example)
+[warn] guard: rejected POST /api/settings: unsupported content-type (application/x-www-form-urlencoded)
+```
+
+- **401 Unauthorized** — no `Authorization: Bearer <token>` header, or the wrong token.
+  For scripts and curl:
+  ```bash
+  curl -H "Authorization: Bearer $(cat ~/.agent-town/token)" http://127.0.0.1:4680/api/machines
+  ```
+- **403 Origin not allowed** — a browser page on another origin made the request.
+  Expected for anything except the dashboard itself. If you serve the dashboard
+  from another origin on purpose (e.g. the Vite dev server without its proxy, or a
+  reverse proxy that rewrites `Host`), add it:
+  `AGENT_TOWN_ALLOWED_ORIGINS=https://agent-town.example.com`.
+- **415 Unsupported Media Type** — POST/PUT bodies must be sent with
+  `Content-Type: application/json` (uploads: `multipart/form-data`).
+
+---
+
+### Machine missing, agent logs "heartbeat rejected: token mismatch"
+
+**Cause:** The agent's `~/.agent-town/token` differs from the server's. This happens
+with LAN agents (Option 2 in DEPLOYMENT.md) when the token was never copied, or
+after the server's token was rotated.
+
+**Fix:** Copy the server's token to the agent machine and restart the agent:
+```bash
+ssh user@agent-host 'umask 077 && mkdir -p ~/.agent-town && cat > ~/.agent-town/token' < ~/.agent-town/token
+```
+
+The reverse case shows up in the dashboard as **502 `agent_unauthorized`**
+("Agent rejected the server's access token") on terminal, diff, send or launch
+actions. The fix is the same. SSH nodes get the token automatically on each connect,
+so reconnecting the node from Settings also fixes it.
+
+---
+
+### Dashboard or agent not reachable from another machine
+
+**Cause:** Both bind to `127.0.0.1` by default.
+
+**Fix:** For the dashboard, set `AGENT_TOWN_HOST=0.0.0.0` (or a specific LAN/VPN
+address) on the server. For an agent that a remote server must dial directly, point
+`AGENT_TOWN_SERVER` at the server's LAN address (the agent then binds `0.0.0.0`) or
+set `AGENT_TOWN_TERMINAL_HOST` explicitly. Prefer SSH nodes, which need neither.
+Check what is listening with:
+```bash
+ss -ltn | grep -E ':468[01]'
+```
+
+---
+
 ### Sessions not appearing in the dashboard
 
 **Symptom:** AI agent is running but the dashboard shows no sessions.
@@ -44,16 +117,18 @@ At `debug` level, you will see:
 
 Look at agent logs for heartbeat messages:
 ```
-[info] agent: starting — machine=a1b2c3d4 host=my-machine server=http://localhost:4680 interval=5000ms
+[info] agent: starting — machine=a1b2c3d4 host=my-machine server=http://127.0.0.1:4680 bind=127.0.0.1 interval=5000ms
 [debug] agent: heartbeat: 3 sessions, 2 processes, 2 mapped, 0 unmatched
 ```
 
 If the heartbeat is failing:
 ```
 [error] agent: heartbeat failed: 404 Not Found
+[error] agent: heartbeat rejected: token mismatch — /home/me/.agent-town/token must match the server's token
 ```
 
-Verify the server URL is correct (`AGENT_TOWN_SERVER` env var) and the server is running.
+Verify the server URL is correct (`AGENT_TOWN_SERVER` env var), the server is running,
+and both use the same token (see "heartbeat rejected: token mismatch" above).
 
 **Check 2: Provider is registered**
 
@@ -154,15 +229,15 @@ tmux list-sessions
 
 Verify the agent's terminal server is listening:
 ```bash
-curl http://localhost:4681/
-# Should return: "Agent Town Terminal Server"
+curl http://127.0.0.1:4681/
+# Should return: "Agent Town Terminal Server" (this path needs no token)
 ```
 
 **Check 4: Network connectivity (multi-machine)**
 
 For remote machines, the terminal connection goes through the SSH tunnel. Check tunnel health in server logs:
 ```
-[debug] ssh: health: [my-node] tunnel healthy (localhost:14680)
+[debug] ssh: health: [my-node] tunnel healthy (127.0.0.1:14680)
 ```
 
 If the tunnel is unhealthy:

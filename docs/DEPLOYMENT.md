@@ -33,10 +33,14 @@ This script:
 1. Kills any previously running Agent Town processes (using PID files in `~/.agent-town/pids/`)
 2. Installs dependencies if `node_modules/` doesn't exist
 3. Builds the dashboard (`bun run build`, using Bun's bundler)
-4. Starts the server on port 4680
-5. Starts the agent pointing at `http://localhost:4680`
+4. Starts the server on `127.0.0.1:4680`
+5. Starts the agent pointing at `http://127.0.0.1:4680` (so it binds to `127.0.0.1:4681`)
+6. Prints a login link: `http://localhost:4680/#token=<secret>`
 
-Open http://localhost:4680 in your browser.
+Open the printed link in your browser. The token is read from the URL fragment
+(which browsers never send to the server), kept in the tab's `sessionStorage`,
+and removed from the address bar. A new tab or browser needs the link again, or
+you can paste the token from `~/.agent-town/token` into the sign-in prompt.
 
 ### 3. (Optional) Create a minimal zellij layout
 
@@ -90,6 +94,8 @@ RestartSec=5
 
 # Environment
 Environment=AGENT_TOWN_PORT=4680
+# Loopback only by default; set to 0.0.0.0 to serve the dashboard to the LAN
+Environment=AGENT_TOWN_HOST=127.0.0.1
 Environment=PATH=%h/.bun/bin:%h/.local/bin:%h/.opencode/bin:/usr/local/bin:/usr/bin:/bin
 
 [Install]
@@ -113,7 +119,7 @@ Restart=on-failure
 RestartSec=5
 
 # Environment
-Environment=AGENT_TOWN_SERVER=http://localhost:4680
+Environment=AGENT_TOWN_SERVER=http://127.0.0.1:4680
 Environment=AGENT_TOWN_TERMINAL_PORT=4681
 Environment=PATH=%h/.bun/bin:%h/.local/bin:%h/.opencode/bin:/usr/local/bin:/usr/bin:/bin
 
@@ -135,6 +141,15 @@ systemctl --user start agent-town agent-town-agent
 ```bash
 journalctl --user -u agent-town -f
 journalctl --user -u agent-town-agent -f
+```
+
+### Sign in
+
+The first service to start creates `~/.agent-town/token` (mode 600); the other
+reads it. Build the login link with:
+
+```bash
+echo "http://localhost:4680/#token=$(cat ~/.agent-town/token)"
 ```
 
 ### Important: cgroup isolation
@@ -179,7 +194,7 @@ Central server (machine A, port 4680)
    ./dev.sh
    ```
 
-2. Open the dashboard at http://localhost:4680
+2. Open the login link that `./dev.sh` prints (`http://localhost:4680/#token=...`)
 
 3. Go to Settings and add a new remote node with:
    - Display name
@@ -196,23 +211,40 @@ The server will:
 - Deploy the agent code to `~/.agent-town-remote/` on the remote
 - Install bun if needed
 - Install dependencies
-- Start the agent process
-- Establish SSH tunnels (forward + reverse)
+- Copy the server's access token to `~/.agent-town/token` on the remote (mode 600, over SSH stdin)
+- Start the agent process, bound to the remote's `127.0.0.1`
+- Establish SSH tunnels (forward + reverse), both on loopback at each end
 
-### Option 2: Manual agent setup
+Nothing listens on the LAN in this setup: the server, the agents and the tunnels
+all use loopback, and SSH carries the traffic between machines. This is the
+recommended way to run multiple machines.
 
-On the central machine, start only the server:
+### Option 2: Manual agent setup over the LAN
+
+Use this only when SSH tunnels are not an option. Agents and the server then
+talk over the LAN in plain HTTP, protected by the shared token but **not
+encrypted** — use it only on a network you trust (or over a VPN such as WireGuard
+or Tailscale, binding to the VPN address instead of `0.0.0.0`).
+
+On the central machine, start the server on a reachable interface:
 ```bash
-bun run server/src/index.ts
+AGENT_TOWN_HOST=0.0.0.0 bun run server/src/index.ts
 ```
 
-On each remote machine, clone the repo and start the agent:
+Copy the server's token to each agent machine (same path, mode 600):
+```bash
+ssh user@agent-host 'umask 077 && mkdir -p ~/.agent-town && cat > ~/.agent-town/token' < ~/.agent-town/token
+```
+
+On each agent machine, clone the repo and start the agent:
 ```bash
 cd ~/development/agent-town
 AGENT_TOWN_SERVER=http://<server-ip>:4680 bun run agent/src/index.ts
 ```
 
-This requires direct network connectivity from each agent to the server (no SSH tunnels).
+Because the server URL is not loopback, the agent binds to `0.0.0.0` so the server
+can dial back to it (override with `AGENT_TOWN_TERMINAL_HOST`). Restrict port 4681
+to the server's IP with a firewall where you can.
 
 ### SSH Key Requirements
 
@@ -227,17 +259,23 @@ This requires direct network connectivity from each agent to the server (no SSH 
 
 ### Server
 
-| Variable          | Default          | Description                              |
-|-------------------|------------------|------------------------------------------|
-| `AGENT_TOWN_PORT` | `4680`           | HTTP/WebSocket port for the server       |
+| Variable                     | Default                 | Description                                                        |
+|------------------------------|-------------------------|--------------------------------------------------------------------|
+| `AGENT_TOWN_PORT`            | `4680`                  | HTTP/WebSocket port for the server                                 |
+| `AGENT_TOWN_HOST`            | `127.0.0.1`             | Interface to bind. `0.0.0.0` exposes the dashboard and API to the LAN |
+| `AGENT_TOWN_TOKEN_FILE`      | `~/.agent-town/token`   | Shared access token (created on first run, mode 600)               |
+| `AGENT_TOWN_ALLOWED_ORIGINS` | *(empty)*               | Comma-separated extra browser origins allowed besides the dashboard's own |
 
 ### Agent
 
 | Variable                    | Default                    | Description                              |
 |-----------------------------|----------------------------|------------------------------------------|
-| `AGENT_TOWN_SERVER`         | `http://localhost:4680`    | URL of the central server                |
+| `AGENT_TOWN_SERVER`         | `http://127.0.0.1:4680`    | URL of the central server                |
 | `AGENT_TOWN_INTERVAL`       | `5000`                     | Heartbeat interval in milliseconds       |
 | `AGENT_TOWN_TERMINAL_PORT`  | `4681`                     | Terminal server HTTP/WebSocket port      |
+| `AGENT_TOWN_TERMINAL_HOST`  | `127.0.0.1` if the server URL is loopback, else `0.0.0.0` | Interface the agent binds to |
+| `AGENT_TOWN_TOKEN_FILE`     | `~/.agent-town/token`      | Shared access token; must match the server's |
+| `AGENT_TOWN_ALLOWED_ORIGINS`| *(empty)*                  | Browser origins allowed to call the agent (normally none) |
 | `AGENT_TOWN_MACHINE_ID`     | SHA-256 hash of hostname   | Stable machine identifier                |
 
 ### Codex CLI (agent-side)
@@ -271,6 +309,7 @@ Agent Town stores persistent data in `~/.agent-town/`:
 
 | File                     | Purpose                                      |
 |--------------------------|----------------------------------------------|
+| `token`                  | Shared access token (mode 600, directory 700) |
 | `settings.json`          | Dashboard settings (multiplexer, theme, etc.) |
 | `session-names.json`     | Custom session names (persists across restarts) |
 | `nodes.json`             | Remote node configurations                   |
@@ -284,15 +323,52 @@ Agent Town stores persistent data in `~/.agent-town/`:
 
 ### Network Exposure
 
-- The server binds to `0.0.0.0` by default -- it is accessible from any network interface.
-- There is **no authentication** on the HTTP API or WebSocket connections.
-- For production use on a network, place the server behind a reverse proxy with authentication (e.g., nginx with basic auth, or a VPN).
+Both processes bind to loopback by default: the server to `127.0.0.1:4680`, and the
+agent to `127.0.0.1:4681` whenever its server URL is loopback (local or via SSH tunnel).
+Nothing is reachable from the network unless you set `AGENT_TOWN_HOST` /
+`AGENT_TOWN_TERMINAL_HOST` or point an agent at a LAN server.
+
+### Request Guards
+
+Every `/api/*` and `/ws*` request to the server or the agent must pass three checks,
+in this order:
+
+1. **Origin** — if the request carries an `Origin` header (every browser request
+   does on WebSocket upgrades and cross-origin calls), it must be the dashboard's
+   own origin or listed in `AGENT_TOWN_ALLOWED_ORIGINS`. The agent allows no browser
+   origins by default, because only the server should call it.
+   Rejected with **403**. This blocks cross-site WebSocket hijacking and CSRF from
+   any website open in your browser.
+2. **Token** — the shared secret from `~/.agent-town/token`, sent as
+   `Authorization: Bearer <token>`. Browsers cannot set headers on WebSockets, so
+   upgrade requests may pass it as `?token=` instead (only upgrades; plain HTTP
+   requests ignore the query parameter). Compared in constant time. Rejected with
+   **401**. This blocks other hosts on the LAN, other local users' browsers, and DNS
+   rebinding.
+3. **Content-Type** — POST/PUT/PATCH bodies must be `application/json`
+   (`multipart/form-data` on the two upload endpoints). Rejected with **415**. A
+   cross-site HTML form can only send "simple" content types, so it can never reach
+   a handler.
+
+The dashboard's static files (`/` and the bundled JS/CSS) are public so the sign-in prompt can
+load. The agent's `/` is public as a tunnel health check and returns a fixed string.
+
+### Access Token
+
+- Generated on first run with 32 random bytes; stored at `~/.agent-town/token` with
+  mode 600 inside a 700 directory. A looser mode is tightened on startup.
+- Server and agent on the same machine share the file. For SSH nodes the server
+  copies it to the remote over SSH stdin. For LAN agents, copy it yourself.
+- The server never logs the token. `dev.sh` prints the login link to your terminal.
+- To rotate it, stop everything, delete the file, and restart (then recopy it to
+  any LAN agents and reconnect SSH nodes).
 
 ### SSH Tunnels
 
 - SSH key files are referenced by path and never transmitted.
-- Reverse tunnels expose the server port (4680) on remote machines -- only accessible on `localhost` of the remote.
-- Forward tunnels expose the remote agent port on `localhost` of the server.
+- Reverse tunnels expose the server port (4680) on remote machines -- bound to `127.0.0.1` of the remote.
+- Forward tunnels expose the remote agent port on `127.0.0.1` of the server.
+- The access token is installed on the remote via SSH stdin, never on a command line.
 
 ### Input Validation
 
@@ -322,7 +398,7 @@ server {
     ssl_certificate_key /path/to/key.pem;
 
     location / {
-        proxy_pass http://localhost:4680;
+        proxy_pass http://127.0.0.1:4680;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -333,3 +409,7 @@ server {
 ```
 
 The `Upgrade` and `Connection` headers are required for WebSocket support (dashboard updates and terminal relay).
+Keep `proxy_set_header Host $host`: the origin check compares the browser's `Origin`
+(`https://agent-town.example.com`) with the `Host` header. If your proxy rewrites
+`Host`, add the public origin to `AGENT_TOWN_ALLOWED_ORIGINS` instead. The access
+token is still required behind the proxy.

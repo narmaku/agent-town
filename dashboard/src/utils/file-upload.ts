@@ -1,3 +1,4 @@
+import { apiFetch } from "../auth";
 import { API } from "../utils";
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -23,7 +24,7 @@ export async function uploadFile(machineId: string, file: File): Promise<UploadR
   const formData = new FormData();
   formData.append("file", file);
 
-  const resp = await fetch(`${API.SESSIONS_UPLOAD}?machineId=${encodeURIComponent(machineId)}`, {
+  const resp = await apiFetch(`${API.SESSIONS_UPLOAD}?machineId=${encodeURIComponent(machineId)}`, {
     method: "POST",
     body: formData,
   });

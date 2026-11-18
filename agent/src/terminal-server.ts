@@ -10,6 +10,8 @@ import {
   truncateId,
 } from "@agent-town/shared";
 import type { Server } from "bun";
+
+import { guardAgentRequest } from "./agent-guard";
 import { fetchGitDiff, GitDiffError, validateDiffDir } from "./git-diff";
 import { listDirectories, validateListDirsPath } from "./list-dirs";
 import {
@@ -264,12 +266,26 @@ function validateNewSessionRequest(body: NewSessionRequest): string | null {
   );
 }
 
-export function startTerminalServer(port: number, machineId: string): Server {
+export interface TerminalServerOptions {
+  /** Interface to bind (see resolveAgentBindHost). */
+  hostname: string;
+  /** Shared secret the server must present. */
+  token: string;
+  /** Browser origins allowed to call the agent (normally none). */
+  allowedOrigins: readonly string[];
+}
+
+export function startTerminalServer(port: number, machineId: string, opts: TerminalServerOptions): Server {
+  const guardOptions = { token: opts.token, allowedOrigins: opts.allowedOrigins };
+
   const server = Bun.serve({
     port,
-    hostname: "0.0.0.0",
+    hostname: opts.hostname,
 
     async fetch(req, server) {
+      const denied = guardAgentRequest(req, guardOptions);
+      if (denied) return denied;
+
       const url = new URL(req.url);
       if (url.pathname === "/ws/terminal") {
         const upgraded = server.upgrade(req, {
@@ -783,6 +799,6 @@ export function startTerminalServer(port: number, machineId: string): Server {
     },
   });
 
-  log.info(`listening on ws://0.0.0.0:${port}/ws/terminal`);
+  log.info(`listening on http://${opts.hostname}:${port}`);
   return server;
 }

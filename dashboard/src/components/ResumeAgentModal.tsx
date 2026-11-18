@@ -1,6 +1,7 @@
 import type { AgentType } from "@agent-town/shared";
 import type React from "react";
 import { useState } from "react";
+import { apiFetch } from "../auth";
 import { API, getAgentTypeDisplay, normalizeAutonomousSetting } from "../utils";
 
 interface Props {
@@ -32,7 +33,7 @@ export function ResumeAgentModal({
     setResuming(true);
     setError("");
     try {
-      const resp = await fetch(API.AGENTS_RESUME, {
+      const resp = await apiFetch(API.AGENTS_RESUME, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

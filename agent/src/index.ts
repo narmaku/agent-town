@@ -6,11 +6,15 @@ import {
   createLogger,
   errorMessage,
   type Heartbeat,
+  LOOPBACK_HOST,
   type MultiplexerSessionInfo,
   type SessionInfo,
   type TerminalMultiplexer,
   truncateId,
 } from "@agent-town/shared";
+import { authHeaders, parseOriginList } from "@agent-town/shared/request-guard";
+import { loadOrCreateToken, resolveTokenFile } from "@agent-town/shared/token-store";
+import { resolveAgentBindHost } from "./agent-guard";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
 import { createPlaceholderSessions, deduplicateSessions, expirePlaceholders } from "./placeholder-sessions";
 import { discoverProcessMappings } from "./process-mapper";
@@ -23,9 +27,12 @@ import { startTerminalServer } from "./terminal-server";
 
 const log = createLogger("agent");
 
-const SERVER_URL = process.env.AGENT_TOWN_SERVER || "http://localhost:4680";
+const SERVER_URL = process.env.AGENT_TOWN_SERVER || `http://${LOOPBACK_HOST}:4680`;
 const HEARTBEAT_INTERVAL_MS = Number(process.env.AGENT_TOWN_INTERVAL || "5000");
 const TERMINAL_PORT = Number(process.env.AGENT_TOWN_TERMINAL_PORT || "4681");
+const BIND_HOST = resolveAgentBindHost(SERVER_URL, process.env.AGENT_TOWN_TERMINAL_HOST);
+const TOKEN_FILE = resolveTokenFile();
+const AUTH_TOKEN = loadOrCreateToken(TOKEN_FILE);
 
 function stableMachineId(): string {
   return createHash("sha256").update(hostname()).digest("hex").slice(0, 16);
@@ -244,7 +251,7 @@ async function sendHeartbeat(): Promise<void> {
 
     const response = await fetch(`${SERVER_URL}/api/heartbeat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders(AUTH_TOKEN) },
       body: JSON.stringify(heartbeat),
     });
 
@@ -255,7 +262,9 @@ async function sendHeartbeat(): Promise<void> {
       `heartbeat: ${dedupedSessions.length} sessions, ${processMappings.size} processes, ${mapped} mapped, ${rejected} unmatched`,
     );
 
-    if (!response.ok) {
+    if (response.status === 401) {
+      log.error(`heartbeat rejected: token mismatch — ${TOKEN_FILE} must match the server's token`);
+    } else if (!response.ok) {
       log.error(`heartbeat failed: ${response.status} ${response.statusText}`);
     }
   } catch (error) {
@@ -265,13 +274,17 @@ async function sendHeartbeat(): Promise<void> {
 
 async function main(): Promise<void> {
   log.info(
-    `starting — machine=${MACHINE_ID} host=${machineHostname} server=${SERVER_URL} interval=${HEARTBEAT_INTERVAL_MS}ms`,
+    `starting — machine=${MACHINE_ID} host=${machineHostname} server=${SERVER_URL} bind=${BIND_HOST} interval=${HEARTBEAT_INTERVAL_MS}ms`,
   );
 
   // Initialize agent providers (Claude Code, OpenCode, etc.)
   await initializeProviders();
 
-  startTerminalServer(TERMINAL_PORT, MACHINE_ID);
+  startTerminalServer(TERMINAL_PORT, MACHINE_ID, {
+    hostname: BIND_HOST,
+    token: AUTH_TOKEN,
+    allowedOrigins: parseOriginList(process.env.AGENT_TOWN_ALLOWED_ORIGINS),
+  });
 
   await sendHeartbeat();
   setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);

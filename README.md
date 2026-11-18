@@ -40,7 +40,9 @@ cd ~/development/agent-town
 ./dev.sh
 ```
 
-Open http://localhost:4680
+Open the login link it prints (`http://localhost:4680/#token=...`). The server and agent
+listen on `127.0.0.1` only and every API/WebSocket call needs the token in
+`~/.agent-town/token` — see [Security Considerations](docs/DEPLOYMENT.md#security-considerations).
 
 ## Best Practice: One Terminal Session Per Agent
 
@@ -115,15 +117,18 @@ Starts both the server and agent, builds the dashboard, opens on port 4680.
 
 On your Proxmox server (or any central machine):
 ```bash
-# Start the server
-bun run server/src/index.ts
+# Start the server, reachable from the LAN
+AGENT_TOWN_HOST=0.0.0.0 bun run server/src/index.ts
 ```
 
-On each machine with supported coding-agent sessions:
+On each machine with supported coding-agent sessions, copy the server's
+`~/.agent-town/token` (mode 600), then:
 ```bash
 # Point the agent at the server
 AGENT_TOWN_SERVER=http://<server-ip>:4680 bun run agent/src/index.ts
 ```
+
+This traffic is plain HTTP; unless the network is trusted, add machines as SSH remote nodes instead (see [Multi-Machine Setup](docs/DEPLOYMENT.md#multi-machine-setup)).
 
 ### Option 3: Run agent-town outside any multiplexer
 
@@ -142,7 +147,11 @@ tmux new-session -d -s agent-town -c ~/development/agent-town './dev.sh'
 | Variable | Default | Description |
 |---|---|---|
 | `AGENT_TOWN_PORT` | `4680` | Server port |
-| `AGENT_TOWN_SERVER` | `http://localhost:4680` | Server URL (for agent) |
+| `AGENT_TOWN_HOST` | `127.0.0.1` | Server bind address (`0.0.0.0` to serve the LAN) |
+| `AGENT_TOWN_TOKEN_FILE` | `~/.agent-town/token` | Shared access token (created on first run, mode 600) |
+| `AGENT_TOWN_ALLOWED_ORIGINS` | *(empty)* | Extra browser origins allowed to call the API |
+| `AGENT_TOWN_SERVER` | `http://127.0.0.1:4680` | Server URL (for agent) |
+| `AGENT_TOWN_TERMINAL_HOST` | `127.0.0.1` if server is loopback, else `0.0.0.0` | Agent bind address |
 | `AGENT_TOWN_INTERVAL` | `5000` | Heartbeat interval in ms |
 | `AGENT_TOWN_TERMINAL_PORT` | `4681` | Terminal WebSocket port (agent) |
 | `AGENT_TOWN_MACHINE_ID` | auto (hostname hash) | Stable machine identifier |
