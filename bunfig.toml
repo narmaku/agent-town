@@ -1,0 +1,3 @@
+[test]
+# Isolates tests from the real ~/.agent-town data directory.
+preload = ["./test-setup.ts"]

@@ -75,5 +75,6 @@ describe("resolveTokenFile", () => {
 
   test("defaults to ~/.agent-town/token", () => {
     expect(resolveTokenFile({})).toEndWith(join(".agent-town", "token"));
+    expect(resolveTokenFile({ AGENT_TOWN_DATA_DIR: "/srv/town" })).toBe(join("/srv/town", "token"));
   });
 });

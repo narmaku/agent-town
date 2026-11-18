@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir, hostname, platform } from "node:os";
+import { hostname, platform } from "node:os";
 import { join } from "node:path";
 import {
   createLogger,
@@ -12,6 +12,7 @@ import {
   type TerminalMultiplexer,
   truncateId,
 } from "@agent-town/shared";
+import { resolveDataDir } from "@agent-town/shared/data-dir";
 import { authHeaders, parseOriginList } from "@agent-town/shared/request-guard";
 import { loadOrCreateToken, resolveTokenFile } from "@agent-town/shared/token-store";
 import { resolveAgentBindHost } from "./agent-guard";
@@ -53,8 +54,8 @@ interface MuxAssociation {
   multiplexer: TerminalMultiplexer;
 }
 
-const MUX_ASSOC_DIR = join(homedir(), ".agent-town");
-const MUX_ASSOC_FILE = join(MUX_ASSOC_DIR, "last-known-mux.json");
+const DATA_DIR = resolveDataDir();
+const MUX_ASSOC_FILE = join(DATA_DIR, "last-known-mux.json");
 const lastKnownMux = new Map<string, MuxAssociation>();
 
 function loadLastKnownMux(): void {
@@ -71,7 +72,7 @@ function loadLastKnownMux(): void {
 
 function saveLastKnownMux(): void {
   try {
-    mkdirSync(MUX_ASSOC_DIR, { recursive: true });
+    mkdirSync(DATA_DIR, { recursive: true });
     const obj: Record<string, MuxAssociation> = {};
     for (const [key, value] of lastKnownMux) {
       obj[key] = value;
@@ -87,7 +88,7 @@ loadLastKnownMux();
 // Session names persisted by the server (custom names from dashboard renames
 // and auto-populated multiplexer session names). Used for name-matching
 // when detecting exited sessions.
-const SESSION_NAMES_FILE = join(homedir(), ".agent-town", "session-names.json");
+const SESSION_NAMES_FILE = join(DATA_DIR, "session-names.json");
 
 function loadSessionNames(): Record<string, string> {
   try {
