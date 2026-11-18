@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import {
   type AgentType,
@@ -15,6 +14,7 @@ import {
   type Settings,
   type UpdateNodeRequest,
 } from "@agent-town/shared";
+import { resolveDataDir } from "@agent-town/shared/data-dir";
 
 const log = createLogger("store");
 
@@ -42,8 +42,8 @@ const pendingSessions = new Map<string, PendingSession>(); // key: "machineId:se
 // Persists across heartbeats and server restarts: sessionId -> custom name
 // Keyed by sessionId alone (not machineId:sessionId) so names survive
 // agent restarts that change the machineId
-const SESSION_NAMES_DIR = join(homedir(), ".agent-town");
-const SESSION_NAMES_FILE = join(SESSION_NAMES_DIR, "session-names.json");
+const DATA_DIR = resolveDataDir();
+const SESSION_NAMES_FILE = join(DATA_DIR, "session-names.json");
 
 const sessionNames = new Map<string, string>();
 
@@ -62,7 +62,7 @@ function loadSessionNames(): void {
 
 function saveSessionNames(): void {
   try {
-    mkdirSync(SESSION_NAMES_DIR, { recursive: true });
+    mkdirSync(DATA_DIR, { recursive: true });
     const obj: Record<string, string> = {};
     for (const [key, value] of sessionNames) {
       obj[key] = value;
@@ -361,7 +361,7 @@ export function stopStaleCleanupLoop(): void {
 }
 
 // Settings store
-const SETTINGS_FILE = join(SESSION_NAMES_DIR, "settings.json");
+const SETTINGS_FILE = join(DATA_DIR, "settings.json");
 
 let settings: Settings = {
   defaultMultiplexer: "zellij",
@@ -389,7 +389,7 @@ function loadSettings(): void {
 
 function saveSettings(): void {
   try {
-    mkdirSync(SESSION_NAMES_DIR, { recursive: true });
+    mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
   } catch (err) {
     log.warn(`failed to save settings: ${errorMessage(err)}`);
@@ -410,7 +410,7 @@ export function updateSettings(patch: Partial<Settings>): Settings {
 
 // --- Remote nodes store ---
 
-const NODES_FILE = join(SESSION_NAMES_DIR, "nodes.json");
+const NODES_FILE = join(DATA_DIR, "nodes.json");
 const nodes = new Map<string, RemoteNode>();
 
 function loadNodes(): void {
@@ -431,7 +431,7 @@ function loadNodes(): void {
 
 function saveNodes(): void {
   try {
-    mkdirSync(SESSION_NAMES_DIR, { recursive: true });
+    mkdirSync(DATA_DIR, { recursive: true });
     const arr = [...nodes.values()];
     writeFileSync(NODES_FILE, JSON.stringify(arr, null, 2));
   } catch (err) {

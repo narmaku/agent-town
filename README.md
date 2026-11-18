@@ -148,7 +148,7 @@ tmux new-session -d -s agent-town -c ~/development/agent-town './dev.sh'
 |---|---|---|
 | `AGENT_TOWN_PORT` | `4680` | Server port |
 | `AGENT_TOWN_HOST` | `127.0.0.1` | Server bind address (`0.0.0.0` to serve the LAN) |
-| `AGENT_TOWN_TOKEN_FILE` | `~/.agent-town/token` | Shared access token (created on first run, mode 600) |
+| `AGENT_TOWN_TOKEN_FILE` | `$AGENT_TOWN_DATA_DIR/token` | Shared access token (created on first run, mode 600) |
 | `AGENT_TOWN_ALLOWED_ORIGINS` | *(empty)* | Extra browser origins allowed to call the API |
 | `AGENT_TOWN_SERVER` | `http://127.0.0.1:4680` | Server URL (for agent) |
 | `AGENT_TOWN_TERMINAL_HOST` | `127.0.0.1` if server is loopback, else `0.0.0.0` | Agent bind address |
@@ -158,6 +158,7 @@ tmux new-session -d -s agent-town -c ~/development/agent-town './dev.sh'
 | `CODEX_HOME` | `~/.codex` | Codex state and session root |
 | `PI_CODING_AGENT_DIR` | `~/.pi/agent` | Pi agent data root |
 | `PI_CODING_AGENT_SESSION_DIR` | `$PI_CODING_AGENT_DIR/sessions` | Pi session root override |
+| `AGENT_TOWN_DATA_DIR` | `~/.agent-town` | Directory for persisted state (settings, session names, nodes, rename map, access token). `bun test` points it at a temp dir. |
 
 ## Dashboard Features
 

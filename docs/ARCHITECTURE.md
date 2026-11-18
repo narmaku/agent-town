@@ -228,7 +228,7 @@ When launched multiplexer sessions are created by the agent, they are wrapped in
 
 ### Server State (store.ts)
 
-All state is held in memory with JSON file persistence for specific data:
+All state is held in memory with JSON file persistence for specific data. Files live in the data directory, `~/.agent-town` by default (override with `AGENT_TOWN_DATA_DIR`):
 
 | Data               | Storage                              | Persistence |
 |--------------------|--------------------------------------|-------------|

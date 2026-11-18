@@ -9,7 +9,8 @@
     "outDir": "dist",
     "declaration": true,
     "paths": {
-      "@agent-town/shared": ["./shared/src/index.ts"]
+      "@agent-town/shared": ["./shared/src/index.ts"],
+      "@agent-town/shared/data-dir": ["./shared/src/data-dir.ts"]
     }
   },
   "exclude": ["node_modules", "dist", "dashboard"]

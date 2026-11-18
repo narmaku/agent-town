@@ -5,22 +5,21 @@
  */
 import { randomBytes } from "node:crypto";
 import { chmodSync, linkSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { resolveDataDir } from "./data-dir";
 import { createLogger } from "./logger";
 
 const log = createLogger("token");
 
-export const DEFAULT_TOKEN_FILE = join(homedir(), ".agent-town", "token");
 const TOKEN_BYTES = 32;
 export const MIN_TOKEN_LENGTH = 32;
 const TOKEN_FILE_MODE = 0o600;
 const TOKEN_DIR_MODE = 0o700;
 
-/** Token file path: `AGENT_TOWN_TOKEN_FILE` if set, else `~/.agent-town/token`. */
+/** Token file path: `AGENT_TOWN_TOKEN_FILE` if set, else `token` in the data directory (`~/.agent-town`). */
 export function resolveTokenFile(env: Record<string, string | undefined> = process.env): string {
-  return env.AGENT_TOWN_TOKEN_FILE || DEFAULT_TOKEN_FILE;
+  return env.AGENT_TOWN_TOKEN_FILE || join(resolveDataDir(env), "token");
 }
 
 export function generateToken(): string {

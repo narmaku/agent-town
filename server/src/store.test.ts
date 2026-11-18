@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import type { Heartbeat } from "@agent-town/shared";
+import { resolveDataDir } from "@agent-town/shared/data-dir";
+
 import {
   addPendingSession,
   getAllMachines,
@@ -998,5 +1003,20 @@ describe("store", () => {
     stopStaleCleanupLoop();
 
     expect(broadcastCalled).toBe(false);
+  });
+});
+
+describe("store data directory", () => {
+  test("persists session names and settings under the configured data dir", () => {
+    upsertMachine(makeHeartbeat({ machineId: "data-dir-test" }));
+    renameSession("data-dir-test", "s-data-dir", "Stored In Data Dir");
+    updateSettings({ zellijLayout: "data-dir-layout" });
+
+    const dataDir = resolveDataDir();
+    const names = JSON.parse(readFileSync(join(dataDir, "session-names.json"), "utf-8")) as Record<string, string>;
+    const settings = JSON.parse(readFileSync(join(dataDir, "settings.json"), "utf-8")) as Record<string, unknown>;
+
+    expect(names["s-data-dir"]).toBe("Stored In Data Dir");
+    expect(settings.zellijLayout).toBe("data-dir-layout");
   });
 });

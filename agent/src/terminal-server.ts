@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   type AgentType,
@@ -9,6 +8,7 @@ import {
   type TerminalMultiplexer,
   truncateId,
 } from "@agent-town/shared";
+import { resolveDataDir } from "@agent-town/shared/data-dir";
 import type { Server } from "bun";
 
 import { guardAgentRequest } from "./agent-guard";
@@ -103,7 +103,7 @@ const activeTerminals = new Map<unknown, TerminalSession>();
 // env var in the shell process stays stale. This map lets the process
 // mapper resolve the stale name to the current name.
 // Persisted to disk so it survives agent restarts.
-const RENAME_MAP_DIR = join(homedir(), ".agent-town");
+const RENAME_MAP_DIR = resolveDataDir();
 const RENAME_MAP_FILE = join(RENAME_MAP_DIR, "rename-map.json");
 
 const sessionRenameMap = new Map<string, string>();
