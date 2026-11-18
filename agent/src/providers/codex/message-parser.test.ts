@@ -104,6 +104,47 @@ describe("parseCodexTranscript", () => {
       expect.objectContaining({ role: "assistant", content: "Legacy answer" }),
     ]);
   });
+
+  test("shows each turn once when rollouts mirror response items as events, and hides injected context", () => {
+    const transcript = records([
+      responseMessage(
+        "user",
+        "<environment_context>\n  <cwd>/work</cwd>\n</environment_context>",
+        "2026-09-10T00:00:00.000Z",
+      ),
+      responseMessage("user", "# AGENTS.md instructions for /work\n\nUse bun.", "2026-09-10T00:00:00.500Z"),
+      responseMessage("user", "Fix the build", "2026-09-10T00:00:01.000Z"),
+      {
+        timestamp: "2026-09-10T00:00:01.000Z",
+        type: "event_msg",
+        payload: { type: "user_message", message: "Fix the build" },
+      },
+      {
+        timestamp: "2026-09-10T00:00:02.000Z",
+        type: "response_item",
+        payload: { type: "reasoning", summary: [{ type: "summary_text", text: "Check the logs." }] },
+      },
+      {
+        timestamp: "2026-09-10T00:00:02.000Z",
+        type: "event_msg",
+        payload: { type: "agent_reasoning", text: "Check the logs." },
+      },
+      {
+        timestamp: "2026-09-10T00:00:03.000Z",
+        type: "event_msg",
+        payload: { type: "agent_message", message: "Build fixed." },
+      },
+      responseMessage("assistant", "Build fixed.", "2026-09-10T00:00:03.000Z"),
+    ]);
+
+    const messages = parseCodexTranscript(transcript);
+
+    expect(messages.map(({ role, content, thinking }) => ({ role, content, thinking }))).toEqual([
+      { role: "user", content: "Fix the build", thinking: undefined },
+      { role: "assistant", content: "", thinking: "Check the logs." },
+      { role: "assistant", content: "Build fixed.", thinking: undefined },
+    ]);
+  });
 });
 
 describe("Codex transcript access", () => {

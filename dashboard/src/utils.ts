@@ -87,19 +87,27 @@ export const AGENT_TYPE_CONFIG: Record<AgentType, AgentTypeDisplayConfig> = {
   },
 };
 
-export const AGENT_TYPE_LABELS: Record<AgentType, string> = Object.fromEntries(
-  (Object.entries(AGENT_TYPE_CONFIG) as [AgentType, AgentTypeDisplayConfig][]).map(([type, config]) => [
-    type,
-    config.label,
-  ]),
-) as Record<AgentType, string>;
+/**
+ * Display metadata for an agent type reported by a machine. Agents can run a
+ * newer version than the dashboard, so unknown types fall back to the raw name
+ * instead of crashing the render.
+ */
+export function getAgentTypeDisplay(agentType: string): AgentTypeDisplayConfig {
+  if (Object.hasOwn(AGENT_TYPE_CONFIG, agentType)) return AGENT_TYPE_CONFIG[agentType as AgentType];
+  return {
+    label: agentType,
+    shortLabel: agentType,
+    autonomousHint: "This dashboard doesn't recognize this agent type, so Autonomous mode is unavailable.",
+    autonomousSupported: false,
+  };
+}
 
 export function resolveAvailableAgentType(preferred: AgentType, available: AgentType[]): AgentType {
   return available.includes(preferred) ? preferred : (available[0] ?? preferred);
 }
 
 export function normalizeAutonomousSetting(agentType: AgentType, requested: boolean): boolean {
-  return AGENT_TYPE_CONFIG[agentType].autonomousSupported && requested;
+  return getAgentTypeDisplay(agentType).autonomousSupported && requested;
 }
 
 // --- API endpoints ---

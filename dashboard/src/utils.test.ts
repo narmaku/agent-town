@@ -4,8 +4,8 @@ import { join } from "node:path";
 
 import {
   AGENT_TYPE_CONFIG,
-  AGENT_TYPE_LABELS,
   API,
+  getAgentTypeDisplay,
   normalizeAutonomousSetting,
   resolveAvailableAgentType,
   STATUS_CONFIG,
@@ -22,14 +22,22 @@ describe("agent type metadata", () => {
       autonomousHint: "Bypasses approvals and sandboxing (--dangerously-bypass-approvals-and-sandbox).",
       autonomousSupported: true,
     });
-    expect(AGENT_TYPE_LABELS.codex).toBe("Codex CLI");
+    expect(getAgentTypeDisplay("codex").label).toBe("Codex CLI");
+  });
+
+  test("falls back to the raw name for agent types this dashboard does not know", () => {
+    expect(getAgentTypeDisplay("future-agent")).toMatchObject({ label: "future-agent", shortLabel: "future-agent" });
+    expect(getAgentTypeDisplay("toString").label).toBe("toString");
+  });
+
+  test("defines Pi metadata without autonomy support", () => {
     expect(AGENT_TYPE_CONFIG.pi).toEqual({
       label: "Pi",
       shortLabel: "PI",
       autonomousHint: "Pi has no tool-approval or built-in sandbox layer; Autonomous does not apply.",
       autonomousSupported: false,
     });
-    expect(AGENT_TYPE_LABELS.pi).toBe("Pi");
+    expect(getAgentTypeDisplay("pi").label).toBe("Pi");
     expect(readFileSync(join(import.meta.dir, "styles.css"), "utf8")).toContain(".agent-pi");
   });
 

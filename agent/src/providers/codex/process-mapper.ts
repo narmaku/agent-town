@@ -12,8 +12,16 @@ export interface CodexSessionCandidate {
   isSubagent: boolean;
 }
 
+/**
+ * Find Codex processes to track. The npm package runs a Node launcher that
+ * spawns the native `codex` binary as a child; track the native binary (whose
+ * children are the real tool commands) and drop launchers that wrap it, so
+ * activity detection doesn't mistake the binary itself for an active tool.
+ */
 export function filterCodexProcesses(processes: AgentProcess[]): AgentProcess[] {
-  return processes.filter((process) => isCodexCommand(process.args));
+  const codexProcesses = processes.filter((process) => isCodexCommand(process.args));
+  const launcherPids = new Set(codexProcesses.map((process) => process.ppid));
+  return codexProcesses.filter((process) => !launcherPids.has(process.pid));
 }
 
 export function extractCodexSessionIdFromArgs(args: string): string | undefined {

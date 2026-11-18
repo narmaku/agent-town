@@ -1,7 +1,7 @@
 import type { AgentType } from "@agent-town/shared";
 import type React from "react";
 import { useState } from "react";
-import { AGENT_TYPE_CONFIG, API, normalizeAutonomousSetting } from "../utils";
+import { API, getAgentTypeDisplay, normalizeAutonomousSetting } from "../utils";
 
 interface Props {
   open: boolean;
@@ -23,7 +23,7 @@ export function ResumeAgentModal({
   const [autonomous, setAutonomous] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState("");
-  const agentConfig = AGENT_TYPE_CONFIG[agentType];
+  const agentConfig = getAgentTypeDisplay(agentType);
   const effectiveAutonomous = normalizeAutonomousSetting(agentType, autonomous);
 
   if (!open) return null;
