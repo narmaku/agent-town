@@ -121,8 +121,8 @@ On your Proxmox server (or any central machine):
 AGENT_TOWN_HOST=0.0.0.0 bun run server/src/index.ts
 ```
 
-On each machine with supported coding-agent sessions, copy the server's `~/.agent-town/token`
-(mode 600), then:
+On each machine with supported coding-agent sessions, copy the server's
+`~/.agent-town/token` (mode 600), then:
 ```bash
 # Point the agent at the server
 AGENT_TOWN_SERVER=http://<server-ip>:4680 bun run agent/src/index.ts

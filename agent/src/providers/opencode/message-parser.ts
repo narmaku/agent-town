@@ -1,107 +1,25 @@
 import {
   createLogger,
-  paginateFromEnd,
+  errorMessage,
   type SessionMessage,
   type SessionMessagesResponse,
   safeJsonParse,
   type TokenUsage,
   truncateId,
 } from "@agent-town/shared";
-import { getOpenCodeClient, resetOpenCodeClient } from "./sdk-client";
+import { extractSnippet, type SearchMessageResult } from "../search";
 import { OPENCODE_DB_PATH } from "./session-discovery";
 
 const log = createLogger("opencode:messages");
 
-/**
- * Get paginated messages for an OpenCode session.
- * Uses SDK REST API if available, falls back to SQLite.
- */
+/** Get paginated messages for an OpenCode session from its local SQLite database. */
 export async function getOpenCodeSessionMessages(
   sessionId: string,
   offset: number,
   limit: number,
 ): Promise<SessionMessagesResponse> {
-  const client = await getOpenCodeClient();
-  if (client) {
-    try {
-      return await getMessagesViaSDK(client, sessionId, offset, limit);
-    } catch (err) {
-      log.debug(`SDK messages failed, falling back to SQLite: ${err instanceof Error ? err.message : String(err)}`);
-      resetOpenCodeClient();
-    }
-  }
-
   return getMessagesViaSQLite(sessionId, offset, limit);
 }
-
-async function getMessagesViaSDK(
-  client: NonNullable<Awaited<ReturnType<typeof getOpenCodeClient>>>,
-  sessionId: string,
-  offset: number,
-  limit: number,
-): Promise<SessionMessagesResponse> {
-  const { data } = await client.session.messages({ sessionID: sessionId });
-  if (!data) throw new Error("Session not found");
-
-  // data is Array<{ info: Message, parts: Part[] }>
-  // Filter to user/assistant only
-  const allMessages = data.filter((m) => m.info.role === "user" || m.info.role === "assistant");
-
-  const total = allMessages.length;
-  const { slice, hasMore } = paginateFromEnd(allMessages, offset, limit);
-
-  const messages: SessionMessage[] = slice.map((m) => {
-    const textParts: string[] = [];
-    const toolUse: { name: string; id: string; input?: string }[] = [];
-    const toolResults: { toolUseId: string; content: string }[] = [];
-
-    for (const part of m.parts) {
-      if (part.type === "text" && part.text) {
-        textParts.push(part.text);
-      } else if (part.type === "tool-invocation" || (part as Record<string, unknown>).type === "tool") {
-        const p = part as Record<string, unknown>;
-        const name = (p.name || p.toolName || "unknown") as string;
-        const id = (p.toolCallId || part.id) as string;
-        const input = p.args ? JSON.stringify(p.args, null, 2).slice(0, 2000) : undefined;
-        toolUse.push({ name, id, input });
-        if (typeof p.result === "string") {
-          toolResults.push({ toolUseId: id, content: (p.result as string).slice(0, 2000) });
-        }
-      }
-    }
-
-    const assistantInfo = m.info as Record<string, unknown>;
-    const modelID = (assistantInfo.modelID || "") as string;
-    const providerID = (assistantInfo.providerID || "") as string;
-    const model = modelID ? (providerID ? `${providerID}/${modelID}` : modelID) : undefined;
-
-    // Extract token usage if available in SDK message metadata
-    let tokenUsage: TokenUsage | undefined;
-    const tokens = assistantInfo.tokens as Record<string, number> | undefined;
-    if (tokens && (typeof tokens.input === "number" || typeof tokens.output === "number")) {
-      tokenUsage = {};
-      if (typeof tokens.input === "number") tokenUsage.inputTokens = tokens.input;
-      if (typeof tokens.output === "number") tokenUsage.outputTokens = tokens.output;
-    }
-
-    return {
-      role: m.info.role as "user" | "assistant",
-      timestamp: new Date(m.info.time.created).toISOString(),
-      content: textParts.join("\n\n"),
-      toolUse: toolUse.length > 0 ? toolUse : undefined,
-      toolResults: toolResults.length > 0 ? toolResults : undefined,
-      model,
-      tokenUsage,
-    };
-  });
-
-  log.debug(
-    `getOpenCodeSessionMessages (SDK): session=${truncateId(sessionId)} total=${total} returned=${messages.length} offset=${offset}`,
-  );
-  return { messages, total, hasMore };
-}
-
-// --- SQLite fallback ---
 
 interface MessageRow {
   id: string;
@@ -239,7 +157,48 @@ async function getMessagesViaSQLite(
     );
     return { messages, total, hasMore };
   } catch (err) {
-    log.warn(`getOpenCodeSessionMessages: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`getOpenCodeSessionMessages: ${errorMessage(err)}`);
     throw new Error("Session not found");
+  }
+}
+
+/** Search OpenCode message parts for `query` (already lower-cased). */
+export async function searchOpenCodeMessages(
+  query: string,
+  maxResults: number,
+  dbPath = OPENCODE_DB_PATH,
+): Promise<SearchMessageResult[]> {
+  if (maxResults <= 0) return [];
+  const { Database } = await import("bun:sqlite");
+  const db = new Database(dbPath, { readonly: true });
+  try {
+    const rows = db
+      .query<{ session_id: string; text_content: string | null; match_count: number }, [string, number]>(
+        `SELECT m.session_id,
+                (SELECT p2.data FROM part p2
+                 WHERE p2.message_id = m.id
+                   AND p2.data LIKE '%' || ?1 || '%'
+                 LIMIT 1) as text_content,
+                COUNT(*) as match_count
+         FROM message m
+         JOIN part p ON p.message_id = m.id
+         WHERE p.data LIKE '%' || ?1 || '%'
+         GROUP BY m.session_id
+         ORDER BY match_count DESC
+         LIMIT ?2`,
+      )
+      .all(query, maxResults);
+    return rows.map((row) => {
+      const partText = row.text_content ? (safeJsonParse<{ text?: string }>(row.text_content)?.text ?? "") : "";
+      const index = partText.toLowerCase().indexOf(query);
+      return {
+        sessionId: row.session_id,
+        agentType: "opencode" as const,
+        snippet: index >= 0 ? extractSnippet(partText, index, query.length) : "",
+        matchCount: row.match_count,
+      };
+    });
+  } finally {
+    db.close();
   }
 }

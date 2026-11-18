@@ -151,7 +151,6 @@ function startTestServer(): { server: Server; baseUrl: string } {
   const server = startTerminalServer(0, "test-machine", {
     hostname: "127.0.0.1",
     token: TEST_TOKEN,
-    tokenFile: "/nonexistent/token",
     allowedOrigins: [],
   });
   return { server, baseUrl: `http://127.0.0.1:${server.port}` };

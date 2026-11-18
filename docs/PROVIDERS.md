@@ -1,6 +1,6 @@
 # Agent Town Provider Plugin Guide
 
-Agent Town supports multiple AI coding agents through a provider abstraction. Each provider implements session discovery, process detection, CLI commands, and hook/event handling for a specific agent. This document describes the provider interface, the existing implementations, and how to add a new provider.
+Agent Town supports multiple AI coding agents through a provider abstraction. Each provider implements session discovery, process detection, and CLI commands for a specific agent. Providers only read what an agent already writes to disk; Agent Town never installs hooks or plugins into an agent. This document describes the provider interface, the existing implementations, and how to add a new provider.
 
 ---
 
@@ -18,11 +18,11 @@ interface AgentProvider {
   isAvailable(): Promise<boolean>;
   discoverSessions(): Promise<SessionInfo[]>;
   getSessionMessages(sessionId: string, offset: number, limit: number): Promise<SessionMessagesResponse>;
+  searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]>;
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[];
   extractSessionIdFromArgs(args: string): string | undefined;
   buildLaunchCommand(opts: LaunchOptions): string[];
   buildResumeCommand(opts: ResumeOptions): string[];
-  handleHookEvent(payload: unknown): HookEventResult | null;
   matchProcessToSessionId(cwd: string, processStartMs: number, claimedIds: Set<string>): Promise<string | undefined>;
   deleteSessionData(sessionId: string): Promise<boolean>;
 }
@@ -48,7 +48,7 @@ Checks if the agent's CLI binary is installed on the machine. Typically uses `wh
 Discovers sessions from the agent's native storage. This is called every heartbeat interval (default: 5 seconds).
 
 - **Claude Code:** Reads JSONL files from `~/.claude/projects/` directories.
-- **OpenCode:** Queries the OpenCode SDK (`session.list()`) with SQLite fallback.
+- **OpenCode:** Reads its SQLite database in read-only mode.
 - **Codex CLI:** Reads compatible versioned state databases under `CODEX_HOME` and falls back to active rollout JSONL files.
 - **Pi:** Reads direct and working-directory bucket JSONL sessions from `PI_CODING_AGENT_SESSION_DIR` and reconstructs the active tree branch.
 
@@ -59,7 +59,7 @@ Returns an array of `SessionInfo` objects with fields populated from the agent's
 Returns paginated messages for a session. Used by the `/api/session-messages` endpoint.
 
 - **Claude Code:** Parses the session's JSONL file.
-- **OpenCode:** Uses `session.messages()` from the SDK with SQLite fallback.
+- **OpenCode:** Reads messages and parts from its SQLite database.
 - **Codex CLI:** Normalizes visible rollout messages, reasoning summaries, tool records, and token usage. System/developer content is not exposed.
 - **Pi:** Normalizes the active branch's text, thinking, tool calls/results, model, timestamps, and usage.
 
@@ -126,42 +126,9 @@ interface ResumeOptions {
 - **Codex CLI:** Returns `codex resume <sessionId> [--model X] [--dangerously-bypass-approvals-and-sandbox]`
 - **Pi:** Returns `pi --session <sessionId> [--model X]` (not the interactive `--resume` picker).
 
-#### `handleHookEvent(payload: unknown): HookEventResult | null`
+#### `searchMessages(query, maxResults): Promise<SearchMessageResult[]>`
 
-Parses an incoming hook/event payload and returns a normalized status update. Each provider has its own event format.
-
-```typescript
-interface HookEventResult {
-  sessionId: string;
-  status: SessionStatus;
-  currentTool?: string;
-}
-```
-
-Returns `null` if the payload is not recognized by this provider. The agent iterates through all providers until one returns a non-null result.
-
-**Claude Code hook events** (received via shell hooks configured in `~/.claude/settings.json`):
-```json
-{
-  "session_id": "uuid",
-  "hook_event_name": "PreToolUse",
-  "tool_name": "Edit"
-}
-```
-
-Recognized `hook_event_name` values: `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Stop`, `Notification`, `SessionStart`, `SessionEnd`.
-
-**OpenCode events** (received via webhooks or SSE):
-```json
-{
-  "session_id": "ses_xxx",
-  "event_type": "tool.execute.before",
-  "tool_name": "file_write",
-  "agent_type": "opencode"
-}
-```
-
-Recognized `event_type` values: `session.created`, `session.idle`, `session.deleted`, `session.error`, `tool.execute.before`, `tool.execute.after`, `message.updated`, `permission.asked`, `permission.replied`.
+Finds sessions whose messages contain `query` (already lower-cased), returning up to `maxResults` results with a match count and a snippet. Used by the `/api/search-messages` endpoint, which asks each provider in turn. Shared helpers (`matchTexts`, `extractSnippet`, `contentText`) live in `agent/src/providers/search.ts`.
 
 #### `matchProcessToSessionId(cwd, processStartMs, claimedIds): Promise<string | undefined>`
 
@@ -184,7 +151,7 @@ Fallback method for matching a running process to a session ID when `extractSess
 Deletes the session's data files from local storage. Returns `true` if the session was found and deleted.
 
 - **Claude Code:** Deletes the JSONL file from `~/.claude/projects/`.
-- **OpenCode:** Deletes the session via SDK or SQLite.
+- **OpenCode:** Deletes the session rows from its SQLite database.
 - **Codex CLI:** Runs `codex delete --force <uuid>` using an argument-array spawn. It never unlinks a guessed transcript path.
 - **Pi:** Parses headers under the configured session root and unlinks only the file whose ID exactly matches.
 
@@ -243,12 +210,10 @@ async function initializeProviders(): Promise<void> {
 | `session-discovery.ts`| Reads JSONL files from `~/.claude/projects/`       |
 | `message-parser.ts`   | Parses JSONL into `SessionMessage[]`               |
 | `process-mapper.ts`   | Filters `claude` processes, matches by JSONL birth time |
-| `hook-handler.ts`     | Parses Claude Code hook event payloads             |
 
 Key characteristics:
 - Sessions are stored as JSONL files in `~/.claude/projects/<hash>/` directories.
 - Session IDs are UUIDs (e.g., `550e8400-e29b-41d4-a716-446655440000`).
-- Real-time status comes from Claude Code hooks configured in `~/.claude/settings.json`.
 - Post-launch automation: auto-accepts workspace trust prompt, sends initial message.
 
 ### OpenCode Provider
@@ -257,26 +222,15 @@ Key characteristics:
 
 | File                  | Purpose                                            |
 |-----------------------|----------------------------------------------------|
-| `index.ts`            | Provider class with additional `startEventStream` and `sendViaTUI` methods |
-| `session-discovery.ts`| Queries OpenCode SDK or reads SQLite database       |
-| `message-parser.ts`   | Retrieves messages via SDK or SQLite                |
+| `index.ts`            | Provider class, delegates to specialized modules    |
+| `session-discovery.ts`| Reads sessions from the SQLite database (read-only) |
+| `message-parser.ts`   | Reads messages and parts from SQLite                |
 | `process-mapper.ts`   | Filters `opencode` processes                        |
-| `event-handler.ts`    | Handles webhooks and SSE events                     |
-| `sdk-client.ts`       | Lazy-init SDK client with retry logic               |
 
 Key characteristics:
-- Sessions are stored in SQLite (managed by OpenCode server).
+- Sessions are stored in SQLite (`~/.local/share/opencode/opencode.db`), opened read-only.
 - Session IDs use the format `ses_<alphanumeric>` (e.g., `ses_30163a6c1ffeYDGuDOrp0nH9vG`).
-- Real-time status comes from SSE event subscription via the OpenCode SDK.
-- Text sending uses the SDK's TUI methods (`tui.appendPrompt`, `tui.submitPrompt`).
-- Requires OpenCode server running (`opencode serve --port 4096`).
-
-The OpenCode provider extends the base interface with two additional methods:
-
-```typescript
-startEventStream(onEvent: (result: HookEventResult) => void): Promise<void>;
-sendViaTUI(text: string): Promise<boolean>;
-```
+- Text is sent through the terminal with bracketed paste, like every other TUI provider; no OpenCode server is needed.
 
 ### Gemini CLI Provider
 
@@ -293,15 +247,11 @@ Key characteristics:
 - Sessions are stored as JSON files in `~/.gemini/tmp/<project_hash>/chats/` directories.
 - Session IDs are UUIDs (e.g., `4460d17e-a2b3-4c5d-8e9f-0123456789ab`).
 - Project-to-directory mapping is resolved via `~/.gemini/projects.json` or `.project_root` files in each project hash directory.
-- Status detection is based on file modification time heuristics (no hook or SSE support).
+- Status detection uses file modification times, process mapping, and the terminal screen.
 - Launch command: `gemini [--model X] [--yolo]`
 - Resume command: `gemini --resume <sessionId> [--model X] [--yolo]`
 - Session ID extraction from args: matches `--resume <uuid>` or `-r <uuid>` patterns.
 - Message format includes thoughts (reasoning), tool calls with structured results, and token usage stats (input, output, cached, thoughts, tool, total).
-
-Limitations compared to other providers:
-- **No hook/event support:** Gemini CLI does not currently support hooks or webhooks for real-time status tracking. Status detection relies entirely on file modification time heuristics, which is less accurate than Claude Code hooks or OpenCode SSE events.
-- **No SDK integration:** Session discovery and message parsing read JSON files directly from disk rather than communicating with a running server process.
 
 ### Codex CLI Provider
 
@@ -314,7 +264,7 @@ Limitations compared to other providers:
 | `message-parser.ts`    | Visible message, reasoning, tool, usage, pagination, and search |
 | `process-mapper.ts`    | Exact process detection and UUID/start-time mapping             |
 
-Codex session storage is private and versioned. Agent Town detects compatible schemas at runtime and falls back safely when they change. `CODEX_HOME` defaults to `~/.codex`; archived sessions and subagent rollouts are excluded. There is no hook integration, so status remains activity/process based. Resume requires a UUID, and autonomous mode deliberately bypasses both approvals and sandboxing.
+Codex session storage is private and versioned. Agent Town detects compatible schemas at runtime and falls back safely when they change. `CODEX_HOME` defaults to `~/.codex`; archived sessions and subagent rollouts are excluded. Status comes from activity, process mapping, and the terminal screen. Resume requires a UUID, and autonomous mode deliberately bypasses both approvals and sandboxing.
 
 ### Pi Provider
 
@@ -342,7 +292,7 @@ The session discovery lifecycle runs every heartbeat interval (default: 5 second
 4. **Merge** -- The session list is enriched with `multiplexer` and `multiplexerSession` fields from the process mappings.
 
 5. **Adjust statuses** -- Status priority:
-   - Hook/SSE events (highest accuracy)
+   - Terminal screen (approval prompts and interrupt hints, see `agent/src/screen-status.ts`)
    - Process mapper (child process detection)
    - Storage heuristics (JSONL modification time)
 
@@ -360,7 +310,6 @@ agent/src/providers/my-agent/
   session-discovery.ts  # Session discovery logic
   message-parser.ts     # Message parsing
   process-mapper.ts     # Process filtering + matching
-  event-handler.ts      # Hook/event handling (optional)
 ```
 
 ### Step 2: Add the agent type
@@ -380,10 +329,10 @@ import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
 import type {
   AgentProcess,
   AgentProvider,
-  HookEventResult,
   LaunchOptions,
   ResumeOptions,
 } from "../types";
+import type { SearchMessageResult } from "../search";
 
 export class MyAgentProvider implements AgentProvider {
   readonly type = "my-agent" as const;
@@ -422,6 +371,11 @@ export class MyAgentProvider implements AgentProvider {
     return { messages: [], total: 0, hasMore: false };
   }
 
+  async searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]> {
+    // Return sessions whose messages contain the (lower-cased) query
+    return [];
+  }
+
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
     // Filter ps output to find your agent's processes
     return processes.filter((p) =>
@@ -445,12 +399,6 @@ export class MyAgentProvider implements AgentProvider {
     const parts = ["myagent", "--session", opts.sessionId];
     if (opts.model) parts.push("--model", opts.model);
     return parts;
-  }
-
-  handleHookEvent(payload: unknown): HookEventResult | null {
-    // Parse webhook/hook payloads from your agent
-    // Return null if the payload doesn't belong to this provider
-    return null;
   }
 
   async matchProcessToSessionId(

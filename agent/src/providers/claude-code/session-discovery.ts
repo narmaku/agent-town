@@ -1,7 +1,13 @@
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+import {
+  createLogger,
+  errorMessage,
+  SESSION_RETENTION_MS,
+  type SessionInfo,
+  type SessionStatus,
+} from "@agent-town/shared";
 
 const log = createLogger("claude:sessions");
 
@@ -98,7 +104,7 @@ export async function discoverClaudeSessions(): Promise<SessionInfo[]> {
       }
     }
   } catch (err) {
-    log.debug(`discoverClaudeSessions: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`discoverClaudeSessions: ${errorMessage(err)}`);
   }
 
   pruneSessionCache(currentPaths);
@@ -197,7 +203,7 @@ async function parseClaudeSessionFromJsonl(jsonlPath: string, mtimeMs: number): 
 
     return session;
   } catch (err) {
-    log.debug(`parseClaudeSession: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`parseClaudeSession: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -236,7 +242,7 @@ export async function deleteClaudeSessionData(sessionId: string): Promise<boolea
       }
     }
   } catch (err) {
-    log.warn(`deleteClaudeSessionData: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`deleteClaudeSessionData: ${errorMessage(err)}`);
   }
   return false;
 }

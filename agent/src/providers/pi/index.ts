@@ -1,7 +1,7 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
-
-import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
-import { getPiSessionMessages } from "./message-parser";
+import type { SearchMessageResult } from "../search";
+import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
+import { getPiSessionMessages, searchPiMessages } from "./message-parser";
 import { extractPiSessionIdFromArgs, filterPiProcesses, matchPiProcessToSession } from "./process-mapper";
 import { deletePiSessionData, discoverPiSessions } from "./session-discovery";
 
@@ -48,6 +48,10 @@ export class PiProvider implements AgentProvider {
     return getPiSessionMessages(sessionId, offset, limit);
   }
 
+  async searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]> {
+    return searchPiMessages(query, maxResults);
+  }
+
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
     return filterPiProcesses(processes);
   }
@@ -66,10 +70,6 @@ export class PiProvider implements AgentProvider {
     const command = ["pi", "--session", options.sessionId];
     if (options.model) command.push("--model", options.model);
     return command;
-  }
-
-  handleHookEvent(_payload: unknown): HookEventResult | null {
-    return null;
   }
 
   async matchProcessToSessionId(

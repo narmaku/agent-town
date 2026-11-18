@@ -3,12 +3,16 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   createLogger,
+  errorMessage,
   paginateFromEnd,
   type SessionMessage,
   type SessionMessagesResponse,
+  safeJsonParse,
   type TokenUsage,
   truncateId,
 } from "@agent-town/shared";
+
+import { contentText, matchTexts, type SearchMessageResult } from "../search";
 
 const log = createLogger("claude:messages");
 
@@ -162,4 +166,54 @@ async function findJsonlFile(sessionId: string): Promise<string | null> {
     }
   }
   return null;
+}
+
+/** Search Claude Code transcripts (JSONL) for `query` (already lower-cased). */
+export async function searchClaudeMessages(
+  query: string,
+  maxResults: number,
+  projectsDir = join(homedir(), ".claude", "projects"),
+): Promise<SearchMessageResult[]> {
+  const results: SearchMessageResult[] = [];
+  let projectDirs: string[];
+  try {
+    projectDirs = await readdir(projectsDir);
+  } catch (err) {
+    log.debug(`search: cannot read ${projectsDir}: ${errorMessage(err)}`);
+    return results;
+  }
+
+  for (const dir of projectDirs) {
+    const projectDir = join(projectsDir, dir);
+    let files: string[];
+    try {
+      files = (await readdir(projectDir)).filter((file) => file.endsWith(".jsonl"));
+    } catch (err) {
+      log.debug(`search: skipping ${projectDir}: ${errorMessage(err)}`);
+      continue;
+    }
+    for (const file of files) {
+      if (results.length >= maxResults) return results;
+      const path = join(projectDir, file);
+      try {
+        const text = await Bun.file(path).text();
+        if (!text.toLowerCase().includes(query)) continue;
+        let sessionId = "";
+        const matching: string[] = [];
+        for (const line of text.split("\n")) {
+          const matches = line.toLowerCase().includes(query);
+          if (!matches && sessionId) continue;
+          const entry = safeJsonParse<{ sessionId?: string; message?: { content?: unknown } }>(line);
+          if (!entry) continue;
+          sessionId ||= entry.sessionId ?? "";
+          if (matches) matching.push(contentText(entry.message?.content));
+        }
+        const { matchCount, snippet } = matchTexts(matching, query);
+        if (sessionId && matchCount > 0) results.push({ sessionId, agentType: "claude-code", snippet, matchCount });
+      } catch (err) {
+        log.debug(`search: failed to read ${path}: ${errorMessage(err)}`);
+      }
+    }
+  }
+  return results;
 }

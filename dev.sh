@@ -28,7 +28,7 @@ fi
 
 # Build dashboard
 echo "Building dashboard..."
-cd dashboard && bunx vite build 2>&1 && cd ..
+(cd dashboard && bun run build) 2>&1
 
 PORT="${AGENT_TOWN_PORT:-4680}"
 TOKEN_FILE="${AGENT_TOWN_TOKEN_FILE:-$HOME/.agent-town/token}"

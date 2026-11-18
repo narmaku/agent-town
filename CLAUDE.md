@@ -16,7 +16,7 @@ Heavy refactoring is encouraged when it improves architecture or extensibility.
 
 - **Runtime:** Bun (not Node.js)
 - **Language:** TypeScript (strict mode)
-- **Frontend:** React 19 + Vite
+- **Frontend:** React 19, bundled with `bun build`
 - **Styling:** Plain CSS (no framework)
 - **Testing:** `bun test` (Bun native test runner)
 - **Linter/Formatter:** Biome
@@ -40,7 +40,7 @@ bunx biome check .        # Lint + format check
 bunx biome check --write .  # Auto-fix lint + format issues
 
 # Build
-cd dashboard && bunx vite build  # Build dashboard for production
+cd dashboard && bun run build  # Build dashboard for production (Bun bundler)
 ```
 
 ## Architecture
@@ -63,8 +63,9 @@ Multiplexer Sessions (zellij / tmux)
   multiple AI coding agents (Claude Code, OpenCode, Gemini CLI, Codex CLI, and Pi), maps them to multiplexer
   sessions via process inspection, sends heartbeats to server.
   - **agent/src/providers/** — Agent provider abstraction (Claude Code, OpenCode, Gemini CLI, Codex CLI, and Pi).
-    Each provider implements session discovery, process detection, CLI commands, and
-    hook/event handling for a specific AI coding agent.
+    Each provider implements session discovery, process detection, and CLI commands for a
+    specific AI coding agent. No hooks are installed into agents: status comes from the
+    terminal screen (`screen-status.ts`), process activity, and session files.
 - **server/** — Central hub. Receives heartbeats, stores machine state, proxies commands
   to agents, serves the dashboard SPA.
 - **dashboard/** — React SPA. Connects via WebSocket for real-time updates.

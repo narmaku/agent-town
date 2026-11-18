@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Hook-free status detection: the agent reads each session's visible tmux/zellij screen and flags approval prompts (`action_required`) and running turns (`working`) (2026-11-18)
 - Pi provider with active-branch JSONL discovery, transcript search, exact process/session mapping, resume/delete support, and dashboard controls (2026-09-10)
 - Codex CLI provider with SQLite/rollout discovery, transcript parsing, process mapping, native resume/delete commands, and dashboard controls (2026-09-10)
 - Gemini CLI provider: third supported agent type with session discovery from `~/.gemini/tmp/`, JSON-based message parsing, and process detection (2026-03-21)
@@ -23,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 292 additional tests for 9 previously untested modules (2026-03-19)
 
 ### Changed
+- Multiplexer control (create, type, rename, kill) lives in `agent/src/mux-control.ts`; launch, resume, and reconnect share one startup sequence, and typed text is sent to tmux literally (2026-11-18)
+- Message search is a provider method (`searchMessages`) instead of a per-agent if-chain; shared snippet and JSON helpers replace duplicated copies (2026-11-18)
+- Terminal relay uses Bun's built-in pseudo-terminal instead of a Python helper; the agent now needs only Bun (2026-11-18)
+- Dashboard is bundled with `bun build` instead of Vite; Markdown is rendered by a small in-house parser that never injects HTML and only links http(s)/mailto (2026-11-18)
+- Terminal fit, Unicode widths, and link detection are implemented locally instead of xterm addons; remaining dependencies are pinned to exact versions (2026-11-18)
 - Removed cost estimation, kept token tracking only (2026-03-22)
 - Moved tool/thinking toggles to header as switch controls (2026-03-21)
 - Extracted shared utilities and constants to reduce duplication (2026-03-18)
@@ -36,11 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - Server and agent bind to `127.0.0.1` by default (`AGENT_TOWN_HOST`, `AGENT_TOWN_TERMINAL_HOST`); agents bind to all interfaces only when pointed at a non-loopback server (2026-11-18)
-- Shared access token in `~/.agent-town/token` (mode 600, generated on first run) required on every API and WebSocket request between dashboard, server, agents and hooks; compared in constant time (2026-11-18)
+- Shared access token in `~/.agent-town/token` (mode 600, generated on first run) required on every API and WebSocket request between dashboard, server and agents; compared in constant time (2026-11-18)
 - Origin allowlist on all API requests and WebSocket upgrades, blocking cross-site WebSocket hijacking and CSRF (`AGENT_TOWN_ALLOWED_ORIGINS` for extra origins) (2026-11-18)
 - POST/PUT bodies must be `application/json` (multipart on upload endpoints) (2026-11-18)
 - Dashboard sign-in via `#token=` login link or token prompt; token kept in `sessionStorage` (2026-11-18)
-- SSH nodes receive the token over SSH stdin and use loopback-only tunnels; remote hook setup no longer breaks on quoting (2026-11-18)
+- SSH nodes receive the token over SSH stdin and use loopback-only tunnels (2026-11-18)
+### Removed
+- Claude Code hook installation (local and remote), the `/api/hook-event` endpoint, the hook store, and the `enableHooks` node setting (2026-11-18)
+- OpenCode SDK client and SSE event stream; OpenCode is read from its SQLite database only (2026-11-18)
+- Legacy process-mapping keys without an agent type (2026-11-18)
+- Dependencies: `@opencode-ai/sdk`, `react-markdown`, `remark-gfm`, `rehype-highlight`, `@xterm/addon-fit`, `@xterm/addon-unicode11`, `@xterm/addon-web-links`, `vite`, `@vitejs/plugin-react` (2026-11-18)
+
 
 ## [0.1.0] - 2026-03-18
 

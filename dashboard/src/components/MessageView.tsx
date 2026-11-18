@@ -1,7 +1,7 @@
 import type React from "react";
 import { useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+
+import { Markdown } from "./Markdown";
 
 interface Props {
   lastMessage: string;
@@ -19,30 +19,7 @@ export function MessageView({ lastMessage, fullMessage }: Props): React.JSX.Elem
     <div className="message-view">
       {showFull && hasFullMessage ? (
         <div className="message-full">
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              code({ className, children, ...props }) {
-                const isInline = !className;
-                if (isInline) {
-                  return (
-                    <code className="inline-code" {...props}>
-                      {children}
-                    </code>
-                  );
-                }
-                return (
-                  <pre className="code-block">
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  </pre>
-                );
-              },
-            }}
-          >
-            {displayText}
-          </Markdown>
+          <Markdown text={displayText ?? ""} />
         </div>
       ) : (
         <div className="message-summary">{lastMessage}</div>

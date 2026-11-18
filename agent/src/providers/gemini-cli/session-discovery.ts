@@ -1,7 +1,13 @@
 import { readdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { createLogger, SESSION_RETENTION_MS, type SessionInfo, type SessionStatus } from "@agent-town/shared";
+import {
+  createLogger,
+  errorMessage,
+  SESSION_RETENTION_MS,
+  type SessionInfo,
+  type SessionStatus,
+} from "@agent-town/shared";
 
 const log = createLogger("gemini:sessions");
 
@@ -134,7 +140,7 @@ async function loadProjectsMapping(): Promise<Map<string, string>> {
       reverseMap.set(hash, projectPath);
     }
   } catch (err) {
-    log.debug(`loadProjectsMapping: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`loadProjectsMapping: ${errorMessage(err)}`);
   }
   return reverseMap;
 }
@@ -201,7 +207,7 @@ export async function discoverGeminiSessions(): Promise<SessionInfo[]> {
       }
     }
   } catch (err) {
-    log.debug(`discoverGeminiSessions: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`discoverGeminiSessions: ${errorMessage(err)}`);
   }
 
   // Prune cache entries for deleted or expired files
@@ -271,7 +277,7 @@ async function parseGeminiSession(
       contextTokens: contextTokens > 0 ? contextTokens : undefined,
     };
   } catch (err) {
-    log.debug(`parseGeminiSession: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`parseGeminiSession: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -337,7 +343,7 @@ export async function deleteGeminiSessionData(sessionId: string): Promise<boolea
       }
     }
   } catch (err) {
-    log.warn(`deleteGeminiSessionData: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`deleteGeminiSessionData: ${errorMessage(err)}`);
   }
   return false;
 }
@@ -400,7 +406,7 @@ export async function findGeminiSessionByDir(directory: string, claimedIds: Set<
     candidates.sort((a, b) => b.lastUpdated - a.lastUpdated);
     return candidates[0]?.sessionId;
   } catch (err) {
-    log.debug(`findGeminiSessionByDir: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`findGeminiSessionByDir: ${errorMessage(err)}`);
   }
   return undefined;
 }
@@ -440,7 +446,7 @@ export async function findSessionFilePath(sessionId: string): Promise<string | n
     // If filename hint didn't work, do a full scan
     return await findSessionFileFullScan(sessionId);
   } catch (err) {
-    log.debug(`findSessionFilePath: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`findSessionFilePath: ${errorMessage(err)}`);
   }
   return null;
 }
@@ -469,7 +475,7 @@ async function findSessionFileFullScan(sessionId: string): Promise<string | null
       }
     }
   } catch (err) {
-    log.debug(`findSessionFileFullScan: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`findSessionFileFullScan: ${errorMessage(err)}`);
   }
   return null;
 }

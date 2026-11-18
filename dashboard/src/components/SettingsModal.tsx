@@ -71,7 +71,6 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
   const [nodeSshKeyPath, setNodeSshKeyPath] = useState("~/.ssh/id_ed25519");
   const [nodeAgentPort, setNodeAgentPort] = useState("4681");
   const [nodeAutoConnect, setNodeAutoConnect] = useState(false);
-  const [nodeEnableHooks, setNodeEnableHooks] = useState(true);
 
   function resetNodeForm() {
     setNodeName("");
@@ -81,7 +80,6 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
     setNodeSshKeyPath("~/.ssh/id_ed25519");
     setNodeAgentPort("4681");
     setNodeAutoConnect(false);
-    setNodeEnableHooks(true);
     setTestResult(null);
     setShowAddForm(false);
   }
@@ -170,7 +168,6 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
           sshKeyPath: nodeSshKeyPath,
           agentPort: parseInt(nodeAgentPort, 10),
           autoConnect: nodeAutoConnect,
-          enableHooks: nodeEnableHooks,
         }),
       });
       if (resp.ok) {
@@ -679,20 +676,6 @@ export function SettingsModal({ open, onClose }: Props): React.JSX.Element | nul
                       />
                       Auto-connect on server start
                     </label>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <input
-                        type="checkbox"
-                        checked={nodeEnableHooks}
-                        onChange={(e) => setNodeEnableHooks(e.target.checked)}
-                      />
-                      Enable Claude Code hooks (real-time status)
-                    </label>
-                    <span className="form-hint">
-                      Configures ~/.claude/settings.json on the remote to send hook events to the agent. Provides
-                      accurate status tracking (working, awaiting input, action required).
-                    </span>
                   </div>
                   {testResult && (
                     <div className={`node-test-result ${testResult.ok ? "success" : "failure"}`}>

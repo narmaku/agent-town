@@ -1,12 +1,13 @@
-import { FitAddon } from "@xterm/addon-fit";
-import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import type React from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalMultiplexer } from "@agent-town/shared";
 import { withTokenParam } from "../auth";
+
+import { fitTerminal } from "../terminal/fit";
+import { registerLinks } from "../terminal/links";
+import { UNICODE_VERSION, unicodeWidthProvider } from "../terminal/unicode-width";
 
 const DOUBLE_ESC_THRESHOLD_MS = 500;
 
@@ -71,20 +72,15 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(function Termi
 
     termRef.current = term;
 
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    const unicode11Addon = new Unicode11Addon();
-
-    term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
-    term.loadAddon(unicode11Addon);
-    term.unicode.activeVersion = "11";
+    const links = registerLinks(term);
+    term.unicode.register(unicodeWidthProvider);
+    term.unicode.activeVersion = UNICODE_VERSION;
     term.open(containerRef.current);
 
     // Fit immediately, then again after a short delay to ensure accurate sizing
-    fitAddon.fit();
+    fitTerminal(term);
     requestAnimationFrame(() => {
-      fitAddon.fit();
+      fitTerminal(term);
     });
 
     // Connect after fit so we send accurate cols/rows from the start
@@ -105,7 +101,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(function Termi
       setConnected(true);
       term.focus();
       // Send a resize after connect to ensure the PTY matches the browser size
-      fitAddon.fit();
+      fitTerminal(term);
       ws.send(
         JSON.stringify({
           type: "resize",
@@ -140,7 +136,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(function Termi
     });
 
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
+      fitTerminal(term);
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(
           JSON.stringify({
@@ -166,6 +162,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, Props>(function Termi
 
     return () => {
       keyHandler.dispose();
+      links.dispose();
       resizeObserver.disconnect();
       wsRef.current = null;
       termRef.current = null;

@@ -1,5 +1,5 @@
 import { readFile, readlink } from "node:fs/promises";
-import { type AgentType, createLogger, type TerminalMultiplexer } from "@agent-town/shared";
+import { type AgentType, createLogger, errorMessage, type TerminalMultiplexer } from "@agent-town/shared";
 import {
   extractClaudeSessionIdFromArgs,
   matchSessionByBirthTime,
@@ -16,7 +16,7 @@ export interface ProcessMapping {
   session: string; // multiplexer session name
   sessionId?: string; // agent session ID
   hasActiveChildren: boolean;
-  agentType?: AgentType; // agent type that owns this process
+  agentType: AgentType; // agent type that owns this process
 }
 
 export type ProcessMappingKeyKind = "session" | "cwd";
@@ -38,9 +38,7 @@ async function getEnvVar(pid: number, varName: string): Promise<string | null> {
       }
     }
   } catch (err) {
-    log.debug(
-      `getEnvVar: pid=${pid} var=${varName} failed (process may have exited): ${err instanceof Error ? err.message : String(err)}`,
-    );
+    log.debug(`getEnvVar: pid=${pid} var=${varName} failed (process may have exited): ${errorMessage(err)}`);
   }
   return null;
 }
@@ -60,9 +58,7 @@ async function getCwd(pid: number): Promise<string | null> {
   try {
     return await readlink(`/proc/${pid}/cwd`);
   } catch (err) {
-    log.debug(
-      `getCwd: pid=${pid} failed (process may have exited): ${err instanceof Error ? err.message : String(err)}`,
-    );
+    log.debug(`getCwd: pid=${pid} failed (process may have exited): ${errorMessage(err)}`);
     return null;
   }
 }
@@ -126,7 +122,7 @@ async function resolveMultiplexerSession(
         }
       }
     } catch (err) {
-      log.debug(`tmux pane lookup failed for pid=${proc.pid}: ${err instanceof Error ? err.message : String(err)}`);
+      log.debug(`tmux pane lookup failed for pid=${proc.pid}: ${errorMessage(err)}`);
     }
   }
 
@@ -207,7 +203,7 @@ export async function discoverProcessMappings(): Promise<Map<string, ProcessMapp
       }
     }
   } catch (err) {
-    log.warn(`discoverProcessMappings failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`discoverProcessMappings failed: ${errorMessage(err)}`);
   }
 
   return mappings;

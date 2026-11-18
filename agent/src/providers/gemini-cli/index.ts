@@ -1,7 +1,8 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
-import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
+import type { SearchMessageResult } from "../search";
+import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { filterProcessesByBinary, isBinaryAvailable } from "../utils";
-import { getGeminiSessionMessages } from "./message-parser";
+import { getGeminiSessionMessages, searchGeminiMessages } from "./message-parser";
 import { extractGeminiSessionIdFromArgs } from "./process-mapper";
 import { deleteGeminiSessionData, discoverGeminiSessions, findGeminiSessionByDir } from "./session-discovery";
 
@@ -27,6 +28,10 @@ export class GeminiCliProvider implements AgentProvider {
     return getGeminiSessionMessages(sessionId, offset, limit);
   }
 
+  async searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]> {
+    return searchGeminiMessages(query, maxResults);
+  }
+
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
     return filterProcessesByBinary(processes, this.binaryName);
   }
@@ -47,12 +52,6 @@ export class GeminiCliProvider implements AgentProvider {
     if (opts.model) parts.push("--model", opts.model);
     if (opts.autonomous) parts.push("--yolo");
     return parts;
-  }
-
-  handleHookEvent(_payload: unknown): HookEventResult | null {
-    // Gemini CLI does not currently support hooks/webhooks for status tracking.
-    // Status detection relies on process-based heuristics and file modification times.
-    return null;
   }
 
   async matchProcessToSessionId(

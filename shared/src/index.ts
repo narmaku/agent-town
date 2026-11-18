@@ -1,9 +1,17 @@
 export { SESSION_ID_DISPLAY_LENGTH, SESSION_RETENTION_MS } from "./constants";
-export { buildHookCommand, DEFAULT_TOKEN_FILE_SHELL_EXPR } from "./hook-command";
 export { createLogger, type Logger } from "./logger";
 export { ALL_INTERFACES_HOST, isLoopbackHost, LOOPBACK_HOST } from "./network";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
-export { formatCompactTokens, paginateFromEnd, safeJsonParse, truncateId } from "./utils";
+export {
+  errorMessage,
+  formatCompactTokens,
+  isRecord,
+  numberValue,
+  paginateFromEnd,
+  safeJsonParse,
+  stringValue,
+  truncateId,
+} from "./utils";
 
 export type AgentType = "claude-code" | "opencode" | "gemini-cli" | "codex" | "pi";
 
@@ -36,8 +44,6 @@ export interface SessionInfo {
   version?: string;
   multiplexerSession?: string; // zellij/tmux session name
   multiplexer?: TerminalMultiplexer;
-  hookEnabled?: boolean; // true if session is sending hook events (accurate status)
-  currentTool?: string; // tool currently being executed (from hooks)
   totalInputTokens?: number; // aggregated input tokens across all messages
   totalOutputTokens?: number; // aggregated output tokens across all messages
   contextTokens?: number; // current context window size (from last API response)
@@ -173,7 +179,6 @@ export interface RemoteNode {
   error?: string; // last error message
   lastConnected?: string; // ISO timestamp
   autoConnect: boolean; // connect on server start
-  enableHooks: boolean; // configure Claude Code hooks on the remote
 }
 
 export interface CreateNodeRequest {
@@ -184,7 +189,6 @@ export interface CreateNodeRequest {
   sshKeyPath: string;
   agentPort?: number;
   autoConnect?: boolean;
-  enableHooks?: boolean;
 }
 
 export interface UpdateNodeRequest {
@@ -195,7 +199,6 @@ export interface UpdateNodeRequest {
   sshKeyPath?: string;
   agentPort?: number;
   autoConnect?: boolean;
-  enableHooks?: boolean;
 }
 
 // --- Git diff types ---

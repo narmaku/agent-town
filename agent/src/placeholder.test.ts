@@ -10,6 +10,7 @@ function makeMapping(overrides: Partial<ProcessMapping> = {}): ProcessMapping {
     multiplexer: "zellij",
     session: "test-session",
     hasActiveChildren: false,
+    agentType: "claude-code",
     ...overrides,
   };
 }
@@ -18,7 +19,7 @@ describe("createPlaceholderSessions", () => {
   test("placeholder sessions have status 'starting'", () => {
     const sessions: SessionInfo[] = [];
     const processMappings = new Map<string, ProcessMapping>();
-    processMappings.set("cwd:/home/user/project", makeMapping({ session: "my-agent" }));
+    processMappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "my-agent" }));
     const activeMuxNames = new Set(["my-agent"]);
 
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
@@ -30,7 +31,10 @@ describe("createPlaceholderSessions", () => {
   test("placeholder sessions include agentType from mapping", () => {
     const sessions: SessionInfo[] = [];
     const processMappings = new Map<string, ProcessMapping>();
-    processMappings.set("cwd:/home/user/project", makeMapping({ session: "my-agent", agentType: "claude-code" }));
+    processMappings.set(
+      "claude-code:cwd:/home/user/project",
+      makeMapping({ session: "my-agent", agentType: "claude-code" }),
+    );
     const activeMuxNames = new Set(["my-agent"]);
 
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
@@ -42,7 +46,7 @@ describe("createPlaceholderSessions", () => {
   test("placeholder sessions have correct lastMessage for starting status", () => {
     const sessions: SessionInfo[] = [];
     const processMappings = new Map<string, ProcessMapping>();
-    processMappings.set("cwd:/home/user/project", makeMapping({ session: "my-agent" }));
+    processMappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "my-agent" }));
     const activeMuxNames = new Set(["my-agent"]);
 
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
@@ -54,7 +58,7 @@ describe("createPlaceholderSessions", () => {
   test("placeholder sessions use correct sessionId format", () => {
     const sessions: SessionInfo[] = [];
     const processMappings = new Map<string, ProcessMapping>();
-    processMappings.set("cwd:/home/user/project", makeMapping({ session: "my-agent" }));
+    processMappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "my-agent" }));
     const activeMuxNames = new Set(["my-agent"]);
 
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
@@ -80,7 +84,7 @@ describe("createPlaceholderSessions", () => {
       },
     ];
     const processMappings = new Map<string, ProcessMapping>();
-    processMappings.set("cwd:/home/user/project", makeMapping({ session: "my-agent" }));
+    processMappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "my-agent" }));
     const activeMuxNames = new Set(["my-agent"]);
 
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
@@ -93,7 +97,7 @@ describe("createPlaceholderSessions", () => {
   test("skips mappings whose mux session does not exist in active list", () => {
     const sessions: SessionInfo[] = [];
     const processMappings = new Map<string, ProcessMapping>();
-    processMappings.set("cwd:/home/user/project", makeMapping({ session: "ghost-session" }));
+    processMappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "ghost-session" }));
     const activeMuxNames = new Set(["other-session"]);
 
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
@@ -104,24 +108,11 @@ describe("createPlaceholderSessions", () => {
   test("skips sessionId-based keys (non-cwd keys)", () => {
     const sessions: SessionInfo[] = [];
     const processMappings = new Map<string, ProcessMapping>();
-    // This key is a session ID, not a cwd: prefix
-    processMappings.set("some-session-id", makeMapping({ session: "my-agent" }));
+    processMappings.set("claude-code:session:some-session-id", makeMapping({ session: "my-agent" }));
     const activeMuxNames = new Set(["my-agent"]);
 
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
 
     expect(sessions).toHaveLength(0);
-  });
-
-  test("placeholder agentType defaults to claude-code when not set in mapping", () => {
-    const sessions: SessionInfo[] = [];
-    const processMappings = new Map<string, ProcessMapping>();
-    processMappings.set("cwd:/home/user/project", makeMapping({ session: "my-agent" }));
-    const activeMuxNames = new Set(["my-agent"]);
-
-    createPlaceholderSessions(sessions, processMappings, activeMuxNames);
-
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0].agentType).toBe("claude-code");
   });
 });

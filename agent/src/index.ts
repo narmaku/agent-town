@@ -4,6 +4,7 @@ import { homedir, hostname, platform } from "node:os";
 import { join } from "node:path";
 import {
   createLogger,
+  errorMessage,
   type Heartbeat,
   LOOPBACK_HOST,
   type MultiplexerSessionInfo,
@@ -14,13 +15,11 @@ import {
 import { authHeaders, parseOriginList } from "@agent-town/shared/request-guard";
 import { loadOrCreateToken, resolveTokenFile } from "@agent-town/shared/token-store";
 import { resolveAgentBindHost } from "./agent-guard";
-import { configureLocalHooks } from "./hook-setup";
-import { updateHookState } from "./hook-store";
 import { detectMultiplexers, listAllSessions } from "./multiplexer";
 import { createPlaceholderSessions, deduplicateSessions, expirePlaceholders } from "./placeholder-sessions";
 import { discoverProcessMappings } from "./process-mapper";
-import type { OpenCodeProvider } from "./providers/opencode/index";
-import { getAllProviders, getProvider, initializeProviders } from "./providers/registry";
+import { getAllProviders, initializeProviders } from "./providers/registry";
+import { applyScreenStatuses } from "./screen-status";
 import { adjustSessionStatuses, discoverAndMapSessions } from "./session-mapping";
 import { discoverSessions } from "./session-parser";
 import { writeSessionMetadata } from "./session-recovery";
@@ -66,7 +65,7 @@ function loadLastKnownMux(): void {
       lastKnownMux.set(key, value);
     }
   } catch (err) {
-    log.debug(`last-known mux not loaded: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`last-known mux not loaded: ${errorMessage(err)}`);
   }
 }
 
@@ -79,7 +78,7 @@ function saveLastKnownMux(): void {
     }
     writeFileSync(MUX_ASSOC_FILE, JSON.stringify(obj, null, 2));
   } catch (err) {
-    log.warn(`failed to save last-known mux: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`failed to save last-known mux: ${errorMessage(err)}`);
   }
 }
 
@@ -95,7 +94,7 @@ function loadSessionNames(): Record<string, string> {
     const data = readFileSync(SESSION_NAMES_FILE, "utf-8");
     return JSON.parse(data) as Record<string, string>;
   } catch (err) {
-    log.debug(`session names not loaded: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`session names not loaded: ${errorMessage(err)}`);
     return {};
   }
 }
@@ -149,7 +148,7 @@ function trackMultiplexerAssociations(sessions: SessionInfo[], multiplexerSessio
     if (lastMux && unclaimedMuxLookup.has(lastMux.session) && !claimedMuxNames.has(lastMux.session)) {
       session.multiplexer = lastMux.multiplexer;
       session.multiplexerSession = lastMux.session;
-      // Only set "exited" if session isn't already "done" (hook-based done takes priority)
+      // Keep a "done" status reported by the provider
       if (session.status !== "done") {
         session.status = "exited";
       }
@@ -226,6 +225,7 @@ async function sendHeartbeat(): Promise<void> {
 
     const activeMuxNames = discoverAndMapSessions(sessions, multiplexerSessions, processMappings);
     adjustSessionStatuses(sessions, processMappings);
+    await applyScreenStatuses(sessions);
     trackMultiplexerAssociations(sessions, multiplexerSessions);
     persistSessionMetadata(sessions);
     createPlaceholderSessions(sessions, processMappings, activeMuxNames);
@@ -280,21 +280,9 @@ async function main(): Promise<void> {
   // Initialize agent providers (Claude Code, OpenCode, etc.)
   await initializeProviders();
 
-  // Configure local Claude Code hooks to point to this agent
-  configureLocalHooks(TERMINAL_PORT, undefined, TOKEN_FILE);
-
-  // Start OpenCode SSE event subscription for real-time status
-  const openCodeProvider = getProvider("opencode") as OpenCodeProvider | undefined;
-  if (openCodeProvider?.startEventStream) {
-    openCodeProvider.startEventStream((result) => {
-      updateHookState(result);
-    });
-  }
-
   startTerminalServer(TERMINAL_PORT, MACHINE_ID, {
     hostname: BIND_HOST,
     token: AUTH_TOKEN,
-    tokenFile: TOKEN_FILE,
     allowedOrigins: parseOriginList(process.env.AGENT_TOWN_ALLOWED_ORIGINS),
   });
 

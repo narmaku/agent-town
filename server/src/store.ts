@@ -7,6 +7,7 @@ import {
   type CreateNodeRequest,
   createLogger,
   DEFAULT_KEYBOARD_SHORTCUTS,
+  errorMessage,
   type Heartbeat,
   type MachineInfo,
   type NodeStatus,
@@ -55,7 +56,7 @@ function loadSessionNames(): void {
     }
     log.info(`loaded ${sessionNames.size} session name(s) from ${SESSION_NAMES_FILE}`);
   } catch (err) {
-    log.debug(`session names file not loaded: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`session names file not loaded: ${errorMessage(err)}`);
   }
 }
 
@@ -68,7 +69,7 @@ function saveSessionNames(): void {
     }
     writeFileSync(SESSION_NAMES_FILE, JSON.stringify(obj, null, 2));
   } catch (err) {
-    log.warn(`failed to save session names: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`failed to save session names: ${errorMessage(err)}`);
   }
 }
 
@@ -382,7 +383,7 @@ function loadSettings(): void {
     settings = { ...settings, ...parsed };
     log.info(`loaded settings from ${SETTINGS_FILE}`);
   } catch (err) {
-    log.debug(`settings file not loaded (using defaults): ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`settings file not loaded (using defaults): ${errorMessage(err)}`);
   }
 }
 
@@ -391,7 +392,7 @@ function saveSettings(): void {
     mkdirSync(SESSION_NAMES_DIR, { recursive: true });
     writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
   } catch (err) {
-    log.warn(`failed to save settings: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`failed to save settings: ${errorMessage(err)}`);
   }
 }
 
@@ -424,7 +425,7 @@ function loadNodes(): void {
     }
     log.info(`loaded ${nodes.size} remote node(s) from ${NODES_FILE}`);
   } catch (err) {
-    log.debug(`nodes file not loaded: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`nodes file not loaded: ${errorMessage(err)}`);
   }
 }
 
@@ -434,7 +435,7 @@ function saveNodes(): void {
     const arr = [...nodes.values()];
     writeFileSync(NODES_FILE, JSON.stringify(arr, null, 2));
   } catch (err) {
-    log.warn(`failed to save nodes: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`failed to save nodes: ${errorMessage(err)}`);
   }
 }
 
@@ -459,7 +460,6 @@ export function createNode(req: CreateNodeRequest): RemoteNode {
     agentPort: req.agentPort ?? 4681,
     status: "disconnected",
     autoConnect: req.autoConnect ?? false,
-    enableHooks: req.enableHooks ?? true,
   };
   nodes.set(node.id, node);
   saveNodes();
@@ -478,7 +478,6 @@ export function updateNode(id: string, patch: UpdateNodeRequest): RemoteNode | n
   if (patch.sshKeyPath !== undefined) node.sshKeyPath = patch.sshKeyPath;
   if (patch.agentPort !== undefined) node.agentPort = patch.agentPort;
   if (patch.autoConnect !== undefined) node.autoConnect = patch.autoConnect;
-  if (patch.enableHooks !== undefined) node.enableHooks = patch.enableHooks;
 
   saveNodes();
   return node;
