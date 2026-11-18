@@ -45,3 +45,23 @@ export function formatCompactTokens(count: number): string {
   }
   return String(count);
 }
+
+/** Message of an Error, or the stringified value for anything else thrown. */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** True for plain objects (parsed JSON objects), false for arrays and null. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The value if it is a string, otherwise "". */
+export function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** The value if it is a finite number, otherwise 0. */
+export function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}

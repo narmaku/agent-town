@@ -1,12 +1,18 @@
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   createLogger,
+  errorMessage,
   paginateFromEnd,
   type SessionMessage,
   type SessionMessagesResponse,
+  safeJsonParse,
   truncateId,
 } from "@agent-town/shared";
+
+import { contentText, matchTexts, type SearchMessageResult } from "../search";
 import type { GeminiMessage, GeminiSessionFile, GeminiToolCall } from "./session-discovery";
-import { extractTextContent, findSessionFilePath } from "./session-discovery";
+import { extractTextContent, findSessionFilePath, GEMINI_TMP_DIR } from "./session-discovery";
 
 const log = createLogger("gemini:messages");
 
@@ -123,4 +129,49 @@ export async function getGeminiSessionMessages(
     `getGeminiSessionMessages: session=${truncateId(sessionId)} total=${total} returned=${messages.length} offset=${offset}`,
   );
   return { messages, total, hasMore };
+}
+
+/** Search Gemini CLI chat files for `query` (already lower-cased). */
+export async function searchGeminiMessages(
+  query: string,
+  maxResults: number,
+  tmpDir = GEMINI_TMP_DIR,
+): Promise<SearchMessageResult[]> {
+  const results: SearchMessageResult[] = [];
+  let projectHashes: string[];
+  try {
+    projectHashes = await readdir(tmpDir);
+  } catch (err) {
+    log.debug(`search: cannot read ${tmpDir}: ${errorMessage(err)}`);
+    return results;
+  }
+
+  for (const projectHash of projectHashes) {
+    const chatsDir = join(tmpDir, projectHash, "chats");
+    let chatFiles: string[];
+    try {
+      chatFiles = (await readdir(chatsDir)).filter((file) => file.endsWith(".json"));
+    } catch (err) {
+      log.debug(`search: skipping ${chatsDir}: ${errorMessage(err)}`);
+      continue;
+    }
+    for (const chatFile of chatFiles) {
+      if (results.length >= maxResults) return results;
+      const path = join(chatsDir, chatFile);
+      try {
+        const text = await Bun.file(path).text();
+        if (!text.toLowerCase().includes(query)) continue;
+        const data = safeJsonParse<{ sessionId?: string; messages?: Array<{ content?: unknown }> }>(text);
+        if (!data?.sessionId || !Array.isArray(data.messages)) continue;
+        const { matchCount, snippet } = matchTexts(
+          data.messages.map((message) => contentText(message.content)),
+          query,
+        );
+        if (matchCount > 0) results.push({ sessionId: data.sessionId, agentType: "gemini-cli", snippet, matchCount });
+      } catch (err) {
+        log.debug(`search: failed to read ${path}: ${errorMessage(err)}`);
+      }
+    }
+  }
+  return results;
 }

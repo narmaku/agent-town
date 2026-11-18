@@ -3,7 +3,7 @@
 This document describes all HTTP endpoints and WebSocket protocols exposed by the Agent Town system. There are two services that expose APIs:
 
 - **Server** (default port `4680`) -- Central hub that the dashboard connects to. Proxies requests to agents.
-- **Agent** (default port `4681`) -- Runs on each machine. Manages terminal sessions, session discovery, and hook events.
+- **Agent** (default port `4681`) -- Runs on each machine. Manages terminal sessions and session discovery.
 
 ---
 
@@ -359,8 +359,7 @@ Returns all configured remote nodes.
     "agentPort": 4681,
     "status": "connected",
     "lastConnected": "2026-03-18T10:00:00.000Z",
-    "autoConnect": true,
-    "enableHooks": true
+    "autoConnect": true
   }
 ]
 ```
@@ -380,12 +379,11 @@ Creates a new remote node configuration.
   "user": "deploy",
   "sshKeyPath": "~/.ssh/id_ed25519",
   "agentPort": 4681,
-  "autoConnect": true,
-  "enableHooks": true
+  "autoConnect": true
 }
 ```
 
-Required fields: `name`, `host`, `user`, `sshKeyPath`. Optional fields default to: `port=22`, `agentPort=4681`, `autoConnect=false`, `enableHooks=true`.
+Required fields: `name`, `host`, `user`, `sshKeyPath`. Optional fields default to: `port=22`, `agentPort=4681`, `autoConnect=false`.
 
 **Response:** `201 Created` -- The created `RemoteNode` object.
 
@@ -696,38 +694,6 @@ Renames a multiplexer session (zellij or tmux). Stores a rename mapping so stale
 
 ---
 
-### POST /api/hook-event
-
-Receives hook/event data from AI coding agents (Claude Code hooks or OpenCode webhooks). Responds immediately to avoid slowing down the agent. Events are parsed by each registered provider until one recognizes the payload.
-
-**Request body (Claude Code):**
-```json
-{
-  "session_id": "550e8400-e29b-41d4-a716-446655440000",
-  "hook_event_name": "PreToolUse",
-  "tool_name": "Edit"
-}
-```
-
-**Request body (OpenCode):**
-```json
-{
-  "session_id": "ses_30163a6c1ffeYDGuDOrp0nH9vG",
-  "event_type": "tool.execute.before",
-  "tool_name": "file_write",
-  "agent_type": "opencode"
-}
-```
-
-**Response:** `200 OK`
-```json
-{ "exit": 0 }
-```
-
-Always returns `200` regardless of whether the event was recognized.
-
----
-
 ## WebSocket Protocols
 
 ### Dashboard WebSocket -- `/ws` (Server)
@@ -847,8 +813,6 @@ interface SessionInfo {
   version?: string;
   multiplexerSession?: string;
   multiplexer?: TerminalMultiplexer;
-  hookEnabled?: boolean;
-  currentTool?: string;
 }
 ```
 
@@ -898,7 +862,6 @@ interface RemoteNode {
   error?: string;
   lastConnected?: string;
   autoConnect: boolean;
-  enableHooks: boolean;
 }
 ```
 

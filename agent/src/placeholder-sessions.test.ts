@@ -43,7 +43,7 @@ describe("createPlaceholderSessions", () => {
   test("creates placeholder when no real session claims the mux session", () => {
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/home/user/project", makeMapping({ session: "agent-1" }));
+    mappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "agent-1" }));
     const activeMuxNames = new Set(["agent-1"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -57,7 +57,7 @@ describe("createPlaceholderSessions", () => {
   test("does not create placeholder when real session already claims the mux session", () => {
     const sessions: SessionInfo[] = [makeSession({ multiplexerSession: "agent-1" })];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/home/user/project", makeMapping({ session: "agent-1" }));
+    mappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "agent-1" }));
     const activeMuxNames = new Set(["agent-1"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -70,7 +70,7 @@ describe("createPlaceholderSessions", () => {
   test("does not create placeholder when mux session is not active", () => {
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/home/user/project", makeMapping({ session: "dead-session" }));
+    mappings.set("claude-code:cwd:/home/user/project", makeMapping({ session: "dead-session" }));
     const activeMuxNames = new Set(["other-session"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -92,8 +92,8 @@ describe("createPlaceholderSessions", () => {
   test("creates multiple placeholders for different mux sessions", () => {
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project-a", makeMapping({ session: "agent-1" }));
-    mappings.set("cwd:/project-b", makeMapping({ session: "agent-2" }));
+    mappings.set("claude-code:cwd:/project-a", makeMapping({ session: "agent-1" }));
+    mappings.set("claude-code:cwd:/project-b", makeMapping({ session: "agent-2" }));
     const activeMuxNames = new Set(["agent-1", "agent-2"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -107,7 +107,7 @@ describe("createPlaceholderSessions", () => {
     // First heartbeat: no real session, placeholder is created with timestamp
     const sessions1: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project", makeMapping({ session: "agent-1" }));
+    mappings.set("claude-code:cwd:/project", makeMapping({ session: "agent-1" }));
     const activeMuxNames = new Set(["agent-1"]);
 
     createPlaceholderSessions(sessions1, mappings, activeMuxNames);
@@ -128,7 +128,7 @@ describe("createPlaceholderSessions", () => {
     // and verify the old timestamp was cleaned up so it gets a fresh one
     const sessions3: SessionInfo[] = [];
     const mappings3 = new Map<string, ProcessMapping>();
-    mappings3.set("cwd:/project", makeMapping({ session: "agent-1" }));
+    mappings3.set("claude-code:cwd:/project", makeMapping({ session: "agent-1" }));
     // Remove the real session from this heartbeat to force placeholder creation
     createPlaceholderSessions(sessions3, mappings3, activeMuxNames);
     expect(sessions3).toHaveLength(1);
@@ -142,7 +142,7 @@ describe("createPlaceholderSessions", () => {
   test("does not reset timestamp on repeated calls for same placeholder", () => {
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project", makeMapping({ session: "agent-1" }));
+    mappings.set("claude-code:cwd:/project", makeMapping({ session: "agent-1" }));
     const activeMuxNames = new Set(["agent-1"]);
 
     // First call creates the placeholder and registers the timestamp
@@ -167,18 +167,6 @@ describe("createPlaceholderSessions", () => {
     const result = expirePlaceholders(sessions2);
     expect(result).toHaveLength(0);
   });
-
-  test("defaults agentType to claude-code when mapping has no agentType", () => {
-    const sessions: SessionInfo[] = [];
-    const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project", makeMapping({ session: "agent-1", agentType: undefined }));
-    const activeMuxNames = new Set(["agent-1"]);
-
-    createPlaceholderSessions(sessions, mappings, activeMuxNames);
-
-    expect(sessions).toHaveLength(1);
-    expect(sessions[0].agentType).toBe("claude-code");
-  });
 });
 
 describe("expirePlaceholders", () => {
@@ -190,7 +178,7 @@ describe("expirePlaceholders", () => {
     // Create a placeholder to register its timestamp
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project", makeMapping({ session: "fresh-agent" }));
+    mappings.set("claude-code:cwd:/project", makeMapping({ session: "fresh-agent" }));
     const activeMuxNames = new Set(["fresh-agent"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -206,7 +194,7 @@ describe("expirePlaceholders", () => {
     // Create placeholder with a timestamp in the past
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project", makeMapping({ session: "old-agent" }));
+    mappings.set("claude-code:cwd:/project", makeMapping({ session: "old-agent" }));
     const activeMuxNames = new Set(["old-agent"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -230,8 +218,8 @@ describe("expirePlaceholders", () => {
   test("keeps fresh placeholder but removes expired one", () => {
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project-a", makeMapping({ session: "fresh" }));
-    mappings.set("cwd:/project-b", makeMapping({ session: "expired" }));
+    mappings.set("claude-code:cwd:/project-a", makeMapping({ session: "fresh" }));
+    mappings.set("claude-code:cwd:/project-b", makeMapping({ session: "expired" }));
     const activeMuxNames = new Set(["fresh", "expired"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -263,7 +251,7 @@ describe("expirePlaceholders", () => {
   test("placeholder at exactly TTL boundary is kept", () => {
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project", makeMapping({ session: "boundary" }));
+    mappings.set("claude-code:cwd:/project", makeMapping({ session: "boundary" }));
     const activeMuxNames = new Set(["boundary"]);
 
     createPlaceholderSessions(sessions, mappings, activeMuxNames);
@@ -397,7 +385,7 @@ describe("agent-side deduplication", () => {
     // a new placeholder and checking it doesn't immediately expire.
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project", makeMapping({ session: "dedup-mux" }));
+    mappings.set("claude-code:cwd:/project", makeMapping({ session: "dedup-mux" }));
     createPlaceholderSessions(sessions, mappings, new Set(["dedup-mux"]));
 
     const result = expirePlaceholders(sessions);
@@ -416,8 +404,8 @@ describe("combined expire + dedup pipeline", () => {
     // real session also for mux-b
     const sessions: SessionInfo[] = [];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/project-a", makeMapping({ session: "mux-a" }));
-    mappings.set("cwd:/project-b", makeMapping({ session: "mux-b" }));
+    mappings.set("claude-code:cwd:/project-a", makeMapping({ session: "mux-a" }));
+    mappings.set("claude-code:cwd:/project-b", makeMapping({ session: "mux-b" }));
     createPlaceholderSessions(sessions, mappings, new Set(["mux-a", "mux-b"]));
     expect(sessions).toHaveLength(2);
 

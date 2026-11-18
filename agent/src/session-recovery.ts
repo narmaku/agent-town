@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentType } from "@agent-town/shared";
-import { createLogger, shellEscape } from "@agent-town/shared";
+import { createLogger, errorMessage, shellEscape } from "@agent-town/shared";
 
 const log = createLogger("session-recovery");
 
@@ -93,9 +93,7 @@ export function writeSessionMetadata(
     const content = JSON.stringify(metadata, null, 2);
     writeFileSync(filePath, content);
   } catch (err) {
-    log.warn(
-      `failed to write session metadata for mux=${muxSessionName}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    log.warn(`failed to write session metadata for mux=${muxSessionName}: ${errorMessage(err)}`);
   }
 }
 

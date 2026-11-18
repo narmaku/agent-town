@@ -1,8 +1,8 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
-
-import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
+import type { SearchMessageResult } from "../search";
+import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { isBinaryAvailable } from "../utils";
-import { getCodexSessionMessages } from "./message-parser";
+import { getCodexSessionMessages, searchCodexMessages } from "./message-parser";
 import {
   extractCodexSessionIdFromArgs,
   filterCodexProcesses,
@@ -33,6 +33,10 @@ export class CodexProvider implements AgentProvider {
     return getCodexSessionMessages(sessionId, offset, limit);
   }
 
+  async searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]> {
+    return searchCodexMessages(query, maxResults);
+  }
+
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
     return filterCodexProcesses(processes);
   }
@@ -53,10 +57,6 @@ export class CodexProvider implements AgentProvider {
     if (options.model) command.push("--model", options.model);
     if (options.autonomous) command.push("--dangerously-bypass-approvals-and-sandbox");
     return command;
-  }
-
-  handleHookEvent(_payload: unknown): HookEventResult | null {
-    return null;
   }
 
   async matchProcessToSessionId(

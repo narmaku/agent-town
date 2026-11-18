@@ -39,10 +39,6 @@ describe("CodexProvider", () => {
       "--dangerously-bypass-approvals-and-sandbox",
     ]);
   });
-
-  test("has no hook event support", () => {
-    expect(provider.handleHookEvent({ type: "anything" })).toBeNull();
-  });
 });
 
 describe("Codex native deletion", () => {

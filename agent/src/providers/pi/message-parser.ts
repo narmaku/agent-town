@@ -1,11 +1,16 @@
-import { createLogger, paginateFromEnd, type SessionMessagesResponse, truncateId } from "@agent-town/shared";
+import {
+  createLogger,
+  errorMessage,
+  paginateFromEnd,
+  type SessionMessagesResponse,
+  truncateId,
+} from "@agent-town/shared";
 
-import type { SearchMessageResult } from "../../session-messages";
+import { matchTexts, type SearchMessageResult } from "../search";
 import { parseTreeSession } from "../tree-session";
 import { discoverPiSessions, findPiSessionPath, getPiSessionsDir } from "./session-discovery";
 
 const log = createLogger("pi:messages");
-const SEARCH_SNIPPET_LENGTH = 120;
 
 export async function getPiSessionMessages(
   sessionId: string,
@@ -37,16 +42,10 @@ export async function searchPiMessages(
     try {
       const messages = await loadPiMessages(session.sessionId, sessionsDir);
       if (!messages) continue;
-      let matchCount = 0;
-      let snippet = "";
-      for (const message of messages) {
-        for (const content of [message.content, message.thinking ?? ""]) {
-          const index = content.toLowerCase().indexOf(normalizedQuery);
-          if (index < 0) continue;
-          matchCount++;
-          if (!snippet) snippet = extractSnippet(content, index, normalizedQuery.length);
-        }
-      }
+      const { matchCount, snippet } = matchTexts(
+        messages.flatMap((message) => [message.content, message.thinking ?? ""]),
+        normalizedQuery,
+      );
       if (matchCount > 0) {
         results.push({
           sessionId: session.sessionId,
@@ -56,7 +55,7 @@ export async function searchPiMessages(
         });
       }
     } catch (err) {
-      log.debug(`search skipped session=${truncateId(session.sessionId)}: ${formatError(err)}`);
+      log.debug(`search skipped session=${truncateId(session.sessionId)}: ${errorMessage(err)}`);
     }
   }
   return results;
@@ -68,19 +67,7 @@ async function loadPiMessages(sessionId: string, sessionsDir: string) {
   try {
     return parseTreeSession(await Bun.file(path).text())?.messages ?? null;
   } catch (err) {
-    log.debug(`message read failed: session=${truncateId(sessionId)} error=${formatError(err)}`);
+    log.debug(`message read failed: session=${truncateId(sessionId)} error=${errorMessage(err)}`);
     return null;
   }
-}
-
-function extractSnippet(content: string, index: number, queryLength: number): string {
-  if (content.length <= SEARCH_SNIPPET_LENGTH) return content;
-  const context = Math.floor((SEARCH_SNIPPET_LENGTH - queryLength) / 2);
-  const start = Math.max(0, Math.min(index - context, content.length - SEARCH_SNIPPET_LENGTH));
-  const value = content.slice(start, start + SEARCH_SNIPPET_LENGTH);
-  return `${start > 0 ? "…" : ""}${value}${start + SEARCH_SNIPPET_LENGTH < content.length ? "…" : ""}`;
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

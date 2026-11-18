@@ -1,19 +1,22 @@
 import { Database } from "bun:sqlite";
 import {
   createLogger,
+  errorMessage,
+  isRecord,
+  numberValue,
   paginateFromEnd,
   type SessionMessage,
   type SessionMessagesResponse,
+  stringValue,
   truncateId,
 } from "@agent-town/shared";
 
-import type { SearchMessageResult } from "../../session-messages";
+import { matchTexts, type SearchMessageResult } from "../search";
 import { discoverCodexSessions, findCodexDatabasePaths, findCodexRolloutPath, getCodexHome } from "./session-discovery";
 
 const log = createLogger("codex:messages");
 
 const TOOL_CONTENT_MAX_LENGTH = 2_000;
-const SEARCH_SNIPPET_LENGTH = 120;
 
 /**
  * Prefixes of user-role messages that Codex injects into the model context
@@ -192,19 +195,13 @@ export async function searchCodexMessages(
       const transcript = await loadCodexTranscript(session.sessionId, codexHome);
       if (!transcript) continue;
       const messages = parseCodexTranscript(transcript);
-      let matchCount = 0;
-      let snippet = "";
-      for (const message of messages) {
-        for (const content of [message.content, message.thinking ?? ""]) {
-          const index = content.toLowerCase().indexOf(normalizedQuery);
-          if (index < 0) continue;
-          matchCount++;
-          if (!snippet) snippet = extractSnippet(content, index, normalizedQuery.length);
-        }
-      }
+      const { matchCount, snippet } = matchTexts(
+        messages.flatMap((message) => [message.content, message.thinking ?? ""]),
+        normalizedQuery,
+      );
       if (matchCount > 0) results.push({ sessionId: session.sessionId, agentType: "codex", snippet, matchCount });
     } catch (err) {
-      log.debug(`search skipped session=${truncateId(session.sessionId)}: ${formatError(err)}`);
+      log.debug(`search skipped session=${truncateId(session.sessionId)}: ${errorMessage(err)}`);
     }
   }
 
@@ -256,7 +253,7 @@ async function readDatabaseTranscript(sessionId: string, codexHome: string): Pro
         for (const row of rows) records.push(...historyRowToRecords(row));
       }
     } catch (err) {
-      log.debug(`history database skipped: ${formatError(err)}`);
+      log.debug(`history database skipped: ${errorMessage(err)}`);
     } finally {
       db?.close();
     }
@@ -381,18 +378,6 @@ function parseRecord(line: string): Record<string, unknown> | undefined {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
 function normalizeTimestamp(value: unknown): string {
   if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return new Date(value).toISOString();
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -437,15 +422,4 @@ function serializeToolOutput(value: unknown): string {
   } catch (_err) {
     return "[tool output]";
   }
-}
-
-function extractSnippet(content: string, index: number, queryLength: number): string {
-  const half = Math.floor((SEARCH_SNIPPET_LENGTH - queryLength) / 2);
-  const start = Math.max(0, index - half);
-  const end = Math.min(content.length, index + queryLength + half);
-  return `${start > 0 ? "…" : ""}${content.slice(start, end)}${end < content.length ? "…" : ""}`;
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

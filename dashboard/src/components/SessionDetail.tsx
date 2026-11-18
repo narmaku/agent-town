@@ -1,13 +1,12 @@
 import type { AgentType, SessionInfo, SessionMessage, TerminalMultiplexer } from "@agent-town/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { useResizable } from "../hooks/useResizable";
 import { useWindowWidth } from "../hooks/useWindowWidth";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
 import { DiffModal } from "./DiffModal";
 import { FileDropZone } from "./FileDropZone";
 import { InfoPane } from "./InfoPane";
+import { Markdown } from "./Markdown";
 import { SendMessage, type SendMessageHandle } from "./SendMessage";
 import { TerminalHelpers } from "./TerminalHelpers";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
@@ -81,29 +80,6 @@ function ToolCallBlock({
     </div>
   );
 }
-
-const markdownComponents: Record<
-  string,
-  React.ComponentType<{ className?: string; children?: React.ReactNode; [key: string]: unknown }>
-> = {
-  code({ className, children, ...props }: { className?: string; children?: React.ReactNode; [key: string]: unknown }) {
-    const isInline = !className;
-    if (isInline) {
-      return (
-        <code className="inline-code" {...props}>
-          {children}
-        </code>
-      );
-    }
-    return (
-      <pre className="code-block">
-        <code className={className} {...props}>
-          {children}
-        </code>
-      </pre>
-    );
-  },
-};
 
 interface Props {
   session: SessionInfo;
@@ -454,13 +430,6 @@ export function SessionDetail({
           <div className="session-status" data-status={session.status}>
             <span className={`status-dot ${config.pulse ? "pulse" : ""}`} />
             <span className="status-label">{config.label}</span>
-            {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
-            <span
-              className={`tracking-badge ${session.hookEnabled ? "hook" : "heuristic"}`}
-              title={session.hookEnabled ? "Real-time tracking via hooks" : "Estimated status (no hooks)"}
-            >
-              {session.hookEnabled ? "LIVE" : "EST"}
-            </span>
           </div>
           <span className="fullscreen-name">{session.customName || session.slug}</span>
           <span className="session-time">Updated {timeAgo(session.lastActivity)}</span>
@@ -566,9 +535,7 @@ export function SessionDetail({
                           {msg.role === "assistant" ? (
                             <>
                               {msg.content.trim() ? (
-                                <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                                  {msg.content}
-                                </Markdown>
+                                <Markdown text={msg.content} />
                               ) : isToolOnlyMessage(msg) && !showToolDetails ? (
                                 <div className="chat-tools-summary">
                                   Used{" "}

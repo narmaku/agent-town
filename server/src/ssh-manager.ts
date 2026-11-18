@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { createLogger, type RemoteNode } from "@agent-town/shared";
+import { createLogger, errorMessage, type RemoteNode } from "@agent-town/shared";
 import type { Subprocess } from "bun";
 import { updateNodeStatus } from "./store";
 
@@ -182,66 +182,6 @@ async function deployAgent(node: RemoteNode): Promise<void> {
 }
 
 /**
- * Configure Claude Code hooks on a remote node.
- * Merges hook config into ~/.claude/settings.json without overwriting
- * other settings. Hooks point to the local agent (localhost:agentPort).
- */
-async function configureHooks(node: RemoteNode): Promise<void> {
-  const sshTarget = `${node.user}@${node.host}`;
-  const sshOpts = buildSshOpts(node);
-  const hookUrl = `http://localhost:${node.agentPort}/api/hook-event`;
-
-  log.info(`hooks: configuring Claude Code hooks on ${sshTarget} → ${hookUrl}`);
-
-  // Build the hook config
-  const hookEntry = [
-    {
-      matcher: "",
-      hooks: [{ type: "command", command: `curl -s -X POST ${hookUrl} -H 'Content-Type: application/json' -d @-` }],
-    },
-  ];
-  const hooksConfig = {
-    PreToolUse: hookEntry,
-    PostToolUse: hookEntry,
-    Notification: hookEntry,
-    Stop: hookEntry,
-    UserPromptSubmit: hookEntry,
-    SessionStart: hookEntry,
-    SessionEnd: hookEntry,
-  };
-
-  // Read existing settings, merge hooks, write back
-  const script = `
-import json, os
-path = os.path.expanduser("~/.claude/settings.json")
-try:
-    with open(path) as f:
-        settings = json.load(f)
-except:
-    settings = {}
-settings["hooks"] = json.loads('${JSON.stringify(hooksConfig)}')
-os.makedirs(os.path.dirname(path), exist_ok=True)
-with open(path, "w") as f:
-    json.dump(settings, f, indent=2)
-print("HOOKS: configured")
-`;
-
-  const proc = Bun.spawn(["ssh", ...sshOpts, sshTarget, `python3 -c ${JSON.stringify(script)}`], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const output = await Bun.readableStreamToText(proc.stdout);
-  await proc.exited;
-
-  if (proc.exitCode !== 0) {
-    const stderr = await Bun.readableStreamToText(proc.stderr);
-    log.warn(`hooks: failed to configure on ${sshTarget}: ${stderr.trim()}`);
-  } else {
-    log.info(`hooks: ${output.trim()}`);
-  }
-}
-
-/**
  * Start the agent on a remote node via SSH, then set up tunnels.
  *
  * Tunnel setup:
@@ -315,7 +255,7 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
         if (text) log.debug(`tunnel: ${node.name} stderr: ${text}`);
       }
     } catch (err) {
-      log.debug(`tunnel: ${node.name} stderr reader ended: ${err instanceof Error ? err.message : String(err)}`);
+      log.debug(`tunnel: ${node.name} stderr reader ended: ${errorMessage(err)}`);
     }
   })();
 
@@ -347,9 +287,7 @@ async function startTunnels(node: RemoteNode, serverPort: number): Promise<NodeC
         // Auto-reconnect after a delay
         setTimeout(() => connectNode(node.id), 5000);
       } else {
-        log.debug(
-          `health: [${node.name}] check failed (tunnel alive): ${err instanceof Error ? err.message : String(err)}`,
-        );
+        log.debug(`health: [${node.name}] check failed (tunnel alive): ${errorMessage(err)}`);
       }
     }
   }, HEALTH_CHECK_INTERVAL_MS);
@@ -399,14 +337,10 @@ export async function connectNode(nodeId: string): Promise<void> {
 
     log.info(`connect: [${node.name}] SSH connectivity verified`);
 
-    // Phase 2: Deploy agent code + configure hooks
+    // Phase 2: Deploy agent code
     log.info(`connect: [${node.name}] phase 2/3 — deploying agent code`);
     updateNodeStatus(nodeId, "deploying");
     await deployAgent(node);
-
-    if (node.enableHooks) {
-      await configureHooks(node);
-    }
 
     // Phase 3: Start tunnels
     log.info(`connect: [${node.name}] phase 3/3 — starting SSH tunnels`);
@@ -430,7 +364,7 @@ export async function connectNode(nodeId: string): Promise<void> {
     updateNodeStatus(nodeId, "connected");
     log.info(`connect: ${node.name} — connected (local port ${conn.localPort})`);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     log.error(`connect: ${node.name} — failed: ${message}`);
     updateNodeStatus(nodeId, "error", message);
     throw err;
@@ -498,10 +432,8 @@ export async function testNodeConnection(node: {
     log.info(`test: SSH connection to ${node.user}@${node.host} succeeded: ${stdout.trim()}`);
     return { ok: true, remoteInfo: stdout.trim() };
   } catch (err) {
-    log.error(
-      `test: SSH connection to ${node.user}@${node.host} error: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    log.error(`test: SSH connection to ${node.user}@${node.host} error: ${errorMessage(err)}`);
+    return { ok: false, error: errorMessage(err) };
   }
 }
 
@@ -536,7 +468,7 @@ export async function connectAutoNodes(): Promise<void> {
   log.info(`auto-connect: ${autoNodes.length} node(s)`);
   for (const node of autoNodes) {
     connectNode(node.id).catch((err) => {
-      log.error(`auto-connect: ${node.name} failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`auto-connect: ${node.name} failed: ${errorMessage(err)}`);
     });
   }
 }

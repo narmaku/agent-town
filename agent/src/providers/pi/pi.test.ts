@@ -33,10 +33,6 @@ describe("PiProvider", () => {
     ).toEqual(["pi", "--session", "project.session-7", "--model", "provider/model"]);
   });
 
-  test("does not claim hook event support", () => {
-    expect(provider.handleHookEvent({ type: "anything" })).toBeNull();
-  });
-
   test("verifies that the short pi binary is the coding agent", async () => {
     expect(
       await isPiCliAvailable(async () => ({

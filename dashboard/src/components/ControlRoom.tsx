@@ -293,15 +293,6 @@ function ControlRoomRow({
             {displayName}
           </span>
         )}
-        {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
-        {session.status !== "starting" && (
-          <span
-            className={`tracking-badge ${session.hookEnabled ? "hook" : "heuristic"}`}
-            title={session.hookEnabled ? "Real-time tracking via hooks" : "Estimated status (no hooks)"}
-          >
-            {session.hookEnabled ? "LIVE" : "EST"}
-          </span>
-        )}
         {!session.multiplexerSession && session.status !== "starting" && (
           <span
             className="tracking-badge standalone"

@@ -40,12 +40,6 @@ export function InfoPane({
       <div className="info-pane-status-row" data-status={session.status}>
         <span className={`status-dot ${config.pulse ? "pulse" : ""}`} />
         <span className="info-pane-status-label">{config.label}</span>
-        <span
-          className={`tracking-badge ${session.hookEnabled ? "hook" : "heuristic"}`}
-          title={session.hookEnabled ? "Real-time tracking via hooks" : "Estimated status (no hooks)"}
-        >
-          {session.hookEnabled ? "LIVE" : "EST"}
-        </span>
         {!session.multiplexerSession && (
           <span
             className="tracking-badge standalone"
@@ -54,7 +48,6 @@ export function InfoPane({
             standalone
           </span>
         )}
-        {session.currentTool && <span className="current-tool-badge">{session.currentTool}</span>}
       </div>
 
       <div className="info-pane-section">

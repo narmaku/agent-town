@@ -3,6 +3,7 @@ import {
   type AgentType,
   type CreateNodeRequest,
   createLogger,
+  errorMessage,
   type Heartbeat,
   type LaunchAgentRequest,
   type RenameSessionRequest,
@@ -167,7 +168,7 @@ async function routeRequest(
 
       return Response.json({ ok: true });
     } catch (err) {
-      log.warn(`heartbeat: invalid payload: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`heartbeat: invalid payload: ${errorMessage(err)}`);
       return Response.json({ error: "Invalid heartbeat payload" }, { status: 400 });
     }
   }
@@ -335,7 +336,7 @@ async function routeRequest(
       });
       return Response.json({ ok: true });
     } catch (err) {
-      log.warn(`rename: invalid payload: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`rename: invalid payload: ${errorMessage(err)}`);
       return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
   }
@@ -373,7 +374,7 @@ async function routeRequest(
       }
       return Response.json({ ok: true });
     } catch (err) {
-      log.error(`kill: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`kill: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to kill session" }, { status: 500 });
     }
   }
@@ -435,7 +436,7 @@ async function routeRequest(
 
       return Response.json({ ok: true });
     } catch (err) {
-      log.error(`delete: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`delete: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to delete session" }, { status: 500 });
     }
   }
@@ -477,7 +478,7 @@ async function routeRequest(
       }
       return Response.json({ ok: true });
     } catch (err) {
-      log.error(`send: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`send: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to send" }, { status: 500 });
     }
   }
@@ -513,7 +514,7 @@ async function routeRequest(
       const data = await result.response.json();
       return Response.json(data, { status: result.response.status });
     } catch (err) {
-      log.error(`upload proxy: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`upload proxy: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to upload" }, { status: 500 });
     }
   }
@@ -559,7 +560,7 @@ async function routeRequest(
       }
       return Response.json({ ok: true });
     } catch (err) {
-      log.error(`reconnect: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`reconnect: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to reconnect" }, { status: 500 });
     }
   }
@@ -576,7 +577,7 @@ async function routeRequest(
       const updated = updateSettings(body);
       return Response.json(updated);
     } catch (err) {
-      log.warn(`settings: invalid payload: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`settings: invalid payload: ${errorMessage(err)}`);
       return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
   }
@@ -641,7 +642,7 @@ async function routeRequest(
         multiplexer: mux,
       });
     } catch (err) {
-      log.error(`launch: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`launch: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to launch agent" }, { status: 500 });
     }
   }
@@ -700,7 +701,7 @@ async function routeRequest(
         multiplexer: settings.defaultMultiplexer,
       });
     } catch (err) {
-      log.error(`resume: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`resume: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to resume agent" }, { status: 500 });
     }
   }
@@ -727,7 +728,7 @@ async function routeRequest(
       const node = createNode(body);
       return Response.json(node, { status: 201 });
     } catch (err) {
-      log.warn(`create node: invalid payload: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`create node: invalid payload: ${errorMessage(err)}`);
       return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
   }
@@ -741,7 +742,7 @@ async function routeRequest(
       if (!node) return Response.json({ error: "Node not found" }, { status: 404 });
       return Response.json(node);
     } catch (err) {
-      log.warn(`update node: invalid payload: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`update node: invalid payload: ${errorMessage(err)}`);
       return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
   }
@@ -753,7 +754,7 @@ async function routeRequest(
     try {
       await disconnectNode(nodeId);
     } catch (err) {
-      log.debug(`delete node: pre-disconnect failed (continuing): ${err instanceof Error ? err.message : String(err)}`);
+      log.debug(`delete node: pre-disconnect failed (continuing): ${errorMessage(err)}`);
     }
     const ok = deleteNode(nodeId);
     if (!ok) return Response.json({ error: "Node not found" }, { status: 404 });
@@ -767,9 +768,7 @@ async function routeRequest(
     if (!node) return Response.json({ error: "Node not found" }, { status: 404 });
     // Connect in background — don't block the request
     connectNode(nodeId).catch((err) => {
-      log.error(
-        `connect node: ${node.name} background connect failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log.error(`connect node: ${node.name} background connect failed: ${errorMessage(err)}`);
     });
     return Response.json({ ok: true, status: "connecting" });
   }
@@ -781,9 +780,7 @@ async function routeRequest(
       await disconnectNode(nodeId);
       return Response.json({ ok: true });
     } catch (err) {
-      log.error(
-        `disconnect: failed for node=${nodeId.slice(0, 8)}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      log.error(`disconnect: failed for node=${nodeId.slice(0, 8)}: ${errorMessage(err)}`);
       return Response.json({ error: "Failed to disconnect" }, { status: 500 });
     }
   }
@@ -803,7 +800,7 @@ async function routeRequest(
       });
       return Response.json(result);
     } catch (err) {
-      log.error(`test node: failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`test node: failed: ${errorMessage(err)}`);
       return Response.json({ error: "Test failed" }, { status: 500 });
     }
   }

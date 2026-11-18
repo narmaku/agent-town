@@ -1,6 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { createLogger } from "@agent-town/shared";
+import { createLogger, errorMessage } from "@agent-town/shared";
 import { CLAUDE_PROJECTS_DIR, pathToProjectDir } from "./session-discovery";
 
 const log = createLogger("claude:process-mapper");
@@ -30,7 +30,7 @@ async function getBirthtimeMs(filePath: string): Promise<number> {
     // back to mtimeMs as it causes false matches (session kidnapping).
     return fileStat.birthtimeMs;
   } catch (err) {
-    log.debug(`getBirthtimeMs: failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`getBirthtimeMs: failed for ${filePath}: ${errorMessage(err)}`);
     return 0;
   }
 }
@@ -58,7 +58,7 @@ export async function findSessionCandidates(cwd: string): Promise<SessionCandida
     }
     return candidates;
   } catch (err) {
-    log.debug(`findSessionCandidates: failed for cwd=${cwd}: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`findSessionCandidates: failed for cwd=${cwd}: ${errorMessage(err)}`);
     return [];
   }
 }

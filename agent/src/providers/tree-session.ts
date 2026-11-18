@@ -1,4 +1,5 @@
 import type { SessionMessage } from "@agent-town/shared";
+import { isRecord, numberValue, stringValue } from "@agent-town/shared";
 
 const TOOL_CONTENT_MAX_LENGTH = 2_000;
 const MAX_TREE_DEPTH = 100_000;
@@ -192,18 +193,6 @@ function parseRecord(line: string): Record<string, unknown> | undefined {
   } catch (_err) {
     return undefined;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function normalizeUsage(value: unknown): SessionMessage["tokenUsage"] {

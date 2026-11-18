@@ -38,7 +38,7 @@ describe("discoverAndMapSessions", () => {
     const sessions = [makeSession({ sessionId: "uuid-1" })];
     const muxSessions = [makeMuxSession("agent-1")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("uuid-1", makeMapping({ session: "agent-1" }));
+    mappings.set("claude-code:session:uuid-1", makeMapping({ session: "agent-1" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 
@@ -64,7 +64,7 @@ describe("discoverAndMapSessions", () => {
     const sessions = [makeSession({ sessionId: "uuid-1" })];
     const muxSessions = [makeMuxSession("other-session")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("uuid-1", makeMapping({ session: "dead-session" }));
+    mappings.set("claude-code:session:uuid-1", makeMapping({ session: "dead-session" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 
@@ -75,7 +75,7 @@ describe("discoverAndMapSessions", () => {
     const sessions = [makeSession({ sessionId: "uuid-1", cwd: "/root/dev/freqtrade" })];
     const muxSessions = [makeMuxSession("strategies")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
+    mappings.set("claude-code:cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 
@@ -87,8 +87,8 @@ describe("discoverAndMapSessions", () => {
     const sessions = [makeSession({ sessionId: "uuid-1", cwd: "/root/dev/freqtrade" })];
     const muxSessions = [makeMuxSession("agent-1"), makeMuxSession("strategies")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("uuid-1", makeMapping({ session: "agent-1" }));
-    mappings.set("cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
+    mappings.set("claude-code:session:uuid-1", makeMapping({ session: "agent-1" }));
+    mappings.set("claude-code:cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 
@@ -102,7 +102,7 @@ describe("discoverAndMapSessions", () => {
     ];
     const muxSessions = [makeMuxSession("strategies")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
+    mappings.set("claude-code:cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 
@@ -114,7 +114,7 @@ describe("discoverAndMapSessions", () => {
     const sessions = [makeSession({ sessionId: "uuid-1", cwd: undefined })];
     const muxSessions = [makeMuxSession("strategies")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
+    mappings.set("claude-code:cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 
@@ -125,7 +125,7 @@ describe("discoverAndMapSessions", () => {
     const sessions = [makeSession({ sessionId: "uuid-1", cwd: "/root/dev/freqtrade" })];
     const muxSessions = [makeMuxSession("strategies")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
+    mappings.set("claude-code:cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 
@@ -156,8 +156,8 @@ describe("discoverAndMapSessions", () => {
     ];
     const muxSessions = [makeMuxSession("strategies")];
     const mappings = new Map<string, ProcessMapping>();
-    mappings.set("uuid-1", makeMapping({ session: "strategies" }));
-    mappings.set("cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
+    mappings.set("claude-code:session:uuid-1", makeMapping({ session: "strategies" }));
+    mappings.set("claude-code:cwd:/root/dev/freqtrade", makeMapping({ session: "strategies" }));
 
     discoverAndMapSessions(sessions, muxSessions, mappings);
 

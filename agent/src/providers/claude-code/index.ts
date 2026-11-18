@@ -1,8 +1,8 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
-import type { AgentProcess, AgentProvider, HookEventResult, LaunchOptions, ResumeOptions } from "../types";
+import type { SearchMessageResult } from "../search";
+import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { filterProcessesByBinary, isBinaryAvailable } from "../utils";
-import { handleClaudeHookEvent } from "./hook-handler";
-import { getClaudeSessionMessages } from "./message-parser";
+import { getClaudeSessionMessages, searchClaudeMessages } from "./message-parser";
 import { extractClaudeSessionIdFromArgs, findSessionCandidates, matchSessionByBirthTime } from "./process-mapper";
 import { deleteClaudeSessionData, discoverClaudeSessions } from "./session-discovery";
 
@@ -28,6 +28,10 @@ export class ClaudeCodeProvider implements AgentProvider {
     return getClaudeSessionMessages(sessionId, offset, limit);
   }
 
+  async searchMessages(query: string, maxResults: number): Promise<SearchMessageResult[]> {
+    return searchClaudeMessages(query, maxResults);
+  }
+
   filterAgentProcesses(processes: AgentProcess[]): AgentProcess[] {
     return filterProcessesByBinary(processes, this.binaryName);
   }
@@ -48,10 +52,6 @@ export class ClaudeCodeProvider implements AgentProvider {
     if (opts.model) parts.push("--model", opts.model);
     if (opts.autonomous) parts.push("--dangerously-skip-permissions");
     return parts;
-  }
-
-  handleHookEvent(payload: unknown): HookEventResult | null {
-    return handleClaudeHookEvent(payload);
   }
 
   async matchProcessToSessionId(
