@@ -12,7 +12,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "./auth";
 import { ActivityFeed } from "./components/ActivityFeed";
 import { ControlRoom } from "./components/ControlRoom";
-import { ActivityIcon, ControlRoomIcon, MenuIcon, SettingsIcon, SignalBoardIcon } from "./components/icons";
+import { ExplorerLayout } from "./components/ExplorerLayout";
+import {
+  ActivityIcon,
+  ControlRoomIcon,
+  ExplorerIcon,
+  MenuIcon,
+  SettingsIcon,
+  SignalBoardIcon,
+} from "./components/icons";
 import { KeyboardHelp } from "./components/KeyboardHelp";
 import { LaunchAgentModal } from "./components/LaunchAgentModal";
 import { ResumeAgentModal } from "./components/ResumeAgentModal";
@@ -20,8 +28,10 @@ import { SessionFullscreen } from "./components/SessionFullscreen";
 import { SettingsModal } from "./components/SettingsModal";
 import { SignalBoard } from "./components/SignalBoard";
 import { TerminalOverlay } from "./components/TerminalOverlay";
+import type { ExplorerSelection } from "./explorer-selection";
 import { useKeyboardNavigation } from "./hooks/useKeyboardNavigation";
 import { useWebSocket } from "./hooks/useWebSocket";
+import { type LayoutMode, normalizeLayoutMode } from "./layout-preferences";
 import { createBrowserLogger } from "./logger";
 import { visibleSessions } from "./session-grouping";
 import { API } from "./utils";
@@ -41,7 +51,7 @@ interface DeepSearchResult {
 export type SortMode = "recent" | "alphabetical" | "status";
 export type TimeFilter = "24h" | "3d" | "7d" | "all";
 export type GroupMode = "directory" | "status" | "none";
-export type LayoutMode = "control" | "signal";
+export type { LayoutMode } from "./layout-preferences";
 
 const STORAGE_KEYS = {
   THEME: "agentTown:theme",
@@ -128,18 +138,16 @@ export function App(): React.JSX.Element {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("24h");
   const [autoDeleteOnClose, setAutoDeleteOnClose] = useState(false);
+  const [openTerminalFullscreen, setOpenTerminalFullscreen] = useState(true);
+  const [explorerSelection, setExplorerSelection] = useState<ExplorerSelection | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">(() => loadLocalStorage(STORAGE_KEYS.THEME, "dark"));
   const [fontSize, setFontSize] = useState<"small" | "medium" | "large">(() =>
     loadLocalStorage(STORAGE_KEYS.FONT_SIZE, "small"),
   );
   const [groupMode, setGroupMode] = useState<GroupMode>(() => loadLocalStorage(STORAGE_KEYS.GROUP_MODE, "directory"));
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => {
-    // Legacy installs persisted "cards"/"explorer"; the Explorer became the
-    // Signal Board, everything else is the Control Room, so old values coerce
-    // forward instead of breaking.
-    const stored = loadLocalStorage<string>(STORAGE_KEYS.LAYOUT_MODE, "control");
-    return stored === "signal" || stored === "explorer" ? "signal" : "control";
-  });
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() =>
+    normalizeLayoutMode(loadLocalStorage<unknown>(STORAGE_KEYS.LAYOUT_MODE, null)),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [deepSearch, setDeepSearch] = useState(false);
   const [deepSearchLoading, setDeepSearchLoading] = useState(false);
@@ -174,6 +182,7 @@ export function App(): React.JSX.Element {
       .then((r) => r.json())
       .then((s: Settings) => {
         setAutoDeleteOnClose(s.autoDeleteOnClose);
+        setOpenTerminalFullscreen(s.openTerminalFullscreen);
         setTheme(s.theme);
         setFontSize(s.fontSize);
         setEnableKeyboardNav(s.enableKeyboardNavigation);
@@ -383,8 +392,29 @@ export function App(): React.JSX.Element {
     setLaunchOpen(true);
   }
 
+  function handleNavigateToSession(machineId: string, sessionId: string): void {
+    if (layoutMode === "explorer") {
+      setExplorerSelection({ machineId, sessionId });
+    } else {
+      setFullscreen({ machineId, sessionId });
+    }
+  }
+
+  function handleLaunched(machineId: string, sessionName: string, multiplexer: TerminalMultiplexer): void {
+    if (layoutMode === "explorer" && !openTerminalFullscreen) {
+      setExplorerSelection({
+        machineId,
+        sessionId: `pending-${sessionName}`,
+        awaitingSession: true,
+        initialTab: "terminal",
+      });
+    } else {
+      handleOpenTerminal(machineId, sessionName, multiplexer);
+    }
+  }
+
   return (
-    <div className={`app font-${fontSize} ${layoutMode === "signal" ? "app-signal" : ""}`}>
+    <div className={`app font-${fontSize} app-${layoutMode}`}>
       <header className="app-header">
         <div className="header-left">
           <h1 className="app-title">Agent Town</h1>
@@ -514,10 +544,21 @@ export function App(): React.JSX.Element {
               <div className="layout-toggle">
                 <button
                   type="button"
+                  className={`layout-toggle-btn ${layoutMode === "explorer" ? "active" : ""}`}
+                  onClick={() => setLayoutMode("explorer")}
+                  title="Explorer"
+                  aria-label="Explorer layout"
+                  aria-pressed={layoutMode === "explorer"}
+                >
+                  <ExplorerIcon />
+                </button>
+                <button
+                  type="button"
                   className={`layout-toggle-btn ${layoutMode === "control" ? "active" : ""}`}
                   onClick={() => setLayoutMode("control")}
                   title="Control Room"
                   aria-label="Control Room layout"
+                  aria-pressed={layoutMode === "control"}
                 >
                   <ControlRoomIcon />
                 </button>
@@ -527,6 +568,7 @@ export function App(): React.JSX.Element {
                   onClick={() => setLayoutMode("signal")}
                   title="Signal Board"
                   aria-label="Signal Board layout"
+                  aria-pressed={layoutMode === "signal"}
                 >
                   <SignalBoardIcon />
                 </button>
@@ -554,7 +596,7 @@ export function App(): React.JSX.Element {
                   isOpen={activityOpen}
                   onClose={() => setActivityOpen(false)}
                   onClearAll={clearActivity}
-                  onNavigateToSession={(machineId, sessionId) => setFullscreen({ machineId, sessionId })}
+                  onNavigateToSession={handleNavigateToSession}
                 />
               </div>
               <button type="button" className="header-btn" onClick={() => setLaunchOpen(true)} title="Launch new agent">
@@ -574,7 +616,24 @@ export function App(): React.JSX.Element {
         </div>
       </header>
 
-      {layoutMode === "control" ? (
+      {layoutMode === "explorer" ? (
+        <ExplorerLayout
+          machines={filteredMachines}
+          allMachines={machines}
+          groupMode={groupMode}
+          sortMode={sortMode}
+          timeFilter={timeFilter}
+          hideIdle={hideIdle}
+          selection={explorerSelection}
+          onSelectionChange={setExplorerSelection}
+          onOpenTerminal={handleOpenTerminal}
+          onResume={(machineId, sessionId, projectDir, agentType) =>
+            setResumeTarget({ machineId, sessionId, projectDir, agentType })
+          }
+          onLaunchAgent={handleLaunchOnMachine}
+          autoDeleteOnClose={autoDeleteOnClose}
+        />
+      ) : layoutMode === "control" ? (
         <main className="app-main">
           {filteredMachines.length === 0 && machines.length === 0 && (
             <div className="empty-state">
@@ -659,7 +718,7 @@ export function App(): React.JSX.Element {
           setLaunchMachineId(undefined);
         }}
         machines={machines}
-        onLaunched={(machineId, sessionName, multiplexer) => handleOpenTerminal(machineId, sessionName, multiplexer)}
+        onLaunched={handleLaunched}
         initialMachineId={launchMachineId}
       />
       <ResumeAgentModal
