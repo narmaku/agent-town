@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { MachineInfo } from "@agent-town/shared";
 import { createSessionViewStore, makeDraftKey } from "./session-view-state";
 
 function memoryStorage() {
@@ -124,6 +125,66 @@ describe("session view continuity", () => {
     expect(store.getDraft(a).sending).toBe(true);
     store.finishSend(submission);
     expect(store.getDraft(a)).toMatchObject({ text: "", sending: false });
+  });
+
+  test("restores a pending draft after reload when its real identity arrives", () => {
+    const storage = memoryStorage();
+    const pending = makeDraftKey("machine-a", "codex", "pending-new");
+    createSessionViewStore({ sessionStorage: () => storage }).setDraftText(pending, "before first heartbeat");
+    const restored = createSessionViewStore({ sessionStorage: () => storage });
+    const machines: MachineInfo[] = [
+      {
+        machineId: "machine-a",
+        hostname: "host",
+        platform: "linux",
+        lastHeartbeat: new Date().toISOString(),
+        multiplexers: ["tmux"],
+        multiplexerSessions: [],
+        availableAgents: ["codex"],
+        sessions: [
+          {
+            sessionId: "session",
+            agentType: "codex",
+            slug: "new",
+            projectPath: "/work",
+            projectName: "work",
+            gitBranch: "main",
+            status: "working",
+            lastActivity: new Date().toISOString(),
+            lastMessage: "",
+            cwd: "/work",
+            multiplexer: "tmux",
+            multiplexerSession: "new",
+          },
+        ],
+      },
+    ];
+
+    const pendingMachine: MachineInfo = {
+      ...machines[0],
+      sessions: [{ ...machines[0].sessions[0], sessionId: "pending-new" }],
+    };
+    restored.reconcileSessions([pendingMachine]);
+    restored.reconcileSessions(machines);
+    expect(restored.getDraft(a).text).toBe("before first heartbeat");
+    expect(restored.getDraft(pending).text).toBe("");
+    restored.reconcileSessions(machines);
+    expect(restored.getDraft(a).text).toBe("before first heartbeat");
+
+    // An old unmatched pending draft must not move into an unrelated later
+    // conversation just because it reuses the same multiplexer name.
+    storage.setItem(`agentTown:sessionDraft:${pending}`, "unmatched old draft");
+    const unrelated = createSessionViewStore({ sessionStorage: () => storage });
+    unrelated.reconcileSessions(machines);
+    expect(unrelated.getDraft(a).text).toBe("before first heartbeat");
+    expect(unrelated.getDraft(pending).text).toBe("unmatched old draft");
+
+    const disconnected = createSessionViewStore({ sessionStorage: () => storage });
+    disconnected.reconcileSessions([pendingMachine]);
+    disconnected.reconcileSessions([]);
+    disconnected.reconcileSessions(machines);
+    expect(disconnected.getDraft(a).text).toBe("before first heartbeat");
+    expect(disconnected.getDraft(pending).text).toBe("unmatched old draft");
   });
 
   test("reusing a pending mux name cannot redirect its new draft or an old upload", () => {

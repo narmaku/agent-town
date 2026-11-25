@@ -51,6 +51,7 @@ export function createSessionViewStore(options: StoreOptions = {}): SessionViewS
   const submissionKeys = new Map<number, string>();
   const submissions = new Map<string, Set<number>>();
   const listeners = new Set<() => void>();
+  let pendingSessions = new Set<string>();
   let nextToken = 0;
   let preferredView: SessionView = "chat";
   try {
@@ -153,9 +154,23 @@ export function createSessionViewStore(options: StoreOptions = {}): SessionViewS
       notify();
     },
     reconcileSessions(machines) {
-      for (const key of drafts.keys()) {
+      const currentPending = new Set<string>();
+      for (const machine of machines) {
+        for (const session of machine.sessions) {
+          if (!session.sessionId.startsWith("pending-")) continue;
+          const key = makeDraftKey(machine.machineId, session.agentType, session.sessionId);
+          currentPending.add(key);
+          // A reload empties the memory cache. Restore only pending identities
+          // actually reported by the server, even when their pane isn't open.
+          getDraft(key);
+        }
+      }
+      // Only an observed pending -> real handoff can establish the alias.
+      // A later real session reusing a mux name cannot claim an old draft.
+      const promoted = [...pendingSessions].filter((key) => !currentPending.has(key));
+      pendingSessions = currentPending;
+      for (const key of promoted) {
         const [machineId, agentType, sessionId] = JSON.parse(key) as [string, AgentType, string];
-        if (!sessionId.startsWith("pending-")) continue;
         const name = sessionId.slice("pending-".length);
         const real = machines
           .find((machine) => machine.machineId === machineId)
