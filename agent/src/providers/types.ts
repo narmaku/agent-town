@@ -1,4 +1,10 @@
-import type { AgentType, PermissionMode, SessionInfo, SessionMessagesResponse, TerminalMultiplexer } from "@agent-town/shared";
+import type {
+  AgentType,
+  PermissionMode,
+  SessionInfo,
+  SessionMessagesResponse,
+  TerminalMultiplexer,
+} from "@agent-town/shared";
 
 import type { SearchMessageResult } from "./search";
 

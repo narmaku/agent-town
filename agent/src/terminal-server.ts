@@ -435,10 +435,7 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
                   model: body.model,
                   permissionMode,
                 })
-              : buildShellCommand(
-                  provider.buildLaunchCommand({ model: body.model, permissionMode }),
-                  body.projectDir,
-                );
+              : buildShellCommand(provider.buildLaunchCommand({ model: body.model, permissionMode }), body.projectDir);
 
           const env = cleanMultiplexerEnv();
           await createMuxSession(body.multiplexer, body.sessionName, body.projectDir, env, body.zellijLayout);

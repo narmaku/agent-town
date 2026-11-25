@@ -4315,3 +4315,46 @@ body {
   gap: 12px;
   justify-content: center;
 }
+
+/* Permission selector help stays available to keyboard, pointer and touch users. */
+.permission-mode-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.permission-mode-heading .form-label { margin-bottom: 0; }
+.permission-mode-info summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+.permission-mode-info summary::-webkit-details-marker { display: none; }
+.permission-mode-info summary:focus-visible { outline: 2px solid var(--accent-blue-fg); outline-offset: 2px; }
+.permission-mode-help {
+  position: relative;
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.permission-mode-heading:has(details[open]) { flex-wrap: wrap; }
+.permission-mode-heading:has(details[open]) details { width: 100%; }
+.permission-mode-help p { margin: 0 0 8px; }
+.permission-mode-help dl { margin: 0; }
+.permission-mode-help dt { color: var(--text); font-weight: 600; }
+.permission-mode-help dd { margin: 2px 0 10px; }

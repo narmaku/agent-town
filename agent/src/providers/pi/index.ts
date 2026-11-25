@@ -1,5 +1,5 @@
-import { applyPermissionMode } from "../permission-mode";
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
+import { applyPermissionMode } from "../permission-mode";
 import type { SearchMessageResult } from "../search";
 import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { getPiSessionMessages, searchPiMessages } from "./message-parser";

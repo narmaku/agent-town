@@ -22,10 +22,7 @@ describe("CodexProvider", () => {
   test("builds exact launch commands", () => {
     expect(provider.buildLaunchCommand({})).toEqual(["codex"]);
     expect(provider.buildLaunchCommand({ model: "gpt-5.3-codex" })).toEqual(["codex", "--model", "gpt-5.3-codex"]);
-    expect(provider.buildLaunchCommand({ autonomous: true })).toEqual([
-      "codex",
-      "--yolo",
-    ]);
+    expect(provider.buildLaunchCommand({ autonomous: true })).toEqual(["codex", "--yolo"]);
   });
 
   test("builds exact positional resume commands", () => {

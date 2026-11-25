@@ -13,7 +13,11 @@ describe("provider permission modes", () => {
     [new CodexProvider(), ["--approve-for-me"], ["--yolo"]],
     [new GeminiCliProvider(), ["--approval-mode", "auto_edit"], ["--yolo"]],
   ] as const) {
-    for (const [mode, flags] of [["default", []], ["auto", auto], ["yolo", yolo]] as const) {
+    for (const [mode, flags] of [
+      ["default", []],
+      ["auto", auto],
+      ["yolo", yolo],
+    ] as const) {
       test(`${provider.type} ${mode} launch and resume use exact flags`, () => {
         const options = { permissionMode: mode as PermissionMode, model: "test-model" };
         expect(provider.buildLaunchCommand(options)).toEqual([provider.binaryName, "--model", "test-model", ...flags]);
@@ -28,12 +32,23 @@ describe("provider permission modes", () => {
 
   test("OpenCode YOLO scopes both config formats to a single launch or resume process", () => {
     const provider = new OpenCodeProvider();
-    const prefix = ["env", 'OPENCODE_PERMISSION={"*":"allow"}', 'OPENCODE_CLI_CONFIG_CONTENT={"session":{"permissions":"autoaccept"}}'];
+    const prefix = [
+      "env",
+      'OPENCODE_PERMISSION={"*":"allow"}',
+      'OPENCODE_CLI_CONFIG_CONTENT={"session":{"permissions":"autoaccept"}}',
+    ];
     expect(provider.buildLaunchCommand({ permissionMode: "yolo" })).toEqual([...prefix, "opencode"]);
-    expect(provider.buildResumeCommand({ sessionId: "ses_123", permissionMode: "yolo" })).toEqual([...prefix, "opencode", "--session", "ses_123"]);
+    expect(provider.buildResumeCommand({ sessionId: "ses_123", permissionMode: "yolo" })).toEqual([
+      ...prefix,
+      "opencode",
+      "--session",
+      "ses_123",
+    ]);
     expect(provider.buildLaunchCommand({ permissionMode: "default" })).toEqual(["opencode"]);
     expect(() => provider.buildLaunchCommand({ permissionMode: "auto" })).toThrow("Auto");
-    expect(buildShellCommand(provider.buildLaunchCommand({ permissionMode: "yolo" }))).toContain("'OPENCODE_PERMISSION=");
+    expect(buildShellCommand(provider.buildLaunchCommand({ permissionMode: "yolo" }))).toContain(
+      "'OPENCODE_PERMISSION=",
+    );
   });
 
   test("Pi rejects explicit unsupported modes while old autonomous remains unchanged", () => {
