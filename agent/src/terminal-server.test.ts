@@ -338,21 +338,29 @@ describe("permission validation before launch side effects", () => {
   afterAll(() => server.stop(true));
 
   for (const path of ["/api/launch", "/api/resume"]) {
-    test(`${path} rejects malformed permissions before spawning`, async () => {
-      const response = await fetch(`http://127.0.0.1:${server.port}${path}`, {
-        method: "POST",
-        headers: { Authorization: "Bearer permission-test-token", "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionName: "permissions",
-          sessionId: "session-1",
-          projectDir: "/tmp",
-          multiplexer: "tmux",
-          agentType: "claude-code",
-          permissionMode: "unsafe",
-        }),
-      });
-      expect(response.status).toBe(400);
-      expect((await response.json()).error).toContain("permissionMode");
+    test(`${path} rejects malformed and unsupported permissions before spawning`, async () => {
+      for (const [input, message] of [
+        [{ permissionMode: "unsafe" }, "permissionMode"],
+        [{ permissionMode: null }, "permissionMode"],
+        [{ autonomous: "true" }, "autonomous"],
+        [{ agentType: "opencode", permissionMode: "auto" }, "Auto"],
+        [{ agentType: "pi", permissionMode: "yolo" }, "YOLO"],
+      ] as const) {
+        const response = await fetch(`http://127.0.0.1:${server.port}${path}`, {
+          method: "POST",
+          headers: { Authorization: "Bearer permission-test-token", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionName: "permissions",
+            sessionId: "session-1",
+            projectDir: "/tmp",
+            multiplexer: "tmux",
+            agentType: "claude-code",
+            ...input,
+          }),
+        });
+        expect(response.status).toBe(400);
+        expect((await response.json()).error).toContain(message);
+      }
     });
   }
 });

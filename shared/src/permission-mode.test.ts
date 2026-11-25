@@ -4,9 +4,11 @@ import { getPermissionModeSupport, normalizePermissionMode, resolvePermissionMod
 describe("permission modes", () => {
   test("defaults to harness configuration and preserves explicit mode precedence", () => {
     expect(resolvePermissionMode({}, "codex")).toBe("default");
+    expect(resolvePermissionMode({ autonomous: false }, "codex")).toBe("default");
     expect(resolvePermissionMode({ autonomous: true }, "codex")).toBe("yolo");
     expect(resolvePermissionMode({ autonomous: true, permissionMode: "auto" }, "codex")).toBe("auto");
     expect(resolvePermissionMode({ autonomous: true, permissionMode: "default" }, "claude-code")).toBe("default");
+    expect(resolvePermissionMode({ autonomous: false, permissionMode: "yolo" }, "codex")).toBe("yolo");
   });
 
   test("preserves previously ignored legacy autonomy without activating new bypasses", () => {
@@ -19,7 +21,10 @@ describe("permission modes", () => {
     for (const permissionMode of ["YOLO", "unsafe", true, null, 1]) {
       expect(() => resolvePermissionMode({ permissionMode }, "codex")).toThrow("permissionMode");
     }
-    expect(() => resolvePermissionMode({ autonomous: "true" }, "codex")).toThrow("autonomous");
+    for (const autonomous of ["true", "false", 0, 1, null, {}]) {
+      expect(() => resolvePermissionMode({ autonomous }, "codex")).toThrow("autonomous");
+      expect(() => resolvePermissionMode({ autonomous, permissionMode: "auto" }, "codex")).toThrow("autonomous");
+    }
     expect(() => resolvePermissionMode({ permissionMode: "auto" }, "opencode")).toThrow("Auto");
     expect(() => resolvePermissionMode({ permissionMode: "yolo" }, "pi")).toThrow("YOLO");
   });
