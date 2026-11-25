@@ -325,3 +325,22 @@ describe("agent request guards", () => {
     ws.close();
   });
 });
+
+describe("permission validation before launch side effects", () => {
+  let server: Server;
+  beforeAll(() => {
+    server = startTerminalServer(0, "permission-tests", { hostname: "127.0.0.1", token: "permission-test-token", allowedOrigins: [] });
+  });
+  afterAll(() => server.stop(true));
+
+  for (const path of ["/api/launch", "/api/resume"]) {
+    test(`${path} rejects malformed permissions before spawning`, async () => {
+      const response = await fetch(`http://127.0.0.1:${server.port}${path}`, {
+        method: "POST", headers: { Authorization: "Bearer permission-test-token", "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionName: "permissions", sessionId: "session-1", projectDir: "/tmp", multiplexer: "tmux", agentType: "claude-code", permissionMode: "unsafe" }),
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toContain("permissionMode");
+    });
+  }
+});

@@ -24,7 +24,7 @@ describe("CodexProvider", () => {
     expect(provider.buildLaunchCommand({ model: "gpt-5.3-codex" })).toEqual(["codex", "--model", "gpt-5.3-codex"]);
     expect(provider.buildLaunchCommand({ autonomous: true })).toEqual([
       "codex",
-      "--dangerously-bypass-approvals-and-sandbox",
+      "--yolo",
     ]);
   });
 
@@ -36,7 +36,7 @@ describe("CodexProvider", () => {
       SESSION_ID,
       "--model",
       "gpt-5.3-codex",
-      "--dangerously-bypass-approvals-and-sandbox",
+      "--yolo",
     ]);
   });
 });

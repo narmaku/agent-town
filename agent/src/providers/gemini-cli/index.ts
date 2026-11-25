@@ -1,3 +1,4 @@
+import { applyPermissionMode } from "../permission-mode";
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
 import type { SearchMessageResult } from "../search";
 import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
@@ -43,15 +44,13 @@ export class GeminiCliProvider implements AgentProvider {
   buildLaunchCommand(opts: LaunchOptions): string[] {
     const parts = ["gemini"];
     if (opts.model) parts.push("--model", opts.model);
-    if (opts.autonomous) parts.push("--yolo");
-    return parts;
+    return applyPermissionMode(this.type, parts, opts);
   }
 
   buildResumeCommand(opts: ResumeOptions): string[] {
     const parts = ["gemini", "--resume", opts.sessionId];
     if (opts.model) parts.push("--model", opts.model);
-    if (opts.autonomous) parts.push("--yolo");
-    return parts;
+    return applyPermissionMode(this.type, parts, opts);
   }
 
   async matchProcessToSessionId(

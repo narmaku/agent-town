@@ -8,6 +8,8 @@ import {
   isLoopbackHost,
   type LaunchAgentRequest,
   LOOPBACK_HOST,
+  type PermissionMode,
+  resolvePermissionMode,
   type RenameSessionRequest,
   type ResumeAgentRequest,
   type Settings,
@@ -622,6 +624,13 @@ async function routeRequest(
       }
 
       const settings = getSettings();
+      const agentType = body.agentType || settings.defaultAgentType;
+      let permissionMode: PermissionMode;
+      try {
+        permissionMode = resolvePermissionMode(body, agentType);
+      } catch (err) {
+        return Response.json({ error: errorMessage(err) }, { status: 400 });
+      }
       const mux = body.multiplexer || settings.defaultMultiplexer;
 
       const agentUrl = getAgentUrl(machine, "/api/launch");
@@ -634,11 +643,11 @@ async function routeRequest(
           body: JSON.stringify({
             sessionName: body.sessionName,
             projectDir: body.projectDir,
-            agentType: body.agentType || settings.defaultAgentType,
+            agentType,
             multiplexer: mux,
             zellijLayout: settings.zellijLayout,
             model: settings.defaultModel,
-            autonomous: body.autonomous,
+            permissionMode,
           }),
         },
         PROXY_LAUNCH_TIMEOUT_MS,
@@ -687,6 +696,13 @@ async function routeRequest(
       }
 
       const settings = getSettings();
+      const agentType = body.agentType || settings.defaultAgentType;
+      let permissionMode: PermissionMode;
+      try {
+        permissionMode = resolvePermissionMode(body, agentType);
+      } catch (err) {
+        return Response.json({ error: errorMessage(err) }, { status: 400 });
+      }
 
       const agentUrl = getAgentUrl(machine, "/api/resume");
 
@@ -708,11 +724,11 @@ async function routeRequest(
             sessionName,
             sessionId: body.sessionId,
             projectDir: body.projectDir,
-            agentType: body.agentType || settings.defaultAgentType,
+            agentType,
             multiplexer: settings.defaultMultiplexer,
             zellijLayout: settings.zellijLayout,
             model: settings.defaultModel,
-            autonomous: body.autonomous,
+            permissionMode,
           }),
         },
         PROXY_LAUNCH_TIMEOUT_MS,

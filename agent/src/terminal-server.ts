@@ -5,6 +5,8 @@ import {
   buildShellCommand,
   createLogger,
   errorMessage,
+  type PermissionMode,
+  resolvePermissionMode,
   type TerminalMultiplexer,
   truncateId,
 } from "@agent-town/shared";
@@ -218,6 +220,7 @@ interface StartAgentOptions {
   session: string;
   command: string;
   provider: AgentProvider;
+  permissionMode?: PermissionMode;
   autonomous?: boolean;
   /** Send "hi" so CLI agents write their session file right away (new sessions only). */
   sendInitialMessage: boolean;
@@ -229,6 +232,10 @@ interface StartAgentOptions {
  * their startup prompts: accept workspace trust, the autonomous-mode
  * disclaimer, and optionally send a first message. TUI agents need none of it.
  */
+export function requiresYoloDisclaimer(provider: AgentProvider, mode?: PermissionMode): boolean {
+  return mode === "yolo" && provider.terminal.autonomousDisclaimer;
+}
+
 async function startAgentInSession(opts: StartAgentOptions): Promise<void> {
   if (!(await typeLine(opts.multiplexer, opts.session, opts.command, opts.env))) {
     throw new Error("Failed to send command to session");
@@ -237,7 +244,7 @@ async function startAgentInSession(opts: StartAgentOptions): Promise<void> {
 
   await Bun.sleep(TRUST_PROMPT_DELAY_MS);
   await typeLine(opts.multiplexer, opts.session, "", opts.env);
-  if (opts.autonomous && opts.provider.terminal.autonomousDisclaimer) {
+  if (requiresYoloDisclaimer(opts.provider, opts.permissionMode)) {
     await Bun.sleep(AUTONOMOUS_DISCLAIMER_DELAY_MS);
     await typeLine(opts.multiplexer, opts.session, "", opts.env);
   }
@@ -254,6 +261,7 @@ interface NewSessionRequest {
   agentType?: AgentType;
   zellijLayout?: string;
   model?: string;
+  permissionMode?: PermissionMode;
   autonomous?: boolean;
 }
 
@@ -400,13 +408,19 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
         try {
           const body = (await req.json()) as NewSessionRequest;
           const agentType = body.agentType || "claude-code";
+          let permissionMode: PermissionMode;
+          try {
+            permissionMode = resolvePermissionMode(body, agentType);
+          } catch (err) {
+            return Response.json({ error: errorMessage(err) }, { status: 400 });
+          }
           const provider = getProvider(agentType);
           if (!provider) {
             return Response.json({ error: `Agent type "${agentType}" is not available` }, { status: 400 });
           }
 
           log.info(
-            `launch: name=${body.sessionName} agent=${agentType} mux=${body.multiplexer} dir=${body.projectDir} model=${body.model || "default"} autonomous=${body.autonomous || false}`,
+            `launch: name=${body.sessionName} agent=${agentType} mux=${body.multiplexer} dir=${body.projectDir} model=${body.model || "default"} permissionMode=${permissionMode}`,
           );
           const validationError = validateNewSessionRequest(body);
           if (validationError) return Response.json({ error: validationError }, { status: 400 });
@@ -419,10 +433,10 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
                   muxSessionName: body.sessionName,
                   projectDir: body.projectDir,
                   model: body.model,
-                  autonomous: body.autonomous,
+                  permissionMode,
                 })
               : buildShellCommand(
-                  provider.buildLaunchCommand({ model: body.model, autonomous: body.autonomous }),
+                  provider.buildLaunchCommand({ model: body.model, permissionMode }),
                   body.projectDir,
                 );
 
@@ -433,7 +447,7 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
             session: body.sessionName,
             command,
             provider,
-            autonomous: body.autonomous,
+            permissionMode,
             sendInitialMessage: true,
             env,
           });
@@ -449,6 +463,12 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
         try {
           const body = (await req.json()) as NewSessionRequest & { sessionId: string };
           const agentType = body.agentType || "claude-code";
+          let permissionMode: PermissionMode;
+          try {
+            permissionMode = resolvePermissionMode(body, agentType);
+          } catch (err) {
+            return Response.json({ error: errorMessage(err) }, { status: 400 });
+          }
           const provider = getProvider(agentType);
           if (!provider) {
             return Response.json({ error: `Agent type "${agentType}" is not available` }, { status: 400 });
@@ -461,7 +481,7 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
           if (validationError) return Response.json({ error: validationError }, { status: 400 });
 
           const command = buildShellCommand(
-            provider.buildResumeCommand({ sessionId: body.sessionId, model: body.model, autonomous: body.autonomous }),
+            provider.buildResumeCommand({ sessionId: body.sessionId, model: body.model, permissionMode }),
             body.projectDir,
           );
           const env = cleanMultiplexerEnv();
@@ -471,7 +491,7 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
             session: body.sessionName,
             command,
             provider,
-            autonomous: body.autonomous,
+            permissionMode,
             sendInitialMessage: false,
             env,
           });
