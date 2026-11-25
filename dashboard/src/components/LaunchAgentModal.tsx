@@ -3,9 +3,18 @@ import { normalizePermissionMode } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../auth";
+import {
+  loadLastLaunchDirectory,
+  loadLastPermissionMode,
+  saveLastLaunchDirectory,
+  saveLastPermissionMode,
+} from "../launch-preferences";
+import { createBrowserLogger } from "../logger";
 import { AGENT_TYPE_CONFIG, API, resolveAvailableAgentType } from "../utils";
 import { DirectoryBrowserModal } from "./DirectoryBrowserModal";
 import { PermissionModeSelect } from "./PermissionModeSelect";
+
+const log = createBrowserLogger("launch-agent");
 
 export function resolveSelectedMachineId(
   userSelected: string,
@@ -81,19 +90,38 @@ export function LaunchAgentModal({
 
   const recentDirsRef = useRef<HTMLDivElement>(null);
   const projectDirInputRef = useRef<HTMLInputElement>(null);
+  const initializedForRef = useRef("");
+  const appliedSettingsRef = useRef<Settings | null>(null);
+  const dirtyRef = useRef({ agentType: false, projectDir: false, multiplexer: false });
+  const openingRef = useRef(0);
 
   useEffect(() => {
-    if (open) {
-      apiFetch(API.SETTINGS)
-        .then((r) => r.json())
-        .then((s: Settings) => {
-          setGlobalSettings(s);
-          if (s.defaultAgentType) setAgentType(s.defaultAgentType);
-        })
-        .catch((_err) => {
-          // settings load is best-effort
-        });
-    }
+    if (!open) return;
+    openingRef.current++;
+    initializedForRef.current = "";
+    dirtyRef.current = { agentType: false, projectDir: false, multiplexer: false };
+    setMachineId("");
+    setPermissionMode(loadLastPermissionMode("claude-code"));
+    setShowRecentDirs(false);
+    setShowBrowser(false);
+    setError("");
+    setLaunching(false);
+    const controller = new AbortController();
+    apiFetch(API.SETTINGS, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Settings request failed: ${response.status}`);
+        return response.json();
+      })
+      .then((settings: Settings) => {
+        if (!controller.signal.aborted) setGlobalSettings(settings);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) log.warn("Could not load launch defaults", error);
+      });
+    return () => {
+      openingRef.current++;
+      controller.abort();
+    };
   }, [open]);
 
   const selectedMachineId = resolveSelectedMachineId(machineId, initialMachineId, machines[0]?.machineId || "");
@@ -116,45 +144,34 @@ export function LaunchAgentModal({
   // Recent directories derived from session data
   const recentDirs = useMemo(() => deriveRecentDirectories(selectedMachine), [selectedMachine]);
 
-  // Track which machine+settings combo we last initialized for, so we don't
-  // reset user choices on every WebSocket heartbeat update.
-  const initializedForRef = useRef("");
-
-  // When machine changes or settings load, initialize multiplexer and project dir.
-  // Skips re-initialization if we've already set defaults for this machine+settings combo.
+  // Apply defaults once per opening/machine. Late settings can fill untouched
+  // fields, but a heartbeat or settings reply must never replace a user edit.
   useEffect(() => {
-    if (!selectedMachine) return;
+    if (!open || !selectedMachine) return;
+    const machineChanged = initializedForRef.current !== selectedMachineId;
+    if (!machineChanged && appliedSettingsRef.current === globalSettings) return;
+    if (machineChanged) {
+      dirtyRef.current.projectDir = false;
+      dirtyRef.current.multiplexer = false;
+    }
+    initializedForRef.current = selectedMachineId;
+    appliedSettingsRef.current = globalSettings;
 
-    const initKey = `${selectedMachineId}:${globalSettings?.defaultMultiplexer || ""}`;
-    if (initializedForRef.current === initKey) return;
-    initializedForRef.current = initKey;
-
-    // Pick the best multiplexer: prefer global default if available, otherwise first available
     const globalDefault = globalSettings?.defaultMultiplexer;
-    if (globalDefault && availableMux.includes(globalDefault)) {
-      setMultiplexer(globalDefault);
-    } else if (availableMux.length > 0) {
-      setMultiplexer(availableMux[0]);
+    if (!dirtyRef.current.multiplexer) {
+      if (globalDefault && availableMux.includes(globalDefault)) setMultiplexer(globalDefault);
+      else if (availableMux.length > 0) setMultiplexer(availableMux[0]);
+    }
+    if (!dirtyRef.current.agentType) {
+      setAgentType(globalSettings?.defaultAgentType ?? "claude-code");
     }
 
-    // Set default project dir based on machine
-    const isFirstMachine = machines.indexOf(selectedMachine) === 0;
-    if (isFirstMachine && globalSettings?.defaultProjectDir) {
-      setProjectDir(globalSettings.defaultProjectDir);
-    } else {
-      setProjectDir(deriveDefaultProjectDir(selectedMachine));
+    if (!dirtyRef.current.projectDir) {
+      const remembered = loadLastLaunchDirectory(selectedMachineId);
+      const configured = machines[0]?.machineId === selectedMachineId ? globalSettings?.defaultProjectDir : undefined;
+      setProjectDir(remembered ?? (configured || deriveDefaultProjectDir(selectedMachine)));
     }
-  }, [availableMux, globalSettings, selectedMachine, selectedMachineId, machines]);
-
-  // Reset initialization tracking when modal opens so defaults are re-applied
-  useEffect(() => {
-    if (open) {
-      initializedForRef.current = "";
-      setShowRecentDirs(false);
-      setShowBrowser(false);
-      setMachineId("");
-    }
-  }, [open]);
+  }, [open, availableMux, globalSettings, selectedMachine, selectedMachineId, machines]);
 
   // Dismiss recent dirs dropdown when clicking outside
   useEffect(() => {
@@ -176,52 +193,61 @@ export function LaunchAgentModal({
   }, [showRecentDirs]);
 
   const handleSelectRecentDir = useCallback((dir: string) => {
+    dirtyRef.current.projectDir = true;
     setProjectDir(dir);
     setShowRecentDirs(false);
   }, []);
 
   const handleBrowseSelect = useCallback((path: string) => {
+    dirtyRef.current.projectDir = true;
     setProjectDir(path);
   }, []);
 
   if (!open) return null;
 
   async function handleLaunch() {
-    if (!sessionName.trim() || !projectDir.trim()) return;
+    if (launching || !sessionName.trim() || !projectDir.trim()) return;
 
+    const opening = openingRef.current;
+    const submitted = {
+      machineId: selectedMachineId,
+      sessionName: sessionName.trim(),
+      projectDir: projectDir.trim(),
+      agentType: selectedAgentType,
+      permissionMode: normalizePermissionMode(selectedAgentType, permissionMode),
+      multiplexer,
+    };
     setLaunching(true);
     setError("");
     try {
       const resp = await apiFetch(API.AGENTS_LAUNCH, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          machineId: selectedMachineId,
-          sessionName: sessionName.trim(),
-          projectDir: projectDir.trim(),
-          agentType: selectedAgentType,
-          permissionMode: normalizePermissionMode(selectedAgentType, permissionMode),
-          multiplexer,
-        }),
+        body: JSON.stringify(submitted),
       });
 
       if (resp.ok) {
         const data = await resp.json();
-        const launchedName = sessionName.trim();
-        setPermissionMode("default");
-        setSessionName("");
-        setProjectDir("");
-        setError("");
-        onClose();
-        onLaunched(selectedMachineId, data.sessionName || launchedName, data.multiplexer || multiplexer);
+        saveLastPermissionMode(submitted.permissionMode);
+        saveLastLaunchDirectory(submitted.machineId, submitted.projectDir);
+        if (openingRef.current === opening) {
+          setSessionName("");
+          setError("");
+          onClose();
+          onLaunched(
+            submitted.machineId,
+            data.sessionName || submitted.sessionName,
+            data.multiplexer || submitted.multiplexer,
+          );
+        }
       } else {
         const data = await resp.json().catch(() => ({ error: "Launch failed" }));
-        setError(data.error || "Launch failed");
+        if (openingRef.current === opening) setError(data.error || "Launch failed");
       }
     } catch (_err) {
-      setError("Failed to connect to server");
+      if (openingRef.current === opening) setError("Failed to connect to server");
     } finally {
-      setLaunching(false);
+      if (openingRef.current === opening) setLaunching(false);
     }
   }
 
@@ -237,6 +263,7 @@ export function LaunchAgentModal({
   }
 
   function handleProjectDirChange(e: React.ChangeEvent<HTMLInputElement>) {
+    dirtyRef.current.projectDir = true;
     setProjectDir(e.target.value);
     setShowRecentDirs(false);
   }
@@ -272,8 +299,24 @@ export function LaunchAgentModal({
                   className="form-select"
                   value={selectedMachineId}
                   onChange={(e) => {
-                    setMachineId(e.target.value);
-                    setProjectDir("");
+                    const nextId = e.target.value;
+                    const nextMachine = machines.find((machine) => machine.machineId === nextId);
+                    setMachineId(nextId);
+                    initializedForRef.current = nextId;
+                    appliedSettingsRef.current = globalSettings;
+                    dirtyRef.current.projectDir = false;
+                    dirtyRef.current.multiplexer = false;
+                    const configured =
+                      machines[0]?.machineId === nextId ? globalSettings?.defaultProjectDir : undefined;
+                    setProjectDir(
+                      loadLastLaunchDirectory(nextId) ?? (configured || deriveDefaultProjectDir(nextMachine)),
+                    );
+                    const defaultMux = globalSettings?.defaultMultiplexer;
+                    setMultiplexer(
+                      defaultMux && nextMachine?.multiplexers.includes(defaultMux)
+                        ? defaultMux
+                        : (nextMachine?.multiplexers[0] ?? "tmux"),
+                    );
                   }}
                 >
                   {machines.map((m) => (
@@ -294,7 +337,10 @@ export function LaunchAgentModal({
                   id="launch-multiplexer"
                   className="form-select"
                   value={multiplexer}
-                  onChange={(e) => setMultiplexer(e.target.value as TerminalMultiplexer)}
+                  onChange={(e) => {
+                    dirtyRef.current.multiplexer = true;
+                    setMultiplexer(e.target.value as TerminalMultiplexer);
+                  }}
                 >
                   {availableMux.map((m) => (
                     <option key={m} value={m}>
@@ -326,6 +372,7 @@ export function LaunchAgentModal({
                 value={selectedAgentType}
                 onChange={(e) => {
                   const type = e.target.value as AgentType;
+                  dirtyRef.current.agentType = true;
                   setAgentType(type);
                   setPermissionMode((mode) => normalizePermissionMode(type, mode));
                 }}
@@ -404,7 +451,10 @@ export function LaunchAgentModal({
               id="launch-permission-mode"
               agentType={selectedAgentType}
               value={permissionMode}
-              onChange={setPermissionMode}
+              onChange={(mode) => {
+                dirtyRef.current.agentType = true;
+                setPermissionMode(mode);
+              }}
             />
             {error && <div className="form-error">{error}</div>}
           </div>
