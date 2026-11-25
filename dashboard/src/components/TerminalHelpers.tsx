@@ -1,5 +1,5 @@
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { altCode, arrowCode, ctrlCode, ESCAPE, parseKeyCombo, TAB } from "../utils/key-codes";
 
 const HELPERS_STORAGE_KEY = "agentTown:terminalHelpersExpanded";
@@ -24,6 +24,7 @@ interface Props {
 }
 
 export function TerminalHelpers({ sendData, isConnected, onFocusTerminal }: Props): React.JSX.Element {
+  const panelId = useId();
   const [expanded, setExpanded] = useState(loadExpanded);
   const [pendingModifier, setPendingModifier] = useState<PendingModifier>(null);
   const [showSendKeys, setShowSendKeys] = useState(false);
@@ -147,18 +148,8 @@ export function TerminalHelpers({ sendData, isConnected, onFocusTerminal }: Prop
 
   return (
     <div className="terminal-helpers">
-      <button
-        type="button"
-        className={`terminal-helpers-toggle${expanded ? " active" : ""}`}
-        onClick={toggleExpanded}
-        aria-label={expanded ? "Collapse terminal helpers" : "Expand terminal helpers"}
-        title="Terminal helpers"
-      >
-        Helpers
-      </button>
-
       {expanded && (
-        <div className="terminal-helpers-panel">
+        <div id={panelId} className="terminal-helpers-panel">
           {/* Modifier keys */}
           <button
             type="button"
@@ -300,6 +291,21 @@ export function TerminalHelpers({ sendData, isConnected, onFocusTerminal }: Prop
           </div>
         </div>
       )}
+
+      <button
+        type="button"
+        className={`terminal-helpers-toggle${expanded ? " active" : ""}`}
+        onClick={toggleExpanded}
+        aria-label={expanded ? "Collapse terminal helpers" : "Expand terminal helpers"}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        title="Terminal helpers"
+      >
+        <span className="terminal-helpers-chevron" aria-hidden="true">
+          {expanded ? ">" : "<"}
+        </span>
+        Helpers
+      </button>
 
       {pendingModifier && (
         <div className="modifier-prompt" aria-live="polite">

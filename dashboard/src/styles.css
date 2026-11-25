@@ -2324,12 +2324,19 @@ body {
 .terminal-helpers {
   margin-left: auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-width: 0;
   gap: 6px;
   position: relative;
 }
 
 .terminal-helpers-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
   background: var(--bg-secondary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
@@ -2338,6 +2345,11 @@ body {
   font-size: 12px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+}
+
+.terminal-helpers-chevron {
+  width: 8px;
+  text-align: center;
 }
 
 .terminal-helpers-toggle:hover {
@@ -2354,6 +2366,8 @@ body {
 .terminal-helpers-panel {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
   gap: 4px;
   flex-wrap: wrap;
 }
@@ -3571,7 +3585,7 @@ body {
   .terminal-helpers {
     margin-left: 0;
     width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end;
     border-top: 1px solid var(--border);
     padding-top: 6px;
     margin-top: 2px;
