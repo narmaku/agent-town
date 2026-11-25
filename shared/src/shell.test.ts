@@ -28,6 +28,11 @@ describe("shellEscape", () => {
     expect(shellEscape("O'Brien")).toBe("'O'\\''Brien'");
   });
 
+  test("keeps literal backslashes outside the single-quoted segments", () => {
+    expect(shellEscape(String.raw`dir\\file`)).toBe(String.raw`'dir'\\''\\'file'`);
+    expect(shellEscape(String.raw`\'`)).toBe(String.raw`''\\''\'''`);
+  });
+
   test("handles empty string", () => {
     expect(shellEscape("")).toBe("''");
   });

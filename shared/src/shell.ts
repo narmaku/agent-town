@@ -3,11 +3,11 @@
 /** Characters that are safe to leave unquoted in a shell argument. */
 export const SAFE_SHELL_RE = /^[a-zA-Z0-9._:/@=+-]+$/;
 
-/** Escape a string for safe use as a shell argument using single-quote wrapping. */
+/** Escape a shell argument, keeping escaped quotes and backslashes outside single quotes. */
 export function shellEscape(arg: string): string {
   if (arg.length === 0) return "''";
   if (SAFE_SHELL_RE.test(arg)) return arg;
-  return `'${arg.replace(/'/g, "'\\''")}'`;
+  return `'${arg.replace(/['\\]/g, (character) => `'\\${character}'`)}'`;
 }
 
 /** Join command parts into a shell-safe string, optionally prepending `cd <dir> &&`. */

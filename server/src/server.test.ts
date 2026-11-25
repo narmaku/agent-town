@@ -179,7 +179,7 @@ describe("server request guards (integration)", () => {
   });
 });
 
-describe("permission mode proxy", () => {
+describe("launch and resume proxy options", () => {
   let server: Server;
   let agent: Server;
   let baseUrl: string;
@@ -207,6 +207,31 @@ describe("permission mode proxy", () => {
     agent.stop(true);
   });
 
+  test("forwards extra launch arguments as an ordered array", async () => {
+    const extraArgs = ["--flag", "two words", "--option=$HOME", ""];
+    const response = await fetch(`${baseUrl}/api/agents/launch`, {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify({ machineId: MACHINE_ID, sessionName: "args-test", projectDir: "/tmp", extraArgs }),
+    });
+    expect(response.status).toBe(200);
+    expect(forwarded.at(-1)?.extraArgs).toEqual(extraArgs);
+  });
+
+  test("rejects invalid extra launch arguments without forwarding", async () => {
+    const count = forwarded.length;
+    for (const extraArgs of [null, "--flag", [true], ["first\nsecond"], ["back\tspace"]]) {
+      const response = await fetch(`${baseUrl}/api/agents/launch`, {
+        method: "POST",
+        headers: { ...AUTH, "Content-Type": "application/json" },
+        body: JSON.stringify({ machineId: MACHINE_ID, sessionName: "args-test", projectDir: "/tmp", extraArgs }),
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toContain("extraArgs");
+      expect(forwarded.length).toBe(count);
+    }
+  });
+
   for (const action of ["launch", "resume"]) {
     test(`${action} preserves Auto through the authenticated proxy`, async () => {
       const response = await fetch(`${baseUrl}/api/agents/${action}`, {
@@ -225,6 +250,7 @@ describe("permission mode proxy", () => {
       expect(response.status).toBe(200);
       expect(forwarded.at(-1)?.permissionMode).toBe("auto");
       expect(forwarded.at(-1)?.autonomous).toBeUndefined();
+      expect(forwarded.at(-1)?.extraArgs).toBeUndefined();
     });
     test(`${action} rejects invalid and unsupported modes without forwarding`, async () => {
       for (const permissionMode of ["unsafe", "auto"]) {

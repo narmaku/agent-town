@@ -30,6 +30,7 @@ interface WrapperScriptOptions {
   model?: string;
   autonomous?: boolean;
   permissionMode?: PermissionMode;
+  extraArgs?: string[];
   /** Override base dir for testing. */
   baseDir?: string;
 }
@@ -53,6 +54,7 @@ export function buildWrapperScript(opts: WrapperScriptOptions): string {
   }
   extraFlags.push(...permissionModeArgs("claude-code", opts).map(shellEscape));
   const flagsSuffix = extraFlags.length > 0 ? ` ${extraFlags.join(" ")}` : "";
+  const launchArgsSuffix = opts.extraArgs?.map((arg) => ` ${shellEscape(arg)}`).join("") ?? "";
 
   const escapedDir = shellEscape(opts.projectDir);
 
@@ -75,7 +77,7 @@ if [ -f "$SESSION_FILE" ]; then
 fi
 
 # Fresh launch — Claude will create a new session
-exec claude${flagsSuffix}
+exec claude${flagsSuffix}${launchArgsSuffix}
 `;
 }
 
