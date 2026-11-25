@@ -5,7 +5,6 @@ export interface ExplorerSelection {
   sessionId: string;
   /** A successful launch can precede its first websocket update. */
   awaitingSession?: boolean;
-  initialTab?: "chat" | "terminal";
 }
 
 interface ResolvedSelection {

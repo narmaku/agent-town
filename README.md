@@ -6,6 +6,7 @@ A lightweight dashboard to monitor and connect to AI coding agent sessions acros
 
 - **Multi-agent support**: Claude Code, OpenCode, Gemini CLI, Codex CLI, and Pi (extensible via provider plugins)
 - **Explorer, Control Room, and Signal Board layouts**: switch sessions directly from Explorer's left sidebar while keeping chat or terminal open on the right. New installs start in Explorer; your chosen layout is remembered.
+- **Retained session views and drafts**: Chat/Terminal follows your choice across panes. Unsent text stays with its session through navigation and same-tab reloads.
 - **Configurable keyboard navigation**: navigate sessions with j/k, Enter to expand, f for fullscreen, t for terminal, s to send, / to search, ? for help (all shortcuts customizable)
 - **Activity feed**: cross-session status change notifications with click-to-navigate
 - **Git diff viewer**: view uncommitted changes per session with file navigation and syntax-highlighted diffs
