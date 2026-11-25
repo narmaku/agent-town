@@ -11,6 +11,7 @@ import {
   type PermissionMode,
   type RenameSessionRequest,
   type ResumeAgentRequest,
+  resolveExtraLaunchArgs,
   resolvePermissionMode,
   type Settings,
   type UpdateNodeRequest,
@@ -626,8 +627,10 @@ async function routeRequest(
       const settings = getSettings();
       const agentType = body.agentType || settings.defaultAgentType;
       let permissionMode: PermissionMode;
+      let extraArgs: string[] | undefined;
       try {
         permissionMode = resolvePermissionMode(body, agentType);
+        extraArgs = resolveExtraLaunchArgs(body.extraArgs);
       } catch (err) {
         return Response.json({ error: errorMessage(err) }, { status: 400 });
       }
@@ -648,6 +651,7 @@ async function routeRequest(
             zellijLayout: settings.zellijLayout,
             model: settings.defaultModel,
             permissionMode,
+            extraArgs,
           }),
         },
         PROXY_LAUNCH_TIMEOUT_MS,

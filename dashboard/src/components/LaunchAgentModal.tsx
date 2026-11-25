@@ -1,5 +1,13 @@
-import type { AgentType, MachineInfo, PermissionMode, Settings, TerminalMultiplexer } from "@agent-town/shared";
-import { normalizePermissionMode } from "@agent-town/shared";
+import {
+  type AgentType,
+  type LaunchAgentRequest,
+  type MachineInfo,
+  normalizePermissionMode,
+  type PermissionMode,
+  parseLaunchArguments,
+  type Settings,
+  type TerminalMultiplexer,
+} from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../auth";
@@ -80,6 +88,7 @@ export function LaunchAgentModal({
   const [projectDir, setProjectDir] = useState("");
   const [machineId, setMachineId] = useState("");
   const [agentType, setAgentType] = useState<AgentType>("claude-code");
+  const [extraArgsByAgent, setExtraArgsByAgent] = useState<Partial<Record<AgentType, string>>>({});
   const [multiplexer, setMultiplexer] = useState<TerminalMultiplexer>("tmux");
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("default");
   const [launching, setLaunching] = useState(false);
@@ -101,6 +110,7 @@ export function LaunchAgentModal({
     initializedForRef.current = "";
     dirtyRef.current = { agentType: false, projectDir: false, multiplexer: false };
     setMachineId("");
+    setExtraArgsByAgent({});
     setPermissionMode(loadLastPermissionMode("claude-code"));
     setShowRecentDirs(false);
     setShowBrowser(false);
@@ -208,15 +218,24 @@ export function LaunchAgentModal({
   async function handleLaunch() {
     if (launching || !sessionName.trim() || !projectDir.trim()) return;
 
+    let extraArgs: string[];
+    try {
+      extraArgs = parseLaunchArguments(extraArgsByAgent[selectedAgentType] ?? "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid extra arguments");
+      return;
+    }
+
     const opening = openingRef.current;
     const submitted = {
       machineId: selectedMachineId,
       sessionName: sessionName.trim(),
       projectDir: projectDir.trim(),
       agentType: selectedAgentType,
+      extraArgs: extraArgs.length ? extraArgs : undefined,
       permissionMode: normalizePermissionMode(selectedAgentType, permissionMode),
       multiplexer,
-    };
+    } satisfies LaunchAgentRequest;
     setLaunching(true);
     setError("");
     try {
@@ -383,6 +402,27 @@ export function LaunchAgentModal({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="launch-extra-args">
+                Extra Arguments (optional)
+              </label>
+              <input
+                id="launch-extra-args"
+                className="form-input"
+                type="text"
+                value={extraArgsByAgent[selectedAgentType] ?? ""}
+                onChange={(e) => {
+                  dirtyRef.current.agentType = true;
+                  const value = e.target.value;
+                  setExtraArgsByAgent((args) => ({ ...args, [selectedAgentType]: value }));
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={'--flag "value with spaces"'}
+                autoComplete="off"
+                spellCheck={false}
+              />
             </div>
 
             <div className="form-group">

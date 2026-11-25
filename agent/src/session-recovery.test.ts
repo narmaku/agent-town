@@ -77,6 +77,19 @@ describe("buildWrapperScript", () => {
     expect(script).toContain("--dangerously-skip-permissions");
   });
 
+  test("appends literal extra arguments to the fresh Claude launch", () => {
+    const script = buildWrapperScript({
+      muxSessionName: "my-session",
+      projectDir: "/tmp",
+      model: "test-model",
+      extraArgs: ["--flag", "two words", "$(printf hi)", ""],
+      baseDir: TEST_BASE_DIR,
+    });
+
+    expect(script).toContain(`\nexec claude --model test-model --flag 'two words' '$(printf hi)' ''\n`);
+    expect(script).toContain(`exec claude --resume "$SESSION_ID" --model test-model\n`);
+  });
+
   test("does not include --dangerously-skip-permissions when autonomous is false", () => {
     const script = buildWrapperScript({
       muxSessionName: "my-session",

@@ -6,6 +6,7 @@ import {
   createLogger,
   errorMessage,
   type PermissionMode,
+  resolveExtraLaunchArgs,
   resolvePermissionMode,
   type TerminalMultiplexer,
   truncateId,
@@ -261,6 +262,7 @@ interface NewSessionRequest {
   agentType?: AgentType;
   zellijLayout?: string;
   model?: string;
+  extraArgs?: string[];
   permissionMode?: PermissionMode;
   autonomous?: boolean;
 }
@@ -409,8 +411,10 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
           const body = (await req.json()) as NewSessionRequest;
           const agentType = body.agentType || "claude-code";
           let permissionMode: PermissionMode;
+          let extraArgs: string[] | undefined;
           try {
             permissionMode = resolvePermissionMode(body, agentType);
+            extraArgs = resolveExtraLaunchArgs(body.extraArgs);
           } catch (err) {
             return Response.json({ error: errorMessage(err) }, { status: 400 });
           }
@@ -434,8 +438,12 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
                   projectDir: body.projectDir,
                   model: body.model,
                   permissionMode,
+                  extraArgs,
                 })
-              : buildShellCommand(provider.buildLaunchCommand({ model: body.model, permissionMode }), body.projectDir);
+              : buildShellCommand(
+                  [...provider.buildLaunchCommand({ model: body.model, permissionMode }), ...(extraArgs ?? [])],
+                  body.projectDir,
+                );
 
           const env = cleanMultiplexerEnv();
           await createMuxSession(body.multiplexer, body.sessionName, body.projectDir, env, body.zellijLayout);

@@ -1,6 +1,7 @@
 import type { PermissionMode } from "./permission-mode";
 
 export { SESSION_ID_DISPLAY_LENGTH, SESSION_RETENTION_MS } from "./constants";
+export { parseLaunchArguments, resolveExtraLaunchArgs } from "./launch-arguments";
 export { createLogger, type Logger } from "./logger";
 export { ALL_INTERFACES_HOST, isLoopbackHost, LOOPBACK_HOST } from "./network";
 export {
@@ -135,6 +136,7 @@ export interface LaunchAgentRequest {
   sessionName: string;
   projectDir: string;
   agentType?: AgentType;
+  extraArgs?: string[];
   permissionMode?: PermissionMode;
   /** @deprecated Use permissionMode. */
   autonomous?: boolean;
