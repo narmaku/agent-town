@@ -284,12 +284,16 @@ Launches a new agent session in a new multiplexer session. Proxied to the agent.
   "sessionName": "my-project",
   "projectDir": "/home/user/projects/my-project",
   "agentType": "claude-code",
-  "autonomous": false,
+  "permissionMode": "default",
   "multiplexer": "zellij"
 }
 ```
 
-`agentType`, `autonomous`, and `multiplexer` are optional. Defaults come from server settings.
+`agentType`, `permissionMode`, and `multiplexer` are optional. Agent and multiplexer defaults come from server settings. Permission mode defaults to `default`, which preserves the harness's own configuration.
+
+`permissionMode` accepts `default`, `auto`, or `yolo`. Auto uses automatic safety review in Codex (`--approve-for-me`) and Claude Code (`--permission-mode auto`). Gemini uses `--approval-mode auto_edit`, which approves edits but may still prompt for other tools. OpenCode has no equivalent Auto mode. YOLO bypasses approvals with each harness's supported mechanism; Codex also disables its sandbox. OpenCode YOLO uses per-process v1/v2 config overrides, without changing config files. Pi has no built-in permission or sandbox layer, so only Default is available.
+
+Unsupported modes and malformed values return HTTP 400 before a session is created. The deprecated boolean `autonomous` is still accepted: true maps to YOLO for Claude Code, Codex, and Gemini; it remains ignored for OpenCode and Pi, matching prior behavior. An explicit valid `permissionMode` takes precedence. Nonboolean `autonomous` values are rejected.
 
 **Response:** `200 OK`
 ```json
@@ -320,11 +324,11 @@ Resumes an idle session in a new multiplexer session.
   "sessionId": "550e8400-e29b-41d4-a716-446655440000",
   "projectDir": "/home/user/projects/my-project",
   "agentType": "claude-code",
-  "autonomous": false
+  "permissionMode": "default"
 }
 ```
 
-`agentType` and `autonomous` are optional.
+`agentType` and `permissionMode` are optional. Permission modes and deprecated `autonomous` compatibility follow the launch endpoint above.
 
 **Response:** `200 OK`
 ```json
@@ -520,11 +524,11 @@ Launches a new multiplexer session with an agent running inside it.
   "agentType": "claude-code",
   "zellijLayout": "agent",
   "model": "claude-sonnet-4-20250514",
-  "autonomous": false
+  "permissionMode": "default"
 }
 ```
 
-Creates a new zellij or tmux session and sends the provider's argument-array launch command through the multiplexer boundary. Codex uses `codex`, optionally with `--model` and `--dangerously-bypass-approvals-and-sandbox`. Pi uses `pi [--model <value>]`; its lack of a tool-approval or built-in sandbox layer means `autonomous` is ignored.
+Creates a new zellij or tmux session and sends the provider's argument-array launch command through the multiplexer boundary. Permission modes and deprecated `autonomous` compatibility match the server launch endpoint. The agent validates the requested mode before creating a multiplexer session; it never substitutes YOLO for Auto.
 
 **Response:** `200 OK`
 ```json
@@ -551,7 +555,7 @@ Resumes an existing agent session in a new multiplexer session.
   "agentType": "claude-code",
   "zellijLayout": "agent",
   "model": "claude-sonnet-4-20250514",
-  "autonomous": false
+  "permissionMode": "default"
 }
 ```
 

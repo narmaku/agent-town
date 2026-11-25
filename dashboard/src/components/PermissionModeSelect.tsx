@@ -6,6 +6,7 @@ import {
   type PermissionMode,
 } from "@agent-town/shared";
 import type React from "react";
+import { useState } from "react";
 import { getAgentTypeDisplay } from "../utils";
 
 interface Props {
@@ -45,6 +46,7 @@ const MODE_HELP: Record<string, Record<PermissionMode, string>> = {
 };
 
 export function PermissionModeSelect({ id, agentType, value, onChange }: Props): React.JSX.Element {
+  const [showHelp, setShowHelp] = useState(false);
   const label = getAgentTypeDisplay(agentType).label;
   const helpId = `${id}-help`;
   const help = Object.hasOwn(MODE_HELP, agentType) ? MODE_HELP[agentType] : undefined;
@@ -54,34 +56,16 @@ export function PermissionModeSelect({ id, agentType, value, onChange }: Props):
         <label className="form-label" htmlFor={id}>
           Permission mode
         </label>
-        <details className="permission-mode-info">
-          <summary aria-label={`Permission mode information for ${label}`} title="About permission modes">
-            i
-          </summary>
-          <div id={helpId} className="permission-mode-help">
-            <p>{label} permission modes apply when starting or resuming a session.</p>
-            <dl>
-              {PERMISSION_MODES.map((mode) => {
-                const support = getPermissionModeSupport(agentType, mode);
-                return (
-                  <div key={mode}>
-                    <dt>
-                      {PERMISSION_MODE_LABELS[mode]}
-                      {!support.supported && " (unavailable)"}
-                    </dt>
-                    <dd>
-                      {help?.[mode] ??
-                        (mode === "default"
-                          ? "Use the harness's configured defaults without an override."
-                          : support.reason)}
-                    </dd>
-                    {!support.supported && help?.[mode] && <dd>{support.reason}</dd>}
-                  </div>
-                );
-              })}
-            </dl>
-          </div>
-        </details>
+        <button
+          type="button"
+          className="permission-mode-info"
+          aria-label={`Permission mode information for ${label}`}
+          aria-expanded={showHelp}
+          aria-controls={helpId}
+          onClick={() => setShowHelp((visible) => !visible)}
+        >
+          i
+        </button>
       </div>
       <select
         id={id}
@@ -96,6 +80,29 @@ export function PermissionModeSelect({ id, agentType, value, onChange }: Props):
           </option>
         ))}
       </select>
+      <div id={helpId} className="permission-mode-help" hidden={!showHelp}>
+        <p>{label} permission modes apply when starting or resuming a session.</p>
+        <dl>
+          {PERMISSION_MODES.map((mode) => {
+            const support = getPermissionModeSupport(agentType, mode);
+            return (
+              <div key={mode}>
+                <dt>
+                  {PERMISSION_MODE_LABELS[mode]}
+                  {!support.supported && " (unavailable)"}
+                </dt>
+                <dd>
+                  {help?.[mode] ??
+                    (mode === "default"
+                      ? "Use the harness's configured defaults without an override."
+                      : support.reason)}
+                </dd>
+                {!support.supported && help?.[mode] && <dd>{support.reason}</dd>}
+              </div>
+            );
+          })}
+        </dl>
+      </div>
     </div>
   );
 }

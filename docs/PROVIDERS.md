@@ -100,14 +100,30 @@ Builds the CLI command string to launch a new session. This command is sent to t
 ```typescript
 interface LaunchOptions {
   model?: string;
-  autonomous?: boolean;
+  permissionMode?: "default" | "auto" | "yolo";
+  autonomous?: boolean; // Deprecated compatibility input
 }
 ```
 
-- **Claude Code:** Returns `claude [--model X] [--dangerously-skip-permissions]`
-- **OpenCode:** Returns `opencode [--model X]`
-- **Codex CLI:** Returns `codex [--model X] [--dangerously-bypass-approvals-and-sandbox]`
-- **Pi:** Returns `pi [--model X]`; `autonomous` is ignored because Pi has no tool-approval or built-in sandbox layer.
+- **Claude Code:** Returns `claude [--model X]` plus the requested permission flags.
+- **OpenCode:** Returns `opencode [--model X]`, prefixed with per-process config overrides for YOLO.
+- **Gemini CLI:** Returns `gemini [--model X]` plus the requested permission flags.
+- **Codex CLI:** Returns `codex [--model X]` plus the requested permission flags.
+- **Pi:** Returns `pi [--model X]`; only Default is supported.
+
+Default adds no permission override and preserves the harness's configured policy. The shared resolver rejects unsupported modes and malformed values; the dashboard disables unsupported choices and explains them in the permission field's information panel.
+
+| Harness | Auto | YOLO |
+| --- | --- | --- |
+| Claude Code | `--permission-mode auto`, classifier-based review; requires model and organization support | `--dangerously-skip-permissions` |
+| Codex CLI | `--approve-for-me`, automatic approval review with workspace-write sandbox | `--yolo`, bypasses approvals and sandbox |
+| Gemini CLI | `--approval-mode auto_edit`, edits are approved but other tools can prompt | `--yolo`, automatic tool approval |
+| OpenCode | Unavailable; no equivalent safety-review mode | `env 'OPENCODE_PERMISSION={"*":"allow"}' 'OPENCODE_CLI_CONFIG_CONTENT={"session":{"permissions":"autoaccept"}}' opencode ...` |
+| Pi | Unavailable | Unavailable; tools already have process-user permissions without per-tool approvals or a built-in sandbox |
+
+OpenCode v1 and v2 each read their respective per-process environment setting; no config file is edited. Specific deny rules or managed policy may still restrict tools. Gemini's separately configured sandbox is unchanged. These settings apply equally to launch and resume. Claude recovery wrappers use the same flag helper for fresh and recovered sessions.
+
+The deprecated `autonomous` boolean maps true to YOLO for Claude Code, Codex and Gemini. It remains ignored for OpenCode and Pi, matching their previous command builders. Explicit `permissionMode` takes precedence. See the official [Claude permission modes](https://code.claude.com/docs/en/permission-modes), [Codex CLI reference](https://developers.openai.com/codex/cli/reference/), [Gemini CLI reference](https://geminicli.com/docs/cli/cli-reference/), [OpenCode configuration](https://opencode.ai/docs/cli/config/), and [Pi security model](https://docs.pi.dev/latest/security) for native behavior and availability.
 
 #### `buildResumeCommand(opts: ResumeOptions): string[]`
 
@@ -117,13 +133,14 @@ Builds the CLI command string to resume an existing session.
 interface ResumeOptions {
   sessionId: string;
   model?: string;
-  autonomous?: boolean;
+  permissionMode?: "default" | "auto" | "yolo";
+  autonomous?: boolean; // Deprecated compatibility input
 }
 ```
 
-- **Claude Code:** Returns `claude --resume <sessionId> [--model X] [--dangerously-skip-permissions]`
+- **Claude Code:** Returns `claude --resume <sessionId> [--model X] [permission flags]`
 - **OpenCode:** Returns `opencode --session <sessionId> [--model X]`
-- **Codex CLI:** Returns `codex resume <sessionId> [--model X] [--dangerously-bypass-approvals-and-sandbox]`
+- **Codex CLI:** Returns `codex resume <sessionId> [--model X] [permission flags]`
 - **Pi:** Returns `pi --session <sessionId> [--model X]` (not the interactive `--resume` picker).
 
 #### `searchMessages(query, maxResults): Promise<SearchMessageResult[]>`
@@ -264,7 +281,7 @@ Key characteristics:
 | `message-parser.ts`    | Visible message, reasoning, tool, usage, pagination, and search |
 | `process-mapper.ts`    | Exact process detection and UUID/start-time mapping             |
 
-Codex session storage is private and versioned. Agent Town detects compatible schemas at runtime and falls back safely when they change. `CODEX_HOME` defaults to `~/.codex`; archived sessions and subagent rollouts are excluded. Status comes from activity, process mapping, and the terminal screen. Resume requires a UUID, and autonomous mode deliberately bypasses both approvals and sandboxing.
+Codex session storage is private and versioned. Agent Town detects compatible schemas at runtime and falls back safely when they change. `CODEX_HOME` defaults to `~/.codex`; archived sessions and subagent rollouts are excluded. Status comes from activity, process mapping, and the terminal screen. Resume requires a UUID, and YOLO deliberately bypasses both approvals and sandboxing. Auto retains a workspace-write sandbox and uses automatic approval review.
 
 ### Pi Provider
 
@@ -272,7 +289,7 @@ Codex session storage is private and versioned. Agent Town detects compatible sc
 
 Pi stores sessions below `~/.pi/agent/sessions/` by default. `PI_CODING_AGENT_DIR` changes the agent root and `PI_CODING_AGENT_SESSION_DIR` directly overrides the session root. Agent Town scans direct JSONL files and one level of working-directory buckets, but excludes deeper artifact/subagent files.
 
-Current v2/v3 transcripts are trees: Agent Town follows guarded `id`/`parentId` links from the last leaf and displays only that active ancestry. Legacy v1/missing-ID transcripts use linear order. Malformed lines, dangling parents, and cycles are isolated safely. Pi provides no hook, tool-approval layer, or built-in sandbox, so status is an estimate and the Autonomous dashboard option does not apply. Pi's separate project-trust prompt still controls whether project-local resources are loaded.
+Current v2/v3 transcripts are trees: Agent Town follows guarded `id`/`parentId` links from the last leaf and displays only that active ancestry. Legacy v1/missing-ID transcripts use linear order. Malformed lines, dangling parents, and cycles are isolated safely. Pi provides no hook, tool-approval layer, or built-in sandbox, so status is an estimate and the dashboard enables only Default, with an explanation that its tools already run without per-tool approvals. Pi's separate project-trust prompt still controls whether project-local resources are loaded.
 
 ---
 
@@ -463,4 +480,4 @@ bun test --filter agent
 
 ### Step 6: Declare terminal behavior
 
-Set `terminal.inputMode` to `"direct"` or `"bracketed-paste"`, and set `terminal.startupMode` to `"cli-prompt"` when Agent Town should handle the provider's startup prompts. `autonomousDisclaimer` controls whether autonomous launches require a second confirmation keystroke. The terminal server uses these capabilities without provider-specific branches.
+Set `terminal.inputMode` to `"direct"` or `"bracketed-paste"`, and set `terminal.startupMode` to `"cli-prompt"` when Agent Town should handle the provider's startup prompts. `autonomousDisclaimer` controls whether YOLO launches require a second confirmation keystroke. Default and Auto never send that bypass confirmation. The terminal server uses these capabilities without provider-specific branches.

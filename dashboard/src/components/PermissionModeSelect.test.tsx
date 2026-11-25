@@ -11,7 +11,7 @@ describe("permission mode selector", () => {
     expect(html).toContain('value="default"');
     expect(html).toContain('value="auto" disabled=""');
     expect(html).toContain('value="yolo"');
-    expect(html).toContain("<summary");
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("Permission mode information for OpenCode");
     expect(html).toContain("no equivalent automatic safety-review");
     expect(html).toContain("OPENCODE_PERMISSION");

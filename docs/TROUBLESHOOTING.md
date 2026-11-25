@@ -393,7 +393,7 @@ If neither matches, the session will show as "idle".
 ### Pi
 
 - Resume uses `pi --session <id>`; `pi --resume` is the interactive picker and is not used by Agent Town.
-- Pi has no tool-approval or built-in sandbox layer, so Agent Town disables and ignores its generic Autonomous option. Pi's separate project-trust prompt may still appear for project-local resources.
+- Pi has no tool-approval or built-in sandbox layer, so Agent Town disables Auto and YOLO for Pi and explains its existing behavior in the permission mode information panel. Pi's separate project-trust prompt may still appear for project-local resources.
 - Deletion locates the exact session header ID rather than guessing from timestamped filenames.
 - `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR` must be visible to the Agent Town service environment.
 
@@ -413,3 +413,10 @@ If neither matches, the session will show as "idle".
    - Expected behavior
    - Actual behavior
    - Log output (with sensitive information redacted)
+
+
+### Auto permission mode is unavailable or rejected
+
+The permission selector shows every mode and disables modes the selected harness does not support. Open the (i) control for the reason and native behavior. OpenCode has no automatic safety-review equivalent; Pi has no built-in permission layer. Gemini Auto approves file edits only, so prompts for other tools are expected.
+
+Codex Auto requires a CLI with `--approve-for-me`; Claude Code Auto requires `--permission-mode auto` and a supported model/organization policy. Upgrade an older CLI if it rejects these flags. Agent Town never falls back from Auto to YOLO. Default applies no override, so existing harness settings can already permit automatic actions.

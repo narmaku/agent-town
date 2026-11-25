@@ -4316,34 +4316,32 @@ body {
   justify-content: center;
 }
 
-/* Permission selector help stays available to keyboard, pointer and touch users. */
+/* Permission information expands below its selector for keyboard, pointer and touch users. */
 .permission-mode-heading {
   display: flex;
   align-items: center;
   gap: 8px;
-  position: relative;
+  margin-bottom: 6px;
 }
-
 .permission-mode-heading .form-label { margin-bottom: 0; }
-.permission-mode-info summary {
+.permission-mode-info {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
+  padding: 0;
   border: 1px solid var(--text-muted);
   border-radius: 50%;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   font-weight: 600;
-  list-style: none;
 }
-.permission-mode-info summary::-webkit-details-marker { display: none; }
-.permission-mode-info summary:focus-visible { outline: 2px solid var(--accent-blue-fg); outline-offset: 2px; }
+.permission-mode-info:focus-visible { outline: 2px solid var(--accent-blue-fg); outline-offset: 2px; }
 .permission-mode-help {
-  position: relative;
+  margin-top: 8px;
   padding: 12px;
-  margin: 8px 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-panel);
@@ -4352,8 +4350,6 @@ body {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.permission-mode-heading:has(details[open]) { flex-wrap: wrap; }
-.permission-mode-heading:has(details[open]) details { width: 100%; }
 .permission-mode-help p { margin: 0 0 8px; }
 .permission-mode-help dl { margin: 0; }
 .permission-mode-help dt { color: var(--text); font-weight: 600; }
