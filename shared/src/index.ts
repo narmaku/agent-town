@@ -63,6 +63,7 @@ export interface SessionInfo {
 export interface MultiplexerSessionInfo {
   name: string;
   multiplexer: TerminalMultiplexer;
+  // Whether the multiplexer session is running, even without an attached viewer.
   attached: boolean;
 }
 

@@ -192,7 +192,7 @@ ps aux | grep -E "claude|opencode|gemini|codex|pi" | grep -v grep
 
 ### Session shows wrong status
 
-**Symptom:** Session shows "idle" when the agent is actively working, or "working" when it is actually waiting for input.
+**Symptom:** Session shows "idle" or "exited" when the agent is running, or "working" when it is actually waiting for input.
 
 **Cause:** Agent Town does not install hooks into agents. Status comes from the visible
 terminal screen (approval prompts and "esc to interrupt" hints), child-process activity, and
@@ -203,6 +203,17 @@ a tmux or zellij session get screen-based detection.
 - Run agents inside tmux or zellij (or launch them from the dashboard) so the screen can be read.
 - Check that `tmux capture-pane -p -t <session>` (or `zellij --session <session> action dump-screen /tmp/x`) works as the agent's user.
 - If an agent changed the wording of its approval prompt, update `APPROVAL_PATTERNS` in `agent/src/screen-status.ts`.
+
+For tmux, Agent Town also uses pane process ancestry and the pane working directory
+when a restricted service cannot read another process's `/proc` files. Detached
+sessions remain running even when no terminal viewer is attached. If you upgraded
+from a version that showed these sessions as exited, restart the Agent Town agent
+to load the fix; the tmux sessions do not need restarting.
+
+Use **Terminal** to reconnect to a running agent. **Resume** starts another agent
+process and is rejected when the latest heartbeat already reports that conversation
+running in a terminal. A Codex message saying the conversation is open in another
+app means another client owns it; resuming again does not transfer ownership.
 
 ---
 

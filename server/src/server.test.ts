@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { Heartbeat } from "@agent-town/shared";
+import type { AgentType, Heartbeat, SessionStatus } from "@agent-town/shared";
 import type { Server } from "bun";
 
 import { startServer } from "./index";
@@ -246,4 +246,94 @@ describe("permission mode proxy", () => {
       }
     });
   }
+});
+
+describe("resume session liveness", () => {
+  let server: Server;
+  let agent: Server;
+  let baseUrl: string;
+  let forwarded = 0;
+  const machineId = "resume-liveness-machine";
+  const sessionId = "resume-liveness-session";
+
+  beforeAll(() => {
+    agent = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch() {
+        forwarded++;
+        return Response.json({ ok: true });
+      },
+    });
+    server = startServer({ port: 0, hostname: "127.0.0.1", token: TOKEN, allowedOrigins: [] });
+    baseUrl = `http://127.0.0.1:${server.port}`;
+  });
+
+  afterAll(() => {
+    server.stop(true);
+    agent.stop(true);
+  });
+
+  async function reportSession(status: SessionStatus): Promise<void> {
+    const heartbeat: Heartbeat = {
+      ...makeHeartbeat(agent.port),
+      machineId,
+      hostname: "resume-liveness-host",
+      sessions: [
+        {
+          sessionId,
+          agentType: "codex",
+          slug: "already-running",
+          projectPath: "/tmp",
+          projectName: "project",
+          gitBranch: "main",
+          status,
+          lastActivity: new Date().toISOString(),
+          lastMessage: "",
+          cwd: "/tmp",
+          multiplexer: "tmux",
+          multiplexerSession: "existing-terminal",
+        },
+      ],
+    };
+    const response = await fetch(`${baseUrl}/api/heartbeat`, {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify(heartbeat),
+    });
+    expect(response.status).toBe(200);
+  }
+
+  function resume(agentType: AgentType = "codex"): Promise<Response> {
+    return fetch(`${baseUrl}/api/agents/resume`, {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify({ machineId, sessionId, agentType, projectDir: "/tmp" }),
+    });
+  }
+
+  for (const status of ["working", "awaiting_input", "action_required", "idle"] as const) {
+    test(`rejects a stale Resume click for a ${status} terminal session without launching`, async () => {
+      await reportSession(status);
+      const count = forwarded;
+      const response = await resume();
+      expect(response.status).toBe(409);
+      expect((await response.json()).error).toContain("already running");
+      expect(forwarded).toBe(count);
+    });
+  }
+
+  test("allows resuming a session after its process has exited", async () => {
+    await reportSession("exited");
+    const count = forwarded;
+    expect((await resume()).status).toBe(200);
+    expect(forwarded).toBe(count + 1);
+  });
+
+  test("does not confuse identical IDs from different harnesses", async () => {
+    await reportSession("working");
+    const count = forwarded;
+    expect((await resume("claude-code")).status).toBe(200);
+    expect(forwarded).toBe(count + 1);
+  });
 });
