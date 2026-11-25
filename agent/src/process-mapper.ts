@@ -1,5 +1,6 @@
 import { readFile, readlink } from "node:fs/promises";
 import { type AgentType, createLogger, errorMessage, type TerminalMultiplexer } from "@agent-town/shared";
+import { listTmuxPanes, type TmuxPaneInfo } from "./multiplexer";
 import {
   extractClaudeSessionIdFromArgs,
   matchSessionByBirthTime,
@@ -94,6 +95,7 @@ export async function runPs(): Promise<AgentProcess[]> {
  */
 async function resolveMultiplexerSession(
   proc: AgentProcess,
+  tmuxPanes: readonly TmuxPaneInfo[],
 ): Promise<{ multiplexer: TerminalMultiplexer; session: string } | null> {
   const zellijSession = await getEnvVar(proc.ppid, "ZELLIJ_SESSION_NAME");
   if (zellijSession) {
@@ -104,29 +106,45 @@ async function resolveMultiplexerSession(
   if (tmuxEnv) {
     try {
       const ttyLink = await readlink(`/proc/${proc.pid}/fd/0`);
-      const tty = ttyLink.split("/").pop();
-      const tmuxProc = Bun.spawn(["tmux", "list-panes", "-a", "-F", "#{pane_tty}:#{session_name}"], {
-        stdout: "pipe",
-        stderr: "ignore",
-      });
-      const tmuxOutput = await Bun.readableStreamToText(tmuxProc.stdout);
-      await tmuxProc.exited;
-
-      for (const line of tmuxOutput.trim().split("\n")) {
-        if (tty && line.includes(tty)) {
-          const sessionName = line.split(":")[1];
-          if (sessionName) {
-            return { multiplexer: "tmux", session: sessionName };
-          }
-          break;
-        }
-      }
+      const pane = tmuxPanes.find((candidate) => candidate.tty === ttyLink);
+      if (pane) return { multiplexer: "tmux", session: pane.session };
     } catch (err) {
       log.debug(`tmux pane lookup failed for pid=${proc.pid}: ${errorMessage(err)}`);
     }
   }
 
   return null;
+}
+
+/**
+ * Resolve the owning terminal through pane ancestry when a restricted service
+ * cannot read another process's /proc cwd, environment or terminal descriptors.
+ * A shared working directory alone is never evidence of pane ownership.
+ */
+export async function resolveProcessContext(
+  proc: AgentProcess,
+  allProcesses: readonly AgentProcess[],
+  tmuxPanes: readonly TmuxPaneInfo[],
+): Promise<{ cwd: string; multiplexer: TerminalMultiplexer; session: string } | null> {
+  const processesByPid = new Map(allProcesses.map((process) => [process.pid, process]));
+  const visited = new Set<number>();
+  let pid = proc.pid;
+  let pane: TmuxPaneInfo | undefined;
+  while (pid > 1 && !visited.has(pid)) {
+    visited.add(pid);
+    pane = tmuxPanes.find((candidate) => candidate.pid === pid);
+    if (pane) break;
+    const parent = processesByPid.get(pid);
+    if (!parent) break;
+    pid = parent.ppid;
+  }
+
+  const cwd = (await getCwd(proc.pid)) ?? pane?.cwd;
+  if (!cwd) return null;
+  const muxInfo = pane
+    ? { multiplexer: "tmux" as const, session: pane.session }
+    : await resolveMultiplexerSession(proc, tmuxPanes);
+  return muxInfo ? { ...muxInfo, cwd } : null;
 }
 
 /**
@@ -139,7 +157,7 @@ export async function discoverProcessMappings(): Promise<Map<string, ProcessMapp
   const mappings = new Map<string, ProcessMapping>();
 
   try {
-    const allProcesses = await runPs();
+    const [allProcesses, tmuxPanes] = await Promise.all([runPs(), listTmuxPanes()]);
     const providers = getAllProviders();
 
     // Collect all agent PIDs across providers so we can detect sub-agents
@@ -167,18 +185,16 @@ export async function discoverProcessMappings(): Promise<Map<string, ProcessMapp
           log.debug(`skipping sub-agent: pid=${proc.pid} ppid=${proc.ppid} agent=${provider.type}`);
           continue;
         }
-        const cwd = await getCwd(proc.pid);
-        if (!cwd) continue;
-
-        const muxInfo = await resolveMultiplexerSession(proc);
-        if (!muxInfo) continue;
+        const context = await resolveProcessContext(proc, allProcesses, tmuxPanes);
+        if (!context) continue;
+        const { cwd } = context;
 
         const MAX_CHILD_AGE_S = 600;
         const hasActiveChildren = allProcesses.some((p) => p.ppid === proc.pid && p.etimes < MAX_CHILD_AGE_S);
 
         const mapping: ProcessMapping = {
-          multiplexer: muxInfo.multiplexer,
-          session: muxInfo.session,
+          multiplexer: context.multiplexer,
+          session: context.session,
           hasActiveChildren,
           agentType: provider.type,
         };

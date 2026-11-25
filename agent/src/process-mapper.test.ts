@@ -3,8 +3,51 @@ import {
   extractSessionIdFromArgs,
   makeProcessMappingKey,
   matchSessionByBirthTime,
+  resolveProcessContext,
   type SessionCandidate,
 } from "./process-mapper";
+import type { AgentProcess } from "./providers/types";
+
+describe("resolveProcessContext", () => {
+  // Outside Linux's PID range: /proc reads fail as they do in a restricted service.
+  const shell: AgentProcess = { pid: 99_999_990, ppid: 1, etimes: 600, args: "bash" };
+  const launcher: AgentProcess = { pid: 99_999_991, ppid: shell.pid, etimes: 120, args: "node codex.js" };
+  const agent: AgentProcess = { pid: 99_999_992, ppid: launcher.pid, etimes: 119, args: "codex" };
+  const pane = { pid: shell.pid, cwd: "/work/my project", session: "agent-session", tty: "/dev/pts/1" };
+
+  test("maps a nested launcher without access to process cwd or environment", async () => {
+    expect(await resolveProcessContext(agent, [shell, launcher, agent], [pane])).toEqual({
+      cwd: pane.cwd,
+      multiplexer: "tmux",
+      session: pane.session,
+    });
+  });
+
+  test("maps an agent that replaced its pane shell with exec", async () => {
+    expect(await resolveProcessContext(agent, [agent], [{ ...pane, pid: agent.pid }])).toEqual({
+      cwd: pane.cwd,
+      multiplexer: "tmux",
+      session: pane.session,
+    });
+  });
+
+  test("does not claim an unrelated pane just because the project directory matches", async () => {
+    expect(await resolveProcessContext(agent, [agent], [pane])).toBeNull();
+  });
+
+  test("selects the exact ancestor among panes with similar terminal numbers", async () => {
+    const other = { ...pane, pid: 99_999_993, session: "other-session", tty: "/dev/pts/11" };
+    expect(await resolveProcessContext(agent, [shell, launcher, agent], [other, pane])).toEqual({
+      cwd: pane.cwd,
+      multiplexer: "tmux",
+      session: pane.session,
+    });
+  });
+
+  test("stops on a stale cyclic process snapshot", async () => {
+    expect(await resolveProcessContext(agent, [agent, { ...launcher, ppid: agent.pid }], [pane])).toBeNull();
+  });
+});
 
 describe("makeProcessMappingKey", () => {
   test("scopes session IDs and working directories by provider", () => {
