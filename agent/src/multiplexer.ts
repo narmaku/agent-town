@@ -79,7 +79,7 @@ export function parseTmuxSessions(output: string): MultiplexerSessionInfo[] {
     .filter(Boolean)
     .map((line) => ({
       name: line.split(":")[0],
-      multiplexer: "tmux",
+      multiplexer: "tmux" as const,
       // Unlike zellij's retained EXITED sessions, every listed tmux session
       // exists. session_attached counts viewers, not running agent processes.
       attached: true,

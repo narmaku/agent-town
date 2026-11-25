@@ -704,6 +704,26 @@ async function routeRequest(
         return Response.json({ error: errorMessage(err) }, { status: 400 });
       }
 
+      const running = machine.sessions.find(
+        (session) =>
+          session.sessionId === body.sessionId &&
+          session.agentType === agentType &&
+          session.multiplexer &&
+          session.multiplexerSession &&
+          session.status !== "exited" &&
+          session.status !== "done",
+      );
+      if (running) {
+        return Response.json(
+          {
+            error: "Session is already running. Open its Terminal instead of resuming.",
+            sessionName: running.multiplexerSession,
+            multiplexer: running.multiplexer,
+          },
+          { status: 409 },
+        );
+      }
+
       const agentUrl = getAgentUrl(machine, "/api/resume");
 
       // Pick the best name for the new multiplexer session:

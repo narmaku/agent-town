@@ -341,6 +341,7 @@ Resumes an idle session in a new multiplexer session.
 
 **Error responses:**
 - `404` -- Machine not found
+- `409` -- Session is already running in a terminal; attach to its Terminal instead
 - `500` -- Failed to resume agent
 - `502` -- Agent resume failed
 
