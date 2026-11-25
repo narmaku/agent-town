@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseLaunchArguments } from "./launch-arguments";
+import { shellEscape } from "./shell";
 
 describe("parseLaunchArguments", () => {
   test("parses flags, quoted values, and escaped spaces as separate arguments", () => {
@@ -26,5 +27,10 @@ describe("parseLaunchArguments", () => {
     expect(parseLaunchArguments(" \t ")).toEqual([]);
     expect(() => parseLaunchArguments(`--flag "unfinished`)).toThrow("quote");
     expect(() => parseLaunchArguments("--flag unfinished\\")).toThrow("backslash");
+  });
+
+  test("round-trips prefilled arguments with spaces, quotes, backslashes, and empty values", () => {
+    const args = ["--flag", "two words", "O'Brien", String.raw`two\\slashes`, "", "$HOME"];
+    expect(parseLaunchArguments(args.map(shellEscape).join(" "))).toEqual(args);
   });
 });

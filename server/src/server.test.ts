@@ -218,21 +218,93 @@ describe("launch and resume proxy options", () => {
     expect(forwarded.at(-1)?.extraArgs).toEqual(extraArgs);
   });
 
-  test("rejects invalid extra launch arguments without forwarding", async () => {
-    const count = forwarded.length;
-    for (const extraArgs of [null, "--flag", [true], ["first\nsecond"], ["back\tspace"]]) {
-      const response = await fetch(`${baseUrl}/api/agents/launch`, {
+  test("prefills original launch arguments and forwards resume edits independently", async () => {
+    const sessionId = "args-prefill-session";
+    const sessionName = "args-prefill";
+    const originalArgs = ["--flag", "two words", ""];
+    const resumeUrl = `${baseUrl}/api/agents/resume`;
+    const getOptionsUrl = `${resumeUrl}?${new URLSearchParams({ machineId: MACHINE_ID, sessionId, agentType: "codex" })}`;
+    const post = (path: string, body: unknown) =>
+      fetch(`${baseUrl}${path}`, {
         method: "POST",
         headers: { ...AUTH, "Content-Type": "application/json" },
-        body: JSON.stringify({ machineId: MACHINE_ID, sessionName: "args-test", projectDir: "/tmp", extraArgs }),
+        body: JSON.stringify(body),
       });
-      expect(response.status).toBe(400);
-      expect((await response.json()).error).toContain("extraArgs");
-      expect(forwarded.length).toBe(count);
+    expect(
+      (
+        await post("/api/agents/launch", {
+          machineId: MACHINE_ID,
+          sessionName,
+          projectDir: "/tmp",
+          agentType: "codex",
+          multiplexer: "tmux",
+          extraArgs: originalArgs,
+        })
+      ).status,
+    ).toBe(200);
+
+    const session = {
+      sessionId,
+      agentType: "codex",
+      slug: sessionName,
+      projectPath: "/tmp",
+      projectName: "tmp",
+      gitBranch: "",
+      status: "awaiting_input",
+      lastActivity: new Date().toISOString(),
+      lastMessage: "",
+      cwd: "/tmp",
+      multiplexer: "tmux",
+      multiplexerSession: sessionName,
+    };
+    const heartbeat = makeHeartbeat(agent.port);
+    expect((await post("/api/heartbeat", { ...heartbeat, sessions: [session] })).status).toBe(200);
+    expect(
+      (
+        await post("/api/heartbeat", {
+          ...heartbeat,
+          sessions: [{ ...session, status: "idle", multiplexer: undefined, multiplexerSession: undefined }],
+        })
+      ).status,
+    ).toBe(200);
+    expect((await fetch(getOptionsUrl)).status).toBe(401);
+    const options = await fetch(getOptionsUrl, { headers: AUTH });
+    expect(options.status).toBe(200);
+    expect(options.headers.get("cache-control")).toBe("no-store");
+    expect(await options.json()).toEqual({ extraArgs: originalArgs });
+
+    for (const extraArgs of [originalArgs, ["--edited"], []]) {
+      expect(
+        (
+          await post("/api/agents/resume", {
+            machineId: MACHINE_ID,
+            sessionId,
+            projectDir: "/tmp",
+            agentType: "codex",
+            extraArgs,
+          })
+        ).status,
+      ).toBe(200);
+      expect(forwarded.at(-1)?.extraArgs).toEqual(extraArgs);
     }
+    expect(await (await fetch(getOptionsUrl, { headers: AUTH })).json()).toEqual({ extraArgs: originalArgs });
   });
 
   for (const action of ["launch", "resume"]) {
+    test(`${action} rejects invalid extra arguments without forwarding`, async () => {
+      const count = forwarded.length;
+      for (const extraArgs of [null, "--flag", [true], ["first\nsecond"], ["back\tspace"]]) {
+        const response = await fetch(`${baseUrl}/api/agents/${action}`, {
+          method: "POST",
+          headers: { ...AUTH, "Content-Type": "application/json" },
+          body: JSON.stringify({ machineId: MACHINE_ID, sessionName: "args-test", projectDir: "/tmp", extraArgs }),
+        });
+        expect(response.status).toBe(400);
+        expect((await response.json()).error).toContain("extraArgs");
+        expect(forwarded.length).toBe(count);
+      }
+    });
+
     test(`${action} preserves Auto through the authenticated proxy`, async () => {
       const response = await fetch(`${baseUrl}/api/agents/${action}`, {
         method: "POST",

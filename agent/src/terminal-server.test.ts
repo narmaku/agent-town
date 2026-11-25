@@ -340,12 +340,13 @@ describe("launch and resume options", () => {
   });
   afterAll(() => server.stop(true));
 
-  async function launch(extraArgs: unknown): Promise<Response> {
-    return fetch(`http://127.0.0.1:${server.port}/api/launch`, {
+  async function start(path: string, extraArgs: unknown): Promise<Response> {
+    return fetch(`http://127.0.0.1:${server.port}${path}`, {
       method: "POST",
       headers: { Authorization: "Bearer permission-test-token", "Content-Type": "application/json" },
       body: JSON.stringify({
         sessionName: "args-test",
+        sessionId: "recorded-session-id",
         projectDir: "/tmp",
         multiplexer: "tmux",
         agentType: "codex",
@@ -354,40 +355,45 @@ describe("launch and resume options", () => {
     });
   }
 
-  test("appends literal arguments to the selected harness command", async () => {
-    const provider = spyOn(providers, "getProvider").mockReturnValue(new CodexProvider());
-    const createSession = spyOn(muxControl, "createMuxSession").mockResolvedValue(undefined);
-    const typeLine = spyOn(muxControl, "typeLine").mockResolvedValue(true);
-    const extraArgs = ["--flag", "two words", "$(printf hi)", String.raw`dir\\file`, ""];
-    try {
-      expect((await launch(extraArgs)).status).toBe(200);
-      expect(provider).toHaveBeenCalledWith("codex");
-      const command = typeLine.mock.calls[0]?.[2];
-      expect(command).toBeDefined();
-      const child = Bun.spawn(["sh", "-c", `codex() { printf '%s\\0' "$@"; }; ${command}`], {
-        stdout: "pipe",
-      });
-      const received = await new Response(child.stdout).text();
-      expect(await child.exited).toBe(0);
-      expect(received).toBe(`${extraArgs.join("\0")}\0`);
-    } finally {
-      typeLine.mockRestore();
-      createSession.mockRestore();
-      provider.mockRestore();
-    }
-  });
+  for (const [path, resumeArgs] of [
+    ["/api/launch", []],
+    ["/api/resume", ["resume", "recorded-session-id"]],
+  ] as const) {
+    test(`${path} appends literal arguments to the selected harness command`, async () => {
+      const provider = spyOn(providers, "getProvider").mockReturnValue(new CodexProvider());
+      const createSession = spyOn(muxControl, "createMuxSession").mockResolvedValue(undefined);
+      const typeLine = spyOn(muxControl, "typeLine").mockResolvedValue(true);
+      const extraArgs = ["--flag", "two words", "$(printf hi)", String.raw`dir\\file`, ""];
+      try {
+        expect((await start(path, extraArgs)).status).toBe(200);
+        expect(provider).toHaveBeenCalledWith("codex");
+        const command = typeLine.mock.calls[0]?.[2];
+        expect(command).toBeDefined();
+        const child = Bun.spawn(["sh", "-c", `codex() { printf '%s\\0' "$@"; }; ${command}`], {
+          stdout: "pipe",
+        });
+        const received = await new Response(child.stdout).text();
+        expect(await child.exited).toBe(0);
+        expect(received).toBe(`${[...resumeArgs, ...extraArgs].join("\0")}\0`);
+      } finally {
+        typeLine.mockRestore();
+        createSession.mockRestore();
+        provider.mockRestore();
+      }
+    });
 
-  test("rejects terminal control characters before looking up the harness", async () => {
-    const provider = spyOn(providers, "getProvider");
-    try {
-      const response = await launch(["--flag", "line\nfeed"]);
-      expect(response.status).toBe(400);
-      expect((await response.json()).error).toContain("extraArgs");
-      expect(provider).not.toHaveBeenCalled();
-    } finally {
-      provider.mockRestore();
-    }
-  });
+    test(`${path} rejects terminal control characters before looking up the harness`, async () => {
+      const provider = spyOn(providers, "getProvider");
+      try {
+        const response = await start(path, ["--flag", "line\nfeed"]);
+        expect(response.status).toBe(400);
+        expect((await response.json()).error).toContain("extraArgs");
+        expect(provider).not.toHaveBeenCalled();
+      } finally {
+        provider.mockRestore();
+      }
+    });
+  }
 
   for (const path of ["/api/launch", "/api/resume"]) {
     test(`${path} rejects malformed and unsupported permissions before spawning`, async () => {

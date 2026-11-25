@@ -469,8 +469,10 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
           const body = (await req.json()) as NewSessionRequest & { sessionId: string };
           const agentType = body.agentType || "claude-code";
           let permissionMode: PermissionMode;
+          let extraArgs: string[] | undefined;
           try {
             permissionMode = resolvePermissionMode(body, agentType);
+            extraArgs = resolveExtraLaunchArgs(body.extraArgs);
           } catch (err) {
             return Response.json({ error: errorMessage(err) }, { status: 400 });
           }
@@ -486,7 +488,10 @@ export function startTerminalServer(port: number, machineId: string, opts: Termi
           if (validationError) return Response.json({ error: validationError }, { status: 400 });
 
           const command = buildShellCommand(
-            provider.buildResumeCommand({ sessionId: body.sessionId, model: body.model, permissionMode }),
+            [
+              ...provider.buildResumeCommand({ sessionId: body.sessionId, model: body.model, permissionMode }),
+              ...(extraArgs ?? []),
+            ],
             body.projectDir,
           );
           const env = cleanMultiplexerEnv();

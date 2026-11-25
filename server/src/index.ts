@@ -22,6 +22,7 @@ import { loadOrCreateToken } from "@agent-town/shared/token-store";
 import type { Server } from "bun";
 import { agentProxyFetch, broadcastToClients, PROXY_LAUNCH_TIMEOUT_MS, WS_CONNECT_TIMEOUT_MS } from "./proxy-fetch";
 import { guardServerRequest } from "./server-guard";
+import { sessionLaunchArguments } from "./session-launch-arguments";
 import {
   connectAutoNodes,
   connectNode,
@@ -349,6 +350,7 @@ async function routeRequest(
               log.error(`rename: agent rename failed: ${errText}`);
             } else {
               log.info("rename: agent rename succeeded");
+              sessionLaunchArguments.renamePending(body.machineId, muxInfo.multiplexer, currentMuxName, newMuxName);
             }
           } else {
             log.debug("rename: no terminalPort, skipping mux rename");
@@ -405,6 +407,7 @@ async function routeRequest(
       if (!result.response.ok) {
         return Response.json({ error: "Agent kill failed" }, { status: 502 });
       }
+      sessionLaunchArguments.forgetPending(body.machineId, body.multiplexer, body.session);
       return Response.json({ ok: true });
     } catch (err) {
       log.error(`kill: failed: ${errorMessage(err)}`);
@@ -465,6 +468,10 @@ async function routeRequest(
       }
 
       // Step 4: Clean up server-side state (session names, etc.)
+      const agentType =
+        body.agentType || machine.sessions.find((session) => session.sessionId === body.sessionId)?.agentType;
+      if (agentType) sessionLaunchArguments.forget(body.machineId, agentType, body.sessionId);
+      if (muxType && muxSession) sessionLaunchArguments.forgetPending(body.machineId, muxType, muxSession);
       renameSession(body.machineId, body.sessionId, "");
 
       return Response.json({ ok: true });
@@ -665,6 +672,12 @@ async function routeRequest(
         return Response.json({ error: errText || "Agent launch failed" }, { status: 502 });
       }
 
+      sessionLaunchArguments.record(
+        { machineId: body.machineId, agentType, multiplexer: mux, sessionName: body.sessionName, extraArgs },
+        machine.sessions,
+        getMachine(body.machineId),
+      );
+
       // Add a pending session so the dashboard shows it immediately
       // (before the next heartbeat discovers the real session)
       addPendingSession(
@@ -690,7 +703,23 @@ async function routeRequest(
     }
   }
 
-  // API: resume an idle claude session in a new multiplexer session
+  // API: read the original arguments for the resume form on demand.
+  if (url.pathname === "/api/agents/resume" && req.method === "GET") {
+    const machineId = url.searchParams.get("machineId");
+    const sessionId = url.searchParams.get("sessionId");
+    const agentType = url.searchParams.get("agentType");
+    if (!machineId || !sessionId || !agentType) {
+      return Response.json({ error: "Missing machineId, sessionId, or agentType" }, { status: 400 });
+    }
+    const session = getMachine(machineId)?.sessions.find((s) => s.sessionId === sessionId && s.agentType === agentType);
+    if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
+    return Response.json(
+      { extraArgs: sessionLaunchArguments.get(machineId, session.agentType, sessionId) ?? [] },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
+  // API: resume an idle agent session in a new multiplexer session
   if (url.pathname === "/api/agents/resume" && req.method === "POST") {
     try {
       const body: ResumeAgentRequest = await req.json();
@@ -702,8 +731,10 @@ async function routeRequest(
       const settings = getSettings();
       const agentType = body.agentType || settings.defaultAgentType;
       let permissionMode: PermissionMode;
+      let extraArgs: string[] | undefined;
       try {
         permissionMode = resolvePermissionMode(body, agentType);
+        extraArgs = resolveExtraLaunchArgs(body.extraArgs);
       } catch (err) {
         return Response.json({ error: errorMessage(err) }, { status: 400 });
       }
@@ -753,6 +784,7 @@ async function routeRequest(
             zellijLayout: settings.zellijLayout,
             model: settings.defaultModel,
             permissionMode,
+            extraArgs,
           }),
         },
         PROXY_LAUNCH_TIMEOUT_MS,
@@ -765,6 +797,7 @@ async function routeRequest(
         const errText = await result.response.text();
         return Response.json({ error: errText || "Agent resume failed" }, { status: 502 });
       }
+      sessionLaunchArguments.forgetPending(body.machineId, settings.defaultMultiplexer, sessionName);
       return Response.json({
         ok: true,
         sessionName,
