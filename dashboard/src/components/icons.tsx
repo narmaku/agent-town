@@ -112,6 +112,23 @@ export function MenuIcon({ size = 18, className, "aria-label": ariaLabel }: Icon
   );
 }
 
+export function ExplorerIcon({ size = 14, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className={className}
+      role={ariaLabel ? "img" : undefined}
+      aria-label={ariaLabel}
+      aria-hidden={ariaLabel ? undefined : "true"}
+    >
+      <path d="M1 2h14v12H1V2zm1 1v10h4V3H2zm5 0v10h7V3H7zM3 5h2v1H3V5zm0 3h2v1H3V8z" />
+    </svg>
+  );
+}
+
 export function ControlRoomIcon({ size = 14, className, "aria-label": ariaLabel }: IconProps): React.JSX.Element {
   return (
     <svg
