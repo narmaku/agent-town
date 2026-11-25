@@ -1,8 +1,9 @@
 import type { AgentType, PermissionMode } from "@agent-town/shared";
 import { normalizePermissionMode } from "@agent-town/shared";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../auth";
+import { loadLastPermissionMode, saveLastPermissionMode } from "../launch-preferences";
 import { API } from "../utils";
 
 import { PermissionModeSelect } from "./PermissionModeSelect";
@@ -27,14 +28,25 @@ export function ResumeAgentModal({
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("default");
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState("");
+  const openingRef = useRef(0);
   const effectivePermissionMode = normalizePermissionMode(agentType, permissionMode);
   useEffect(() => {
-    setPermissionMode((mode) => normalizePermissionMode(agentType, mode));
-  }, [agentType]);
+    if (!open || !machineId || !sessionId) return;
+    openingRef.current++;
+    setPermissionMode(loadLastPermissionMode(agentType));
+    setError("");
+    setResuming(false);
+    return () => {
+      openingRef.current++;
+    };
+  }, [open, agentType, machineId, sessionId]);
 
   if (!open) return null;
 
   async function handleResume() {
+    if (resuming) return;
+    const opening = openingRef.current;
+    const submittedMode = effectivePermissionMode;
     setResuming(true);
     setError("");
     try {
@@ -45,23 +57,25 @@ export function ResumeAgentModal({
           machineId,
           sessionId,
           projectDir,
-          permissionMode: effectivePermissionMode,
+          permissionMode: submittedMode,
           agentType,
         }),
       });
 
       if (resp.ok) {
-        setPermissionMode("default");
-        setError("");
-        onClose();
+        saveLastPermissionMode(submittedMode);
+        if (openingRef.current === opening) {
+          setError("");
+          onClose();
+        }
       } else {
         const data = await resp.json().catch(() => ({ error: "Resume failed" }));
-        setError(data.error || "Resume failed");
+        if (openingRef.current === opening) setError(data.error || "Resume failed");
       }
     } catch (_err) {
-      setError("Failed to connect to server");
+      if (openingRef.current === opening) setError("Failed to connect to server");
     } finally {
-      setResuming(false);
+      if (openingRef.current === opening) setResuming(false);
     }
   }
 

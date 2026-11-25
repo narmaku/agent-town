@@ -4546,16 +4546,34 @@ body {
   .explorer-detail .session-time { font-size: 10px; }
   .explorer-detail .fullscreen-input { min-height: 160px; }
 }
-/* Permission information expands below its selector for keyboard, pointer and touch users. */
-.permission-mode-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+/* Permission choices stay compact; each explanation floats above the form. */
+.permission-mode-field {
+  border: 0;
+  padding: 0;
+  min-width: 0;
 }
-.permission-mode-heading .form-label { margin-bottom: 0; }
-.permission-mode-info {
+.permission-mode-options {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+.permission-mode-option,
+.permission-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.permission-mode-label {
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 32px;
+}
+.permission-mode-label:has(input:disabled) { color: var(--text-muted); cursor: not-allowed; }
+.permission-mode-label input { accent-color: var(--accent-blue-fg); margin: 0; }
+.permission-mode-info {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
@@ -4565,22 +4583,26 @@ body {
   border-radius: 50%;
   background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
+  cursor: help;
+  font-size: 12px;
   font-weight: 600;
 }
-.permission-mode-info:focus-visible { outline: 2px solid var(--accent-blue-fg); outline-offset: 2px; }
-.permission-mode-help {
-  margin-top: 8px;
-  padding: 12px;
+.permission-mode-info:focus-visible,
+.permission-mode-label input:focus-visible { outline: 2px solid var(--accent-blue-fg); outline-offset: 2px; }
+.permission-mode-tooltip {
+  position: fixed;
+  z-index: 1200;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-panel);
-  color: var(--text-secondary);
+  color: var(--text);
+  box-shadow: 0 4px 20px var(--shadow-color-strong);
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  pointer-events: none;
 }
-.permission-mode-help p { margin: 0 0 8px; }
-.permission-mode-help dl { margin: 0; }
-.permission-mode-help dt { color: var(--text); font-weight: 600; }
-.permission-mode-help dd { margin: 2px 0 10px; }
+.permission-mode-tooltip[hidden] { display: none; }
