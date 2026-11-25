@@ -43,6 +43,12 @@ describe("last successful launch preferences", () => {
     expect(loadLastLaunchDirectory("local", storage)).toBe("/work/local project");
   });
 
+  test("ignores malformed or nonabsolute directory preferences", () => {
+    for (const value of ["invalid-json", "null", "{}", "42", '"relative/path"', '""']) {
+      expect(loadLastLaunchDirectory("local", { getItem: () => value, setItem: () => {} })).toBeNull();
+    }
+  });
+
   test("blocked storage cannot prevent loading defaults or saving a successful launch", () => {
     const storage = {
       getItem() {

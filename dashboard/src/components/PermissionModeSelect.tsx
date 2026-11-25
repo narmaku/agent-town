@@ -49,10 +49,12 @@ interface HelpProps {
   id: string;
   label: string;
   text: string;
+  visible: boolean;
+  onShow: () => void;
+  onHide: () => void;
 }
 
-function ModeHelp({ id, label, text }: HelpProps): React.JSX.Element {
-  const [visible, setVisible] = useState(false);
+function ModeHelp({ id, label, text, visible, onShow, onHide }: HelpProps): React.JSX.Element {
   const [position, setPosition] = useState({ left: 0, top: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const tooltipRef = useRef<HTMLSpanElement>(null);
@@ -73,20 +75,28 @@ function ModeHelp({ id, label, text }: HelpProps): React.JSX.Element {
 
   useEffect(() => {
     if (!visible) return;
-    const dismiss = () => setVisible(false);
+    const dismiss = () => onHide();
     const onPointerDown = (event: PointerEvent) => {
       if (!buttonRef.current?.contains(event.target as Node) && !tooltipRef.current?.contains(event.target as Node))
         dismiss();
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      dismiss();
+    };
     window.addEventListener("resize", dismiss);
     window.addEventListener("scroll", dismiss, true);
     document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown, true);
     return () => {
       window.removeEventListener("resize", dismiss);
       window.removeEventListener("scroll", dismiss, true);
       document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [visible]);
+  }, [visible, onHide]);
 
   return (
     <>
@@ -96,20 +106,14 @@ function ModeHelp({ id, label, text }: HelpProps): React.JSX.Element {
         className="permission-mode-info"
         aria-label={label}
         aria-describedby={id}
-        onMouseEnter={() => setVisible(true)}
+        onMouseEnter={onShow}
         onMouseLeave={(event) => {
-          if (document.activeElement !== event.currentTarget) setVisible(false);
+          if (document.activeElement !== event.currentTarget) onHide();
         }}
-        onFocus={() => setVisible(true)}
-        onBlur={() => setVisible(false)}
+        onFocus={onShow}
+        onBlur={onHide}
         onPointerDown={(event) => {
           if (event.pointerType === "touch") event.currentTarget.focus();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && visible) {
-            event.stopPropagation();
-            setVisible(false);
-          }
         }}
       >
         i
@@ -130,6 +134,10 @@ function ModeHelp({ id, label, text }: HelpProps): React.JSX.Element {
 
 export function PermissionModeSelect({ id, agentType, value, onChange }: Props): React.JSX.Element {
   const instanceId = useId();
+  const [activeHelp, setActiveHelp] = useState<{ agentType: string; mode: PermissionMode } | null>(null);
+  useEffect(() => {
+    setActiveHelp((current) => (current?.agentType === agentType ? current : null));
+  }, [agentType]);
   const groupId = `${id}-${instanceId}`;
   const label = getAgentTypeDisplay(agentType).label;
   const help = Object.hasOwn(MODE_HELP, agentType) ? MODE_HELP[agentType] : undefined;
@@ -169,6 +177,13 @@ export function PermissionModeSelect({ id, agentType, value, onChange }: Props):
                 id={`${optionId}-help`}
                 label={`About ${PERMISSION_MODE_LABELS[mode]} mode for ${label}`}
                 text={text}
+                visible={activeHelp?.agentType === agentType && activeHelp.mode === mode}
+                onShow={() => setActiveHelp({ agentType, mode })}
+                onHide={() =>
+                  setActiveHelp((current) =>
+                    current?.agentType === agentType && current.mode === mode ? null : current,
+                  )
+                }
               />
             </div>
           );
