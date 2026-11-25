@@ -1,15 +1,18 @@
 import type { AgentType } from "@agent-town/shared";
 import type React from "react";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { apiFetch } from "../auth";
+import { useSessionDraft } from "../hooks/useSessionViewState";
+import { makeDraftKey, sessionViewStore } from "../session-view-state";
 import { API } from "../utils";
 
 export interface SendMessageHandle {
-  appendText: (text: string) => void;
+  focus: () => void;
 }
 
 interface Props {
   machineId: string;
+  sessionId: string;
   multiplexer: string;
   session: string;
   agentType?: AgentType;
@@ -17,22 +20,23 @@ interface Props {
 }
 
 export const SendMessage = forwardRef<SendMessageHandle, Props>(function SendMessage(
-  { machineId, multiplexer, session, agentType, onSent },
+  { machineId, sessionId, multiplexer, session, agentType, onSent },
   ref,
 ): React.JSX.Element {
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
+  const draftKey = makeDraftKey(machineId, agentType ?? "claude-code", sessionId);
+  const { text, sending, error } = useSessionDraft(draftKey);
+  const currentDraftKeyRef = useRef<string | null>(draftKey);
+  currentDraftKeyRef.current = draftKey;
+  useEffect(() => {
+    currentDraftKeyRef.current = draftKey;
+    return () => {
+      currentDraftKeyRef.current = null;
+    };
+  }, [draftKey]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useImperativeHandle(ref, () => ({
-    appendText(newText: string) {
-      setText((prev) => {
-        const separator = prev && !prev.endsWith("\n") ? "\n" : "";
-        return prev + separator + newText;
-      });
-      setTimeout(() => textareaRef.current?.focus(), 0);
-    },
+    focus: () => textareaRef.current?.focus(),
   }));
 
   useEffect(() => {
@@ -50,9 +54,8 @@ export const SendMessage = forwardRef<SendMessageHandle, Props>(function SendMes
   }, [text]);
 
   async function handleSend() {
-    if (!text.trim() || sending) return;
-    setSending(true);
-    setError("");
+    const submission = sessionViewStore.beginSend(draftKey);
+    if (!submission) return;
 
     try {
       const resp = await apiFetch(API.SESSIONS_SEND, {
@@ -62,22 +65,20 @@ export const SendMessage = forwardRef<SendMessageHandle, Props>(function SendMes
           machineId,
           multiplexer,
           session,
-          text: text.trim(),
+          text: submission.text,
           agentType,
         }),
       });
 
       if (resp.ok) {
-        setText("");
-        onSent?.();
+        sessionViewStore.finishSend(submission);
+        if (currentDraftKeyRef.current === draftKey) onSent?.();
       } else {
         const data = await resp.json().catch(() => ({ error: "Send failed" }));
-        setError(data.error || `Send failed (${resp.status})`);
+        sessionViewStore.finishSend(submission, data.error || `Send failed (${resp.status})`);
       }
     } catch (_err) {
-      setError("Failed to connect to server");
-    } finally {
-      setSending(false);
+      sessionViewStore.finishSend(submission, "Failed to connect to server");
     }
   }
 
@@ -97,7 +98,7 @@ export const SendMessage = forwardRef<SendMessageHandle, Props>(function SendMes
         ref={textareaRef}
         className="send-textarea"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => sessionViewStore.setDraftText(draftKey, e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Send a message to the agent..."
         rows={2}

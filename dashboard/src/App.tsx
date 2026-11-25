@@ -34,6 +34,7 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import { type LayoutMode, normalizeLayoutMode } from "./layout-preferences";
 import { createBrowserLogger } from "./logger";
 import { visibleSessions } from "./session-grouping";
+import { sessionViewStore } from "./session-view-state";
 import { API } from "./utils";
 
 const logger = createBrowserLogger("App");
@@ -127,6 +128,7 @@ function filterMachinesBySearch(
 
 export function App(): React.JSX.Element {
   const { machines, connected, activityFeed, unreadActivityCount, markActivityRead, clearActivity } = useWebSocket();
+  useEffect(() => sessionViewStore.reconcileSessions(machines), [machines]);
   const [activityOpen, setActivityOpen] = useState(false);
   const [terminal, setTerminal] = useState<TerminalTarget | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -307,6 +309,7 @@ export function App(): React.JSX.Element {
     (sessionId: string) => {
       const entry = sessionLookup.get(sessionId);
       if (entry?.session.multiplexer && entry.session.multiplexerSession) {
+        sessionViewStore.setPreferredView("terminal");
         setTerminal({
           machineId: entry.machineId,
           sessionName: entry.session.multiplexerSession,
@@ -384,6 +387,7 @@ export function App(): React.JSX.Element {
     0,
   );
   function handleOpenTerminal(machineId: string, sessionName: string, multiplexer: TerminalMultiplexer) {
+    sessionViewStore.setPreferredView("terminal");
     setTerminal({ machineId, sessionName, multiplexer });
   }
 
@@ -402,11 +406,11 @@ export function App(): React.JSX.Element {
 
   function handleLaunched(machineId: string, sessionName: string, multiplexer: TerminalMultiplexer): void {
     if (layoutMode === "explorer" && !openTerminalFullscreen) {
+      sessionViewStore.setPreferredView("terminal");
       setExplorerSelection({
         machineId,
         sessionId: `pending-${sessionName}`,
         awaitingSession: true,
-        initialTab: "terminal",
       });
     } else {
       handleOpenTerminal(machineId, sessionName, multiplexer);

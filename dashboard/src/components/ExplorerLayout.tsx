@@ -215,7 +215,6 @@ export function ExplorerLayout({
             session={selectedSession}
             machineId={selectedMachine.machineId}
             machineName={selectedMachine.hostname}
-            initialTab={resolved.selection?.initialTab}
             autoDeleteOnClose={autoDeleteOnClose}
             onOpenTerminalFullscreen={(name, multiplexer) =>
               onOpenTerminal(selectedMachine.machineId, name, multiplexer)

@@ -70,7 +70,6 @@ describe("Explorer session selection", () => {
       machineId: "a",
       sessionId: "pending-new-agent",
       awaitingSession: true,
-      initialTab: "terminal",
     };
     expect(resolveExplorerSelection([makeMachine("a", [])], selection).selection).toBe(selection);
     const pending = makeSession({ sessionId: "pending-new-agent", multiplexerSession: "new-agent" });
@@ -82,11 +81,11 @@ describe("Explorer session selection", () => {
   });
 
   test("follows a pending ID to the real session on the same machine", () => {
-    const selection: ExplorerSelection = { machineId: "a", sessionId: "pending-new-agent", initialTab: "terminal" };
+    const selection: ExplorerSelection = { machineId: "a", sessionId: "pending-new-agent" };
     const real = makeSession({ sessionId: "real-id", multiplexerSession: "new-agent" });
     const found = resolveExplorerSelection([makeMachine("a", [real])], selection);
     expect(found.session).toBe(real);
-    expect(found.selection).toMatchObject({ machineId: "a", sessionId: "real-id", initialTab: "terminal" });
+    expect(found.selection).toMatchObject({ machineId: "a", sessionId: "real-id" });
     expect(resolveExplorerSelection([makeMachine("a", []), makeMachine("b", [real])], selection).selection).toBeNull();
   });
 });

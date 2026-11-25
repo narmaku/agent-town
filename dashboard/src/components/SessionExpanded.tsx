@@ -188,6 +188,7 @@ export function SessionExpanded({
       {hasTerminal && (
         <SendMessage
           machineId={machineId}
+          sessionId={session.sessionId}
           multiplexer={session.multiplexer ?? "zellij"}
           session={session.multiplexerSession ?? ""}
           agentType={session.agentType}

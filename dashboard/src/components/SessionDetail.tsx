@@ -2,7 +2,9 @@ import type { AgentType, SessionInfo, SessionMessage, TerminalMultiplexer } from
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../auth";
 import { useResizable } from "../hooks/useResizable";
+import { usePreferredSessionView } from "../hooks/useSessionViewState";
 import { useWindowWidth } from "../hooks/useWindowWidth";
+import { makeDraftKey, type SessionView, sessionViewStore } from "../session-view-state";
 import { API, STATUS_CONFIG, timeAgo } from "../utils";
 import { DiffModal } from "./DiffModal";
 import { FileDropZone } from "./FileDropZone";
@@ -11,8 +13,6 @@ import { Markdown } from "./Markdown";
 import { SendMessage, type SendMessageHandle } from "./SendMessage";
 import { TerminalHelpers } from "./TerminalHelpers";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
-
-type SessionTab = "chat" | "terminal";
 
 const BATCH_SIZE = 10;
 const LOAD_ALL_MESSAGES_LIMIT = 10_000;
@@ -91,7 +91,6 @@ interface Props {
   autoDeleteOnClose?: boolean;
   onClose?: () => void;
   extraActions?: React.ReactNode;
-  initialTab?: SessionTab;
 }
 
 export function SessionDetail({
@@ -103,7 +102,6 @@ export function SessionDetail({
   autoDeleteOnClose,
   onClose,
   extraActions,
-  initialTab,
 }: Props) {
   const config = STATUS_CONFIG[session.status];
   const hasTerminal = session.multiplexer && session.multiplexerSession;
@@ -136,7 +134,12 @@ export function SessionDetail({
   const [showDiff, setShowDiff] = useState(false);
   const [infoPaneVisible, setInfoPaneVisible] = useState(loadInfoPaneVisible);
   const [infoPaneOverlay, setInfoPaneOverlay] = useState(false);
-  const [activeTab, setActiveTab] = useState<SessionTab>(initialTab ?? "chat");
+  const preferredView = usePreferredSessionView();
+  const activeTab = preferredView === "terminal" && hasTerminal ? "terminal" : "chat";
+  const draftKey = makeDraftKey(machineId, session.agentType, session.sessionId);
+  const appendUploadedFile = sessionViewStore.captureDraftAppend(draftKey);
+  const currentDraftKeyRef = useRef(draftKey);
+  currentDraftKeyRef.current = draftKey;
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [pendingTerminalSwitch, setPendingTerminalSwitch] = useState(false);
@@ -322,13 +325,13 @@ export function SessionDetail({
     }
   }
 
-  function handleTabSwitch(tab: SessionTab) {
+  function handleTabSwitch(tab: SessionView) {
     if (tab === "terminal" && !hasTerminal) {
       // Session is idle/exited — show resume confirmation
       setShowResumeConfirm(true);
       return;
     }
-    setActiveTab(tab);
+    sessionViewStore.setPreferredView(tab);
   }
 
   async function handleResumeForTerminal() {
@@ -364,20 +367,13 @@ export function SessionDetail({
   useEffect(() => {
     if (hasTerminal && showResumeConfirm) {
       setShowResumeConfirm(false);
-      setActiveTab("terminal");
+      sessionViewStore.setPreferredView("terminal");
     }
     if (hasTerminal && pendingTerminalSwitch) {
       setPendingTerminalSwitch(false);
-      setActiveTab("terminal");
+      sessionViewStore.setPreferredView("terminal");
     }
   }, [hasTerminal, showResumeConfirm, pendingTerminalSwitch]);
-
-  // If terminal goes away while on terminal tab (and not waiting for one), switch back to chat
-  useEffect(() => {
-    if (!hasTerminal && activeTab === "terminal" && !pendingTerminalSwitch) {
-      setActiveTab("chat");
-    }
-  }, [hasTerminal, activeTab, pendingTerminalSwitch]);
 
   const displayMachineName = machineName || machineId;
   const showInlineActions = isWide && !infoPaneVisible;
@@ -486,7 +482,10 @@ export function SessionDetail({
       <div className={`fullscreen-body${infoPaneResize.isDragging || inputResize.isDragging ? " resizing" : ""}`}>
         <FileDropZone
           machineId={machineId}
-          onFileUploaded={(ref) => sendMessageRef.current?.appendText(ref)}
+          onFileUploaded={(ref) => {
+            appendUploadedFile(ref);
+            if (currentDraftKeyRef.current === draftKey) sendMessageRef.current?.focus();
+          }}
           disabled={!hasTerminal}
         >
           <div className="fullscreen-main">
@@ -608,6 +607,7 @@ export function SessionDetail({
                       <SendMessage
                         ref={sendMessageRef}
                         machineId={machineId}
+                        sessionId={session.sessionId}
                         multiplexer={session.multiplexer ?? "zellij"}
                         session={session.multiplexerSession ?? ""}
                         agentType={session.agentType}
@@ -625,7 +625,6 @@ export function SessionDetail({
                       type="button"
                       className="action-btn terminal-btn"
                       onClick={() => {
-                        setActiveTab("chat");
                         onOpenTerminalFullscreen(session.multiplexerSession ?? "", session.multiplexer ?? "zellij");
                       }}
                       aria-label="Open terminal in fullscreen"
