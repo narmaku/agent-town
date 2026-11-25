@@ -1,4 +1,5 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
+import { applyPermissionMode } from "../permission-mode";
 import type { SearchMessageResult } from "../search";
 import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { filterProcessesByBinary, isBinaryAvailable } from "../utils";
@@ -43,13 +44,13 @@ export class OpenCodeProvider implements AgentProvider {
   buildLaunchCommand(opts: LaunchOptions): string[] {
     const parts = ["opencode"];
     if (opts.model) parts.push("--model", opts.model);
-    return parts;
+    return applyPermissionMode(this.type, parts, opts);
   }
 
   buildResumeCommand(opts: ResumeOptions): string[] {
     const parts = ["opencode", "--session", opts.sessionId];
     if (opts.model) parts.push("--model", opts.model);
-    return parts;
+    return applyPermissionMode(this.type, parts, opts);
   }
 
   async matchProcessToSessionId(

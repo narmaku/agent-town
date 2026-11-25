@@ -1,8 +1,10 @@
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AgentType } from "@agent-town/shared";
+import type { AgentType, PermissionMode } from "@agent-town/shared";
 import { createLogger, errorMessage, shellEscape } from "@agent-town/shared";
+
+import { permissionModeArgs } from "./providers/permission-mode";
 
 const log = createLogger("session-recovery");
 
@@ -17,6 +19,7 @@ export interface SessionMetadata {
   agentType: AgentType;
   projectDir: string;
   autonomous: boolean;
+  permissionMode?: PermissionMode;
   model?: string;
   createdAt: string;
 }
@@ -26,6 +29,7 @@ interface WrapperScriptOptions {
   projectDir: string;
   model?: string;
   autonomous?: boolean;
+  permissionMode?: PermissionMode;
   /** Override base dir for testing. */
   baseDir?: string;
 }
@@ -47,9 +51,7 @@ export function buildWrapperScript(opts: WrapperScriptOptions): string {
   if (opts.model) {
     extraFlags.push(`--model ${shellEscape(opts.model)}`);
   }
-  if (opts.autonomous) {
-    extraFlags.push("--dangerously-skip-permissions");
-  }
+  extraFlags.push(...permissionModeArgs("claude-code", opts).map(shellEscape));
   const flagsSuffix = extraFlags.length > 0 ? ` ${extraFlags.join(" ")}` : "";
 
   const escapedDir = shellEscape(opts.projectDir);

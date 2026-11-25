@@ -4532,3 +4532,41 @@ body {
   .explorer-detail .session-time { font-size: 10px; }
   .explorer-detail .fullscreen-input { min-height: 160px; }
 }
+/* Permission information expands below its selector for keyboard, pointer and touch users. */
+.permission-mode-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.permission-mode-heading .form-label { margin-bottom: 0; }
+.permission-mode-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 600;
+}
+.permission-mode-info:focus-visible { outline: 2px solid var(--accent-blue-fg); outline-offset: 2px; }
+.permission-mode-help {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.permission-mode-help p { margin: 0 0 8px; }
+.permission-mode-help dl { margin: 0; }
+.permission-mode-help dt { color: var(--text); font-weight: 600; }
+.permission-mode-help dd { margin: 2px 0 10px; }

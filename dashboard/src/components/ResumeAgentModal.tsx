@@ -1,8 +1,11 @@
-import type { AgentType } from "@agent-town/shared";
+import type { AgentType, PermissionMode } from "@agent-town/shared";
+import { normalizePermissionMode } from "@agent-town/shared";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "../auth";
-import { API, getAgentTypeDisplay, normalizeAutonomousSetting } from "../utils";
+import { API } from "../utils";
+
+import { PermissionModeSelect } from "./PermissionModeSelect";
 
 interface Props {
   open: boolean;
@@ -21,11 +24,13 @@ export function ResumeAgentModal({
   machineId,
   agentType,
 }: Props): React.JSX.Element | null {
-  const [autonomous, setAutonomous] = useState(false);
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>("default");
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState("");
-  const agentConfig = getAgentTypeDisplay(agentType);
-  const effectiveAutonomous = normalizeAutonomousSetting(agentType, autonomous);
+  const effectivePermissionMode = normalizePermissionMode(agentType, permissionMode);
+  useEffect(() => {
+    setPermissionMode((mode) => normalizePermissionMode(agentType, mode));
+  }, [agentType]);
 
   if (!open) return null;
 
@@ -40,13 +45,13 @@ export function ResumeAgentModal({
           machineId,
           sessionId,
           projectDir,
-          autonomous: effectiveAutonomous,
+          permissionMode: effectivePermissionMode,
           agentType,
         }),
       });
 
       if (resp.ok) {
-        setAutonomous(false);
+        setPermissionMode("default");
         setError("");
         onClose();
       } else {
@@ -101,23 +106,12 @@ export function ResumeAgentModal({
               aria-label="Project directory (read-only)"
             />
           </div>
-          <div className="form-group">
-            <label className="form-toggle-row">
-              <input
-                type="checkbox"
-                checked={effectiveAutonomous}
-                disabled={!agentConfig.autonomousSupported}
-                onChange={(e) => setAutonomous(e.target.checked)}
-              />
-              <span className="form-toggle-label">Autonomous</span>
-            </label>
-            {(effectiveAutonomous || !agentConfig.autonomousSupported) && (
-              <span className="form-hint" style={{ color: "var(--yellow)" }}>
-                {agentConfig.autonomousHint}
-                {agentConfig.autonomousSupported && " The agent will run without human approval for tool use."}
-              </span>
-            )}
-          </div>
+          <PermissionModeSelect
+            id="resume-permission-mode"
+            agentType={agentType}
+            value={effectivePermissionMode}
+            onChange={setPermissionMode}
+          />
           {error && <div className="form-error">{error}</div>}
         </div>
         <div className="modal-footer">

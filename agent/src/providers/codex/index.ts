@@ -1,4 +1,5 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
+import { applyPermissionMode } from "../permission-mode";
 import type { SearchMessageResult } from "../search";
 import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { isBinaryAvailable } from "../utils";
@@ -48,15 +49,13 @@ export class CodexProvider implements AgentProvider {
   buildLaunchCommand(options: LaunchOptions): string[] {
     const command = ["codex"];
     if (options.model) command.push("--model", options.model);
-    if (options.autonomous) command.push("--dangerously-bypass-approvals-and-sandbox");
-    return command;
+    return applyPermissionMode(this.type, command, options);
   }
 
   buildResumeCommand(options: ResumeOptions): string[] {
     const command = ["codex", "resume", options.sessionId];
     if (options.model) command.push("--model", options.model);
-    if (options.autonomous) command.push("--dangerously-bypass-approvals-and-sandbox");
-    return command;
+    return applyPermissionMode(this.type, command, options);
   }
 
   async matchProcessToSessionId(

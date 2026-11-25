@@ -1,9 +1,11 @@
-import type { AgentType, MachineInfo, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import type { AgentType, MachineInfo, PermissionMode, Settings, TerminalMultiplexer } from "@agent-town/shared";
+import { normalizePermissionMode } from "@agent-town/shared";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "../auth";
-import { AGENT_TYPE_CONFIG, API, normalizeAutonomousSetting, resolveAvailableAgentType } from "../utils";
+import { AGENT_TYPE_CONFIG, API, resolveAvailableAgentType } from "../utils";
 import { DirectoryBrowserModal } from "./DirectoryBrowserModal";
+import { PermissionModeSelect } from "./PermissionModeSelect";
 
 export function resolveSelectedMachineId(
   userSelected: string,
@@ -70,7 +72,7 @@ export function LaunchAgentModal({
   const [machineId, setMachineId] = useState("");
   const [agentType, setAgentType] = useState<AgentType>("claude-code");
   const [multiplexer, setMultiplexer] = useState<TerminalMultiplexer>("tmux");
-  const [autonomous, setAutonomous] = useState(false);
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>("default");
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState("");
   const [globalSettings, setGlobalSettings] = useState<Settings | null>(null);
@@ -101,6 +103,10 @@ export function LaunchAgentModal({
     ? configuredAgentTypes.filter((type) => selectedMachine.availableAgents.includes(type))
     : configuredAgentTypes;
   const selectedAgentType = resolveAvailableAgentType(agentType, availableAgentTypes);
+
+  useEffect(() => {
+    setPermissionMode((mode) => normalizePermissionMode(selectedAgentType, mode));
+  }, [selectedAgentType]);
 
   // Available multiplexers for the selected machine (from heartbeat data)
   const availableMux = useMemo(() => {
@@ -194,7 +200,7 @@ export function LaunchAgentModal({
           sessionName: sessionName.trim(),
           projectDir: projectDir.trim(),
           agentType: selectedAgentType,
-          autonomous: normalizeAutonomousSetting(selectedAgentType, autonomous),
+          permissionMode: normalizePermissionMode(selectedAgentType, permissionMode),
           multiplexer,
         }),
       });
@@ -202,6 +208,7 @@ export function LaunchAgentModal({
       if (resp.ok) {
         const data = await resp.json();
         const launchedName = sessionName.trim();
+        setPermissionMode("default");
         setSessionName("");
         setProjectDir("");
         setError("");
@@ -320,7 +327,7 @@ export function LaunchAgentModal({
                 onChange={(e) => {
                   const type = e.target.value as AgentType;
                   setAgentType(type);
-                  if (!AGENT_TYPE_CONFIG[type].autonomousSupported) setAutonomous(false);
+                  setPermissionMode((mode) => normalizePermissionMode(type, mode));
                 }}
               >
                 {availableAgentTypes.map((t) => (
@@ -393,22 +400,12 @@ export function LaunchAgentModal({
                 </div>
               )}
             </div>
-            <div className="form-group">
-              <label className="form-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={normalizeAutonomousSetting(selectedAgentType, autonomous)}
-                  disabled={!AGENT_TYPE_CONFIG[selectedAgentType].autonomousSupported}
-                  onChange={(e) => setAutonomous(e.target.checked)}
-                />
-                <span className="form-toggle-label">Autonomous</span>
-              </label>
-              {(autonomous || !AGENT_TYPE_CONFIG[selectedAgentType].autonomousSupported) && (
-                <span className="form-hint" style={{ color: "var(--yellow)" }}>
-                  {AGENT_TYPE_CONFIG[selectedAgentType].autonomousHint}
-                </span>
-              )}
-            </div>
+            <PermissionModeSelect
+              id="launch-permission-mode"
+              agentType={selectedAgentType}
+              value={permissionMode}
+              onChange={setPermissionMode}
+            />
             {error && <div className="form-error">{error}</div>}
           </div>
           <div className="modal-footer">

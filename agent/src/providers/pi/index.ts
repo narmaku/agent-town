@@ -1,4 +1,5 @@
 import type { SessionInfo, SessionMessagesResponse } from "@agent-town/shared";
+import { applyPermissionMode } from "../permission-mode";
 import type { SearchMessageResult } from "../search";
 import type { AgentProcess, AgentProvider, LaunchOptions, ResumeOptions } from "../types";
 import { getPiSessionMessages, searchPiMessages } from "./message-parser";
@@ -63,13 +64,13 @@ export class PiProvider implements AgentProvider {
   buildLaunchCommand(options: LaunchOptions): string[] {
     const command = ["pi"];
     if (options.model) command.push("--model", options.model);
-    return command;
+    return applyPermissionMode(this.type, command, options);
   }
 
   buildResumeCommand(options: ResumeOptions): string[] {
     const command = ["pi", "--session", options.sessionId];
     if (options.model) command.push("--model", options.model);
-    return command;
+    return applyPermissionMode(this.type, command, options);
   }
 
   async matchProcessToSessionId(

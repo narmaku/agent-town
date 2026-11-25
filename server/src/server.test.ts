@@ -178,3 +178,72 @@ describe("server request guards (integration)", () => {
     expect(agent.seenAuth).toEqual([`Bearer ${TOKEN}`]);
   });
 });
+
+describe("permission mode proxy", () => {
+  let server: Server;
+  let agent: Server;
+  let baseUrl: string;
+  const forwarded: Record<string, unknown>[] = [];
+
+  beforeAll(async () => {
+    agent = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      async fetch(req) {
+        forwarded.push((await req.json()) as Record<string, unknown>);
+        return Response.json({ ok: true });
+      },
+    });
+    server = startServer({ port: 0, hostname: "127.0.0.1", token: TOKEN, allowedOrigins: [] });
+    baseUrl = `http://127.0.0.1:${server.port}`;
+    await fetch(`${baseUrl}/api/heartbeat`, {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify(makeHeartbeat(agent.port)),
+    });
+  });
+  afterAll(() => {
+    server.stop(true);
+    agent.stop(true);
+  });
+
+  for (const action of ["launch", "resume"]) {
+    test(`${action} preserves Auto through the authenticated proxy`, async () => {
+      const response = await fetch(`${baseUrl}/api/agents/${action}`, {
+        method: "POST",
+        headers: { ...AUTH, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          machineId: MACHINE_ID,
+          sessionName: "mode-test",
+          sessionId: "mode-test-session",
+          projectDir: "/tmp",
+          agentType: "codex",
+          permissionMode: "auto",
+          autonomous: true,
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(forwarded.at(-1)?.permissionMode).toBe("auto");
+      expect(forwarded.at(-1)?.autonomous).toBeUndefined();
+    });
+    test(`${action} rejects invalid and unsupported modes without forwarding`, async () => {
+      for (const permissionMode of ["unsafe", "auto"]) {
+        const count = forwarded.length;
+        const response = await fetch(`${baseUrl}/api/agents/${action}`, {
+          method: "POST",
+          headers: { ...AUTH, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            machineId: MACHINE_ID,
+            sessionName: "mode-test",
+            sessionId: "mode-test-session",
+            projectDir: "/tmp",
+            agentType: "pi",
+            permissionMode,
+          }),
+        });
+        expect(response.status).toBe(400);
+        expect(forwarded.length).toBe(count);
+      }
+    });
+  }
+});
