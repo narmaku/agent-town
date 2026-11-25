@@ -1,4 +1,4 @@
-import type { AgentType, SessionInfo, SessionMessagesResponse, TerminalMultiplexer } from "@agent-town/shared";
+import type { AgentType, PermissionMode, SessionInfo, SessionMessagesResponse, TerminalMultiplexer } from "@agent-town/shared";
 
 import type { SearchMessageResult } from "./search";
 
@@ -19,12 +19,16 @@ export interface ProcessMapping {
 
 export interface LaunchOptions {
   model?: string;
+  permissionMode?: PermissionMode;
+  /** @deprecated Use permissionMode. */
   autonomous?: boolean;
 }
 
 export interface ResumeOptions {
   sessionId: string;
   model?: string;
+  permissionMode?: PermissionMode;
+  /** @deprecated Use permissionMode. */
   autonomous?: boolean;
 }
 

@@ -1,6 +1,9 @@
+import type { PermissionMode } from "./permission-mode";
+
 export { SESSION_ID_DISPLAY_LENGTH, SESSION_RETENTION_MS } from "./constants";
 export { createLogger, type Logger } from "./logger";
 export { ALL_INTERFACES_HOST, isLoopbackHost, LOOPBACK_HOST } from "./network";
+export { getPermissionModeSupport, normalizePermissionMode, PERMISSION_MODES, PERMISSION_MODE_LABELS, type PermissionMode, resolvePermissionMode } from "./permission-mode";
 export { buildShellCommand, SAFE_SHELL_RE, shellEscape } from "./shell";
 export {
   errorMessage,
@@ -123,6 +126,8 @@ export interface LaunchAgentRequest {
   sessionName: string;
   projectDir: string;
   agentType?: AgentType;
+  permissionMode?: PermissionMode;
+  /** @deprecated Use permissionMode. */
   autonomous?: boolean;
   multiplexer?: TerminalMultiplexer;
 }
@@ -132,6 +137,8 @@ export interface ResumeAgentRequest {
   sessionId: string;
   projectDir: string;
   agentType?: AgentType;
+  permissionMode?: PermissionMode;
+  /** @deprecated Use permissionMode. */
   autonomous?: boolean;
 }
 
