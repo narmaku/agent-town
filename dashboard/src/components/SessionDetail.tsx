@@ -10,6 +10,7 @@ import { DiffModal } from "./DiffModal";
 import { FileDropZone } from "./FileDropZone";
 import { InfoPane } from "./InfoPane";
 import { Markdown } from "./Markdown";
+import { ResumeAgentModal } from "./ResumeAgentModal";
 import { SendMessage, type SendMessageHandle } from "./SendMessage";
 import { TerminalHelpers } from "./TerminalHelpers";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
@@ -141,7 +142,6 @@ export function SessionDetail({
   const currentDraftKeyRef = useRef(draftKey);
   currentDraftKeyRef.current = draftKey;
   const [showResumeConfirm, setShowResumeConfirm] = useState(false);
-  const [resuming, setResuming] = useState(false);
   const [pendingTerminalSwitch, setPendingTerminalSwitch] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -332,35 +332,6 @@ export function SessionDetail({
       return;
     }
     sessionViewStore.setPreferredView(tab);
-  }
-
-  async function handleResumeForTerminal() {
-    setResuming(true);
-    try {
-      const resp = await apiFetch(API.AGENTS_RESUME, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          machineId,
-          sessionId: session.sessionId,
-          projectDir: session.projectPath,
-          autonomous: false,
-          agentType: session.agentType,
-        }),
-      });
-
-      if (resp.ok) {
-        setShowResumeConfirm(false);
-        setPendingTerminalSwitch(true);
-      } else {
-        const data = await resp.json().catch(() => ({ error: "Resume failed" }));
-        window.alert(data.error || "Resume failed");
-      }
-    } catch {
-      window.alert("Failed to connect to server");
-    } finally {
-      setResuming(false);
-    }
   }
 
   // Auto-switch to terminal tab when a terminal becomes available after resume
@@ -689,56 +660,15 @@ export function SessionDetail({
       )}
 
       {showResumeConfirm && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop dismissal
-        <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowResumeConfirm(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setShowResumeConfirm(false);
-          }}
-          role="presentation"
-        >
-          <div className="modal-panel">
-            <div className="modal-header">
-              <h2 className="modal-title">Resume Session</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setShowResumeConfirm(false)}
-                aria-label="Close resume dialog"
-              >
-                &times;
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>This session has no active terminal. Resuming will restart the agent session so you can connect.</p>
-              <p style={{ marginTop: 8, color: "var(--text-muted)", fontSize: 13 }}>
-                Session: {session.customName || session.slug}
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="action-btn"
-                onClick={() => setShowResumeConfirm(false)}
-                aria-label="Cancel resume"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="send-btn"
-                onClick={handleResumeForTerminal}
-                disabled={resuming}
-                aria-label={resuming ? "Resuming session" : "Resume session and connect terminal"}
-              >
-                {resuming ? "Resuming..." : "Resume & Connect"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ResumeAgentModal
+          machineId={machineId}
+          sessionId={session.sessionId}
+          sessionName={session.customName || session.slug}
+          projectDir={session.projectPath}
+          agentType={session.agentType}
+          onClose={() => setShowResumeConfirm(false)}
+          onResumeAndConnect={() => setPendingTerminalSwitch(true)}
+        />
       )}
     </>
   );

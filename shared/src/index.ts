@@ -148,6 +148,7 @@ export interface ResumeAgentRequest {
   sessionId: string;
   projectDir: string;
   agentType?: AgentType;
+  extraArgs?: string[];
   permissionMode?: PermissionMode;
   /** @deprecated Use permissionMode. */
   autonomous?: boolean;

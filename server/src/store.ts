@@ -15,6 +15,7 @@ import {
   type UpdateNodeRequest,
 } from "@agent-town/shared";
 import { resolveDataDir } from "@agent-town/shared/data-dir";
+import { sessionLaunchArguments } from "./session-launch-arguments";
 
 const log = createLogger("store");
 
@@ -194,6 +195,7 @@ export function upsertMachine(heartbeat: Heartbeat): void {
     availableAgents: heartbeat.availableAgents ?? [],
     terminalPort: heartbeat.terminalPort,
   });
+  sessionLaunchArguments.reconcile({ ...heartbeat, sessions: deduplicatedSessions });
 
   // Remove pending sessions that now appear in heartbeat data
   // (matched by multiplexer session name on this machine)

@@ -292,7 +292,7 @@ Launches a new agent session in a new multiplexer session. Proxied to the agent.
 
 `agentType`, `permissionMode`, and `multiplexer` are optional. Agent and multiplexer defaults come from server settings. Permission mode defaults to `default`, which preserves the harness's own configuration.
 
-`extraArgs` is an optional array of individual CLI arguments appended to the selected harness's launch command. Use a single array entry for a value containing spaces. The dashboard's **Extra Arguments** field accepts quoted values, for example `--add-dir "/home/user/shared tools"`. The arguments apply to the initial launch.
+`extraArgs` is an optional array of individual CLI arguments appended to the selected harness's launch command. Use a single array entry for a value containing spaces. The dashboard's **Extra Arguments** field accepts quoted values, for example `--add-dir "/home/user/shared tools"`. Agent Town saves these arguments with the session so the dashboard can offer them when resuming.
 
 `permissionMode` accepts `default`, `auto`, or `yolo`. Auto uses automatic safety review in Codex (`--approve-for-me`) and Claude Code (`--permission-mode auto`). Gemini uses `--approval-mode auto_edit`, which approves edits but may still prompt for other tools. OpenCode has no equivalent Auto mode. YOLO bypasses approvals with each harness's supported mechanism; Codex also disables its sandbox. OpenCode YOLO uses per-process v1/v2 config overrides, without changing config files. Pi has no built-in permission or sandbox layer, so only Default is available.
 
@@ -317,6 +317,10 @@ A pending session placeholder is added immediately so the dashboard shows the ne
 
 ---
 
+### GET /api/agents/resume
+
+Returns the original launch arguments for the session identified by the required `machineId`, `sessionId`, and `agentType` query parameters. The result is `{ "extraArgs": [] }` when the session has no recorded arguments. This endpoint returns `404` if the session is unavailable.
+
 ### POST /api/agents/resume
 
 Resumes an idle session in a new multiplexer session.
@@ -328,11 +332,14 @@ Resumes an idle session in a new multiplexer session.
   "sessionId": "550e8400-e29b-41d4-a716-446655440000",
   "projectDir": "/home/user/projects/my-project",
   "agentType": "claude-code",
-  "permissionMode": "default"
+  "permissionMode": "default",
+  "extraArgs": ["--add-dir", "/home/user/shared tools"]
 }
 ```
 
 `agentType` and `permissionMode` are optional. Permission modes and deprecated `autonomous` compatibility follow the launch endpoint above.
+
+`extraArgs` is optional. The dashboard prefills the original launch arguments and lets users edit or clear them before submitting. The submitted values apply to that resume. Omit `extraArgs` or pass an empty array to resume without extra arguments.
 
 **Response:** `200 OK`
 ```json
@@ -344,6 +351,7 @@ Resumes an idle session in a new multiplexer session.
 ```
 
 **Error responses:**
+- `400` -- Invalid resume options
 - `404` -- Machine not found
 - `409` -- Session is already running in a terminal; attach to its Terminal instead
 - `500` -- Failed to resume agent

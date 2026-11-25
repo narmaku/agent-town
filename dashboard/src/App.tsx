@@ -725,14 +725,7 @@ export function App(): React.JSX.Element {
         onLaunched={handleLaunched}
         initialMachineId={launchMachineId}
       />
-      <ResumeAgentModal
-        open={!!resumeTarget}
-        onClose={() => setResumeTarget(null)}
-        machineId={resumeTarget?.machineId || ""}
-        sessionId={resumeTarget?.sessionId || ""}
-        projectDir={resumeTarget?.projectDir || ""}
-        agentType={resumeTarget?.agentType || "claude-code"}
-      />
+      {resumeTarget && <ResumeAgentModal {...resumeTarget} onClose={() => setResumeTarget(null)} />}
       <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
